@@ -1135,8 +1135,6 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertArraysAlmostEqual(par, seq)
 
     def test_should_parallelize_alpha(self):
-        doc = _eprop._should_parallelize_alpha.__doc__
-        self.assertIsNotNone(doc)
         self.assertFalse(_eprop._should_parallelize_alpha(100, 100, 1, num_workers=1))
         self.assertTrue(_eprop._should_parallelize_alpha(100, 10000, 16, num_workers=4))
 
@@ -1172,10 +1170,6 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertEqual(res['status'], 'reset_to_defaults')
 
     def test_optimize_errorgen_propagation_parallelization(self):
-        doc = _eprop.optimize_errorgen_propagation_parallelization.__doc__
-        self.assertIn("Empirical Nature and Disclaimer", doc)
-        self.assertIn("configure_errorgen_propagation_parallelization", doc)
-
         # Missing all three inputs raises ValueError
         with self.assertRaises(ValueError):
             _eprop.optimize_errorgen_propagation_parallelization()

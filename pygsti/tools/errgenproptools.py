@@ -10,7 +10,7 @@ Tools for the propagation of error generators through circuits.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-import warnings
+import warnings as _warnings
 import gc as _gc
 from contextlib import contextmanager as _contextmanager
 try:
@@ -19,7 +19,7 @@ except ImportError:
     msg = "Stim is required for use of the error generator propagation tools module, " \
           "and it does not appear to be installed. If you intend to use this module please update" \
           " your environment."
-    warnings.warn(msg)
+    _warnings.warn(msg)
 
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
@@ -462,7 +462,7 @@ def configure_errorgen_propagation_parallelization(
     min_km_alpha : int, optional
         Minimum generator-outcome workload product W = K * M required to engage
         2D grid parallelization in `bulk_alpha` and `bulk_alpha_pauli`. Workloads
-        with K * M below this cutoff execute via the sequential fast-path.
+        with K * M below this cutoff execute via the sequential execution.
     min_magnus_pairs : int, optional
         Minimum number of layer pairs (L * (L - 1) / 2) required to engage chunked
         parallel pairwise reduction in `_second_order_magnus_term` and `magnus_expansion`.
@@ -762,7 +762,7 @@ def _should_parallelize_commuting_product(
 
 
 def _lse_from_string_rep(rep: str, n: int) -> _LSE:
-    """Losslessly reconstruct a LocalStimErrorgenLabel from its cached string representation."""
+    """Reconstruct a LocalStimErrorgenLabel from its cached string representation."""
     typ = rep[0]
     if typ in ('H', 'S'):
         s = rep[1:]
@@ -837,15 +837,6 @@ def _merge_pair_indexed_string_dictionaries(d1: dict, d2: dict) -> dict:
     return res
 
 
-def _merge_dictionaries(d1, d2):
-    """Binary reduction merging rate dictionaries by summing overlapping rates."""
-    res = d1.copy()
-    get = res.get
-    for k, v in d2.items():
-        res[k] = get(k, 0) + v
-    return res
-
-
 @_with_cyclic_gc_paused
 def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
                      truncation_threshold: float = 1e-14,
@@ -870,7 +861,7 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs).
 
     pool : Pool or SharedWorkerPool, optional
@@ -971,7 +962,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs).
 
     pool : Pool or SharedWorkerPool, optional
@@ -1031,7 +1022,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
             )
     if second_order_str_dict is None:
         return {}
-    survivors = {k: v for k, v in second_order_str_dict.items() if abs(v) > truncation_threshold}
+    survivors = _truncated(second_order_str_dict, truncation_threshold)
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
@@ -1064,7 +1055,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs and outer commutators).
 
     pool : Pool or SharedWorkerPool, optional
@@ -1076,6 +1067,29 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         Dictionaries with the same general structure as those in `errorgen_layers`, holding the
         second- and third-order terms of the magnus expansion respectively.
     """
+
+    # Write P_ik = [A(i), A(k)] for i > k for the pairwise layer commutators and group them by
+    # their larger or their smaller index:
+    #
+    #   row_i = \sum_{k<i} P_ik          col_k = \sum_{i>k} P_ik
+    #
+    # The commutators with coinciding indices vanish, so Omega_2 = (1/2) \sum_i row_i. In Omega_3,
+    # using linearity, the first term is a sum over t1 of A(t1) commuted with a PREFIX of the rows
+    # and (after reordering the sums so that t3 is outermost) the second is a sum over t3 of A(t3)
+    # commuted with a SUFFIX of the columns, the coinciding-index row/column entering at half weight:
+    #
+    #   Omega_3 = (1/6) \sum_i [ A(i),  \sum_{j<i} row_j + (1/2) row_i ]
+    #           - (1/6) \sum_k [ A(k),  \sum_{j>k} col_j + (1/2) col_k ]
+    #
+    # Every P_ik lies in exactly one row and one column, so a single forward pass over i computes
+    # each P_ik once and files it into both. row_i is consumed on the spot (second-order term,
+    # running prefix sum and the outer commutator with A(i)); col_k is complete only when the
+    # pass ends (its last contribution comes from i = n-1), so the columns are held until then
+    # and consumed by a descending pass over k. The running sums are truncated at the threshold
+    # before each outer commutator; the held columns are small (the disjoint-support skip in
+    # `_accumulate_layer_pairwise_commutators` removes the pairs that would otherwise dominate
+    # them) and are truncated when consumed.
+
     if identity is None and errorgen_layers:
         for layer in errorgen_layers:
             if layer:
@@ -1223,8 +1237,8 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
             second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(local_pool)
 
-    om2_survivors = {k: v for k, v in second_order_comm_str_dict.items() if abs(v) > truncation_threshold}
-    om3_survivors = {k: v for k, v in third_order_str_dict.items() if abs(v) > truncation_threshold}
+    om2_survivors = _truncated(second_order_comm_str_dict, truncation_threshold)
+    om3_survivors = _truncated(third_order_str_dict, truncation_threshold)
     return ({_lse_from_string_rep(k, n_q): v for k, v in om2_survivors.items()},
             {_lse_from_string_rep(k, n_q): v for k, v in om3_survivors.items()})
 
@@ -1330,7 +1344,7 @@ def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen
                 target[lbl] = get(lbl, 0) + rate
 
 
-def _truncated(errorgen_dict: dict[_LSE, _Rate], truncation_threshold: float) -> dict[_LSE, _Rate]:
+def _truncated(errorgen_dict: dict[Union[_LSE, str], _Rate], truncation_threshold: float) -> dict[Union[_LSE, str], _Rate]:
     """The entries of `errorgen_dict` (label -> rate) whose rate exceeds `truncation_threshold` in magnitude."""
     return {lbl: rate for lbl, rate in errorgen_dict.items() if abs(rate) > truncation_threshold}
 
@@ -5326,23 +5340,6 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL,
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
-class _ProbWorker:
-    """Worker task for parallel approximate_stabilizer_probabilities."""
-    def __init__(self, errorgen_dict, tableau, order, thresh):
-        self.errorgen_dict = errorgen_dict
-        if isinstance(tableau, stim.TableauSimulator):
-            self.tableau = tableau.current_inverse_tableau() ** -1
-        else:
-            self.tableau = tableau
-        self.order = order
-        self.thresh = thresh
-
-    def __call__(self, chunk_bits):
-        return [
-            approximate_stabilizer_probability(self.errorgen_dict, self.tableau, b, self.order, self.thresh)
-            for b in chunk_bits
-        ]
-
 
 def approximate_stabilizer_probabilities(
     errorgen_dict: _ErrorgenDict,
@@ -5497,7 +5494,7 @@ def approximate_stabilizer_pauli_expectations(
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     corrections = alphas @ rates
 
-    # Ideal expectations evaluated serially using a single pre-inverted simulator (194x faster)
+    # Ideal expectations evaluated serially using a single pre-inverted simulator
     sim = stim.TableauSimulator()
     sim.set_inverse_tableau(tableau**-1)
     ideal_expectations = _np.empty(len(pauli_objs), dtype=_np.double)
@@ -5636,7 +5633,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         for k, v in cr.items():
             merged_str[k] = merged_str.get(k, 0.0) + v
 
-    survivors = {k: v for k, v in merged_str.items() if abs(v) > truncation_threshold}
+    survivors = _truncated(merged_str, truncation_threshold)
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 
@@ -5865,7 +5862,7 @@ except ImportError:
           +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them. '\
            'Falling back to python implementation for: pauli_phase_update_all_zeros, pauli_phase_update, amplitude_of_state, ' \
            'bulk_phi, bulk_alpha and bulk_alpha_pauli.'
-    warnings.warn(msg)
+    _warnings.warn(msg)
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
     pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
     amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
@@ -5931,7 +5928,7 @@ def _should_parallelize_alpha(
 ) -> bool:
     r"""
     Internal helper: determines whether a sensitivity calculation (bulk_alpha or bulk_alpha_pauli)
-    should be executed in parallel or routed to the zero-overhead sequential fast-path.
+    should be executed in parallel or routed to the zero-overhead sequential execution.
 
     Checks active manual configuration overrides, dynamic profiling calibration (if run),
     or the default multi-scale absolute cutoff table.
@@ -6171,7 +6168,7 @@ def bulk_alpha(
     First-order error generator sensitivity function for probability.
 
     Calculates the sensitivity of stabilizer measurement probabilities across bitstrings
-    to specified elementary error generators. Supports both serial fast-path execution
+    to specified elementary error generators. Supports both serial execution
     and parallel 2D grid partitioning across bitstrings and generators.
 
     Parameters
@@ -6183,7 +6180,7 @@ def bulk_alpha(
     desired_bitstrings : list of str
         Bitstrings to calculate sensitivities for.
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution).
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse across sequential workflow stages.
@@ -6238,7 +6235,7 @@ def bulk_alpha_pauli(
     paulis : list of stim.PauliString
         Pauli observables to compute expectation sensitivities for.
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution).
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse across sequential workflow stages.

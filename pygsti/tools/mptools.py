@@ -87,7 +87,7 @@ def determine_num_workers(
         - "auto" : Automatically infers physical CPU cores (excluding SMT / hyperthreading
           logical threads) via `psutil.cpu_count(logical=False)` with a fallback to
           `os.cpu_count()`. On Linux, inspects cgroups v2 (`/sys/fs/cgroup/cpu.max`) and
-          cgroups v1 (`cpu.cfs_quota_us`) to clamp workers to the container quota.
+          cgroups v1 (`cpu.cfs_quota_us`) to determine container CPU quota.
     max_limit : int, optional
         Maximum upper bound on workers to return.
 
@@ -175,9 +175,8 @@ def measure_multiprocessing_ipc_latency(
 ) -> float:
     """
     Measure local round-trip inter-process communication dispatch latency (T_IPC)
-    in seconds for the active start method ('fork' vs. 'spawn').
-
-    Results are cached per process lifetime for instantaneous subsequent lookups (< 1 us).
+    in seconds for the active start method ('fork' vs. 'spawn'). Caches results
+    for future reference by `mptools` utilities.
 
     Parameters
     ----------
@@ -189,8 +188,7 @@ def measure_multiprocessing_ipc_latency(
     Returns
     -------
     float
-        Average round-trip dispatch latency in seconds (typically ~0.0001s for fork,
-        ~0.00025s for pre-warmed spawn).
+        Average round-trip dispatch latency in seconds.
     """
     resolved_workers = determine_num_workers(num_workers)
     active_method = start_method or _mp.get_start_method()
@@ -204,8 +202,8 @@ def measure_multiprocessing_ipc_latency(
         raise ValueError(f"Worker count must be at least 1, got {test_workers}.")
     if test_workers == 1:
         # Sequential: negligible latency
-        _IPC_LATENCY_CACHE[cache_key] = 1e-6
-        return 1e-6
+        _IPC_LATENCY_CACHE[cache_key] = 0
+        return 0
 
     try:
         ctx = _mp.get_context(active_method)
@@ -242,9 +240,9 @@ def compute_2d_worker_grid(
     Parameters
     ----------
     n_rows : int
-        Number of rows (e.g. bitstrings or Pauli strings).
+        Number of rows.
     n_cols : int
-        Number of columns (e.g. elementary error generators).
+        Number of columns.
     num_workers : int
         Total worker processes available.
 
@@ -425,9 +423,9 @@ def parallel_2d_grid_map(
         Function `worker_fn(sub_rows, sub_cols) -> np.ndarray` returning a 2D array
         of shape `(len(sub_rows), len(sub_cols))`.
     row_items : sequence
-        Row elements (e.g. bitstrings or Pauli strings).
+        Row elements.
     col_items : sequence
-        Column elements (e.g. elementary error generators).
+        Column elements.
     num_workers : int, str, or None, optional
         Target worker count (defaults to "auto").
     pool : Pool or SharedWorkerPool, optional
@@ -638,8 +636,8 @@ def get_available_system_memory() -> int:
 
     Returns
     -------
-    int
-        Available memory in bytes.
+    int or None
+        Available memory in bytes. If unable to retrieve this value, None is returned.
     """
     try:
         import psutil
@@ -660,8 +658,7 @@ def get_available_system_memory() -> int:
         except Exception:
             pass
 
-    # Conservative default fallback: 8 GB
-    return 8 * 1024 * 1024 * 1024
+    return None
 
 
 def warn_if_insufficient_memory(
@@ -685,7 +682,13 @@ def warn_if_insufficient_memory(
     if available_bytes is None:
         available_bytes = get_available_system_memory()
 
-    if estimated_bytes > available_bytes:
+    if available_bytes is None:
+        msg = (
+            "Unable to resolve available system memory. Cannot determine whether or not operation"
+            + " can be successfully performed within memory budget."
+        )
+        _warnings.warn(msg, ResourceWarning, stacklevel=2)
+    elif estimated_bytes > available_bytes:
         msg = (
             f"Estimated peak memory footprint ({estimated_bytes / (1024**3):.2f} GB) for "
             f"{task_name or 'parallel operation'} exceeds currently available system memory "
