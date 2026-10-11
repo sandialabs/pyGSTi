@@ -579,7 +579,7 @@ def _should_parallelize_magnus(
 
 
 def _lse_from_string_rep(rep: str, n: int) -> _LSE:
-    """Losslessly reconstruct a LocalStimErrorgenLabel from its cached string representation."""
+    """Reconstruct a LocalStimErrorgenLabel from its cached string representation."""
     typ = rep[0]
     if typ in ('H', 'S'):
         s = rep[1:]
@@ -647,15 +647,6 @@ class _MagnusPhase2Worker:
                     target, layer, acc, self.identity, addl_weight=weight, truncation_threshold=self.threshold
                 )
             return {lbl._hashable_string_rep: rate for lbl, rate in target.items()}
-
-
-def _merge_dictionaries(d1, d2):
-    """Binary reduction merging rate dictionaries by summing overlapping rates."""
-    res = dict(d1)
-    get = res.get
-    for k, v in d2.items():
-        res[k] = get(k, 0) + v
-    return res
 
 
 @_with_cyclic_gc_paused
@@ -836,7 +827,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
             )
     if second_order_str_dict is None:
         return {}
-    survivors = {k: v for k, v in second_order_str_dict.items() if abs(v) > truncation_threshold}
+    survivors = _truncated(second_order_str_dict, truncation_threshold)
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
@@ -881,6 +872,29 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         Dictionaries with the same general structure as those in `errorgen_layers`, holding the
         second- and third-order terms of the magnus expansion respectively.
     """
+
+    # Write P_ik = [A(i), A(k)] for i > k for the pairwise layer commutators and group them by
+    # their larger or their smaller index:
+    #
+    #   row_i = \sum_{k<i} P_ik          col_k = \sum_{i>k} P_ik
+    #
+    # The commutators with coinciding indices vanish, so Omega_2 = (1/2) \sum_i row_i. In Omega_3,
+    # using linearity, the first term is a sum over t1 of A(t1) commuted with a PREFIX of the rows
+    # and (after reordering the sums so that t3 is outermost) the second is a sum over t3 of A(t3)
+    # commuted with a SUFFIX of the columns, the coinciding-index row/column entering at half weight:
+    #
+    #   Omega_3 = (1/6) \sum_i [ A(i),  \sum_{j<i} row_j + (1/2) row_i ]
+    #           - (1/6) \sum_k [ A(k),  \sum_{j>k} col_j + (1/2) col_k ]
+    #
+    # Every P_ik lies in exactly one row and one column, so a single forward pass over i computes
+    # each P_ik once and files it into both. row_i is consumed on the spot (second-order term,
+    # running prefix sum and the outer commutator with A(i)); col_k is complete only when the
+    # pass ends (its last contribution comes from i = n-1), so the columns are held until then
+    # and consumed by a descending pass over k. The running sums are truncated at the threshold
+    # before each outer commutator; the held columns are small (the disjoint-support skip in
+    # `_accumulate_layer_pairwise_commutators` removes the pairs that would otherwise dominate
+    # them) and are truncated when consumed.
+
     if identity is None and errorgen_layers:
         for layer in errorgen_layers:
             if layer:
@@ -1035,8 +1049,8 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         for s_lbl, rate in d.items():
             third_order_str_dict[s_lbl] = third_order_str_dict.get(s_lbl, 0.0) + rate
 
-    om2_survivors = {k: v for k, v in second_order_comm_str_dict.items() if abs(v) > truncation_threshold}
-    om3_survivors = {k: v for k, v in third_order_str_dict.items() if abs(v) > truncation_threshold}
+    om2_survivors = _truncated(second_order_comm_str_dict, truncation_threshold)
+    om3_survivors = _truncated(third_order_str_dict, truncation_threshold)
     return ({_lse_from_string_rep(k, n_q): v for k, v in om2_survivors.items()},
             {_lse_from_string_rep(k, n_q): v for k, v in om3_survivors.items()})
 
@@ -1142,7 +1156,7 @@ def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen
                 target[lbl] = get(lbl, 0) + rate
 
 
-def _truncated(errorgen_dict: dict[_LSE, _Rate], truncation_threshold: float) -> dict[_LSE, _Rate]:
+def _truncated(errorgen_dict: dict[Union[_LSE, str], _Rate], truncation_threshold: float) -> dict[Union[_LSE, str], _Rate]:
     """The entries of `errorgen_dict` (label -> rate) whose rate exceeds `truncation_threshold` in magnitude."""
     return {lbl: rate for lbl, rate in errorgen_dict.items() if abs(rate) > truncation_threshold}
 
@@ -5232,7 +5246,7 @@ def approximate_stabilizer_pauli_expectations(
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     corrections = alphas @ rates
 
-    # Ideal expectations evaluated serially using a single pre-inverted simulator (194x faster)
+    # Ideal expectations evaluated serially using a single pre-inverted simulator
     sim = stim.TableauSimulator()
     sim.set_inverse_tableau(tableau**-1)
     ideal_expectations = _np.empty(len(pauli_objs), dtype=_np.double)
@@ -5369,7 +5383,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         for k, v in cr.items():
             merged_str[k] = merged_str.get(k, 0.0) + v
 
-    survivors = {k: v for k, v in merged_str.items() if abs(v) > truncation_threshold}
+    survivors = _truncated(merged_str)
     n_q = len(identity)
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
