@@ -44,7 +44,7 @@ from itertools import chain, product
 import math as _math
 from math import factorial
 import time as _time
-from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, Any, cast as _cast
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, Any, cast as _cast, Sequence
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
                                           num_qubits: int) -> tuple[stim.PauliString, ...]:
