@@ -292,7 +292,7 @@ with SharedWorkerPool(num_workers="auto") as pool:
 
     # 3. Parallel probability calculation for specific bitstrings of interest
     subset_probs = eprop.approximate_stabilizer_probabilities(
-        effective_generator, c, order=2, bitstrings=["0000", "0101"], pool=pool
+        effective_generator, c, ["0000", "0101"], order=2, pool=pool
     )
     print("Subset probabilities:", subset_probs)
 

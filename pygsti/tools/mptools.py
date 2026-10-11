@@ -488,6 +488,54 @@ def parallel_2d_grid_map(
 
 
 # ===================================================================================================
+# Greedy LPT Bin-Packing Partition
+# ===================================================================================================
+
+def lpt_partition(
+    items: Sequence[Any],
+    weights: Sequence[float],
+    num_bins: int,
+) -> List[List[Any]]:
+    """
+    Partition `items` into at most `num_bins` chunks using greedy Longest Processing Time (LPT) bin-packing.
+
+    Parameters
+    ----------
+    items : sequence
+        Elements to partition across bins.
+    weights : sequence of float
+        Relative computational costs corresponding to each item in `items`.
+    num_bins : int
+        Number of bins to distribute items across (must be >= 1).
+
+    Returns
+    -------
+    list of list
+        List of non-empty item chunks assigned to each bin.
+    """
+    if not isinstance(num_bins, (int, _np.integer)) or num_bins < 1:
+        raise ValueError(f"num_bins must be an integer >= 1, got {num_bins}.")
+    if len(items) != len(weights):
+        raise ValueError(f"Length of items ({len(items)}) must match length of weights ({len(weights)}).")
+    n_items = len(items)
+    if n_items == 0:
+        return []
+    if num_bins == 1 or n_items == 1:
+        return [items.copy() if hasattr(items, "copy") else list(items)]
+
+    sorted_items_with_weights = sorted(
+        zip(items, weights), key=lambda x: x[1], reverse=True
+    )
+    bins: List[List[Any]] = [[] for _ in range(num_bins)]
+    bin_weights = [0.0] * num_bins
+    for item, weight in sorted_items_with_weights:
+        min_bin = min(range(num_bins), key=lambda b: bin_weights[b])
+        bins[min_bin].append(item)
+        bin_weights[min_bin] += weight
+    return [b for b in bins if b]
+
+
+# ===================================================================================================
 # Parallel Pair Reduction
 # ===================================================================================================
 
@@ -556,17 +604,7 @@ def parallel_pair_reduce(
         return accum
 
     if pair_weights is not None and len(pair_weights) == n_pairs:
-        # Greedy Longest Processing Time (LPT) bin-packing
-        sorted_pairs_with_weights = sorted(
-            zip(pair_items, pair_weights), key=lambda x: x[1], reverse=True
-        )
-        bins = [[] for _ in range(workers)]
-        bin_weights = [0.0] * workers
-        for pair, weight in sorted_pairs_with_weights:
-            min_bin = min(range(workers), key=lambda b: bin_weights[b])
-            bins[min_bin].append(pair)
-            bin_weights[min_bin] += weight
-        chunks = [b for b in bins if b]
+        chunks = lpt_partition(pair_items, pair_weights, workers)
     else:
         chunk_size = (n_pairs + workers - 1) // workers
         chunks = [pair_items[i : i + chunk_size] for i in range(0, n_pairs, chunk_size) if i < n_pairs]

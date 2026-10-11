@@ -13,6 +13,7 @@ from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_e
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 import pickle
+from unittest import mock
 from ..util import BaseCase
 from itertools import product, chain
 from math import factorial
@@ -1299,12 +1300,86 @@ class ApproxStabilizerMethodTester(BaseCase):
         # Specific bitstrings subset
         subset = ['0000', '0101', '1111']
         probs_sub = _eprop.approximate_stabilizer_probabilities(
-            self.propagated_errorgen_layer, self.circuit, order=2, bitstrings=subset, num_workers=2
+            self.propagated_errorgen_layer, self.circuit, subset, 2, num_workers=2
         )
         self.assertEqual(len(probs_sub), 3)
         self.assertAlmostEqual(probs_sub[0], probs_full[0], places=12)
         self.assertAlmostEqual(probs_sub[1], probs_full[5], places=12)
         self.assertAlmostEqual(probs_sub[2], probs_full[15], places=12)
+
+    def test_tableau_fidelities_and_stabilizer_probabilities(self):
+        tableau = self.circuit_tableau
+        bitstrings = ['0000', '0001', '0101', '1111']
+
+        # Bulk probabilities match single calls
+        bulk_probs = _eprop.stabilizer_probabilities(tableau, bitstrings)
+        single_probs = [_eprop.stabilizer_probability(tableau, b) for b in bitstrings]
+        self.assertEqual(len(bulk_probs), len(bitstrings))
+        for p_bulk, p_single in zip(bulk_probs, single_probs):
+            self.assertAlmostEqual(p_bulk, p_single, places=14)
+
+        # Empty bitstrings returns empty array
+        self.assertEqual(len(_eprop.stabilizer_probabilities(tableau, [])), 0)
+
+        # tableau_fidelities matches tableau_fidelity
+        cands = [_eprop.bitstring_to_tableau(b) for b in bitstrings]
+        bulk_fids = _eprop.tableau_fidelities(tableau, cands)
+        single_fids = [_eprop.tableau_fidelity(tableau, c) for c in cands]
+        for f_bulk, f_single in zip(bulk_fids, single_fids):
+            self.assertAlmostEqual(f_bulk, f_single, places=14)
+
+        # Mismatched candidate qubit count raises ValueError
+        with self.assertRaises(ValueError):
+            bad_cand = stim.Tableau(len(tableau) + 1)
+            _eprop.tableau_fidelities(tableau, [bad_cand])
+
+    def test_approximate_stabilizer_probabilities_positional_and_underflow(self):
+        # Positional bitstrings argument: (errorgen_dict, circuit, bitstrings, order)
+        subset = ['0000', '0101']
+        probs_pos = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, subset, 2
+        )
+        probs_kw = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, bitstrings=subset, order=2
+        )
+        self.assertArraysAlmostEqual(probs_pos, probs_kw)
+
+        # Underflow check: mock random_support returning > 2148
+        with mock.patch("pygsti.tools.errgenproptools.random_support", return_value=2200):
+            with self.assertRaises(RuntimeError):
+                _eprop.approximate_stabilizer_probabilities(
+                    self.propagated_errorgen_layer, self.circuit, subset, 1
+                )
+
+    def test_should_parallelize_commuting_product(self):
+        # Validation
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(None, 10, 10)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(0, 10, 10)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(4, 10, 10, num_workers=0)
+
+        # 1 worker -> False
+        self.assertFalse(_eprop._should_parallelize_commuting_product(4, 100, 100, num_workers=1))
+
+        # Under default threshold (1000 for small)
+        self.assertFalse(_eprop._should_parallelize_commuting_product(4, 10, 10, num_workers=2))
+        # Over threshold
+        self.assertTrue(_eprop._should_parallelize_commuting_product(4, 40, 40, num_workers=2))
+
+        # Configuration overrides
+        try:
+            _eprop.configure_errorgen_propagation_parallelization(min_terms_commuting_product=5000)
+            self.assertFalse(_eprop._should_parallelize_commuting_product(4, 40, 40, num_workers=2))
+
+            _eprop.configure_errorgen_propagation_parallelization(force_serial=["commuting_product"])
+            self.assertFalse(_eprop._should_parallelize_commuting_product(4, 100, 100, num_workers=2))
+
+            _eprop.configure_errorgen_propagation_parallelization(force_serial=False, force_parallel=["commuting_product"])
+            self.assertTrue(_eprop._should_parallelize_commuting_product(4, 2, 2, num_workers=2))
+        finally:
+            _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
     def test_approximate_stabilizer_pauli_expectations_bulk(self):
         paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY'), 'XIII']

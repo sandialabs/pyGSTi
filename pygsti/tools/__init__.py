@@ -40,6 +40,7 @@ from .mptools import (
     compute_2d_worker_grid,
     SharedWorkerPool,
     parallel_2d_grid_map,
+    lpt_partition,
     parallel_pair_reduce,
     get_available_system_memory,
     warn_if_insufficient_memory,

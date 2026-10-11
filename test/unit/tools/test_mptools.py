@@ -231,6 +231,31 @@ class MPToolsTester(BaseCase):
         )
         self.assertEqual(par_accum, seq_accum)
 
+    def test_lpt_partition(self):
+        items = ["a", "b", "c", "d", "e", "f"]
+        weights = [10.0, 8.0, 7.0, 5.0, 3.0, 1.0]
+
+        # Standard 3-bin partition
+        bins = mpt.lpt_partition(items, weights, 3)
+        self.assertEqual(len(bins), 3)
+        all_partitioned = [item for b in bins for item in b]
+        self.assertEqual(sorted(all_partitioned), sorted(items))
+
+        # Single bin
+        single = mpt.lpt_partition(items, weights, 1)
+        self.assertEqual(single, [items])
+
+        # Empty items
+        self.assertEqual(mpt.lpt_partition([], [], 3), [])
+
+        # Validation errors
+        with self.assertRaises(ValueError):
+            mpt.lpt_partition(items, weights, 0)
+        with self.assertRaises(ValueError):
+            mpt.lpt_partition(items, weights, -2)
+        with self.assertRaises(ValueError):
+            mpt.lpt_partition(items, [1.0, 2.0], 3)
+
     def test_shared_worker_pool_process_id_reuse(self):
         with mpt.SharedWorkerPool(num_workers=4) as pool:
             pids_1 = set(pool.map(_get_pid, list(range(16))))

@@ -242,7 +242,7 @@ class ErrorGeneratorPropagator:
         """
 
         if use_bch:
-            kw = dict(bch_kwargs) if bch_kwargs is not None else {}
+            kw = bch_kwargs.copy() if bch_kwargs is not None else {}
             kw.setdefault('num_workers', num_workers)
             kw.setdefault('pool', pool)
             propagated_error_generator = self.propagate_errorgens_bch(circuit, circuit_conversion_kwargs=circuit_conversion_kwargs, **kw)

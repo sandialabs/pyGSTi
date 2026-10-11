@@ -37,6 +37,7 @@ from pygsti.tools.mptools import (
     compute_2d_worker_grid as _compute_2d_worker_grid,
     SharedWorkerPool as _SharedWorkerPool,
     parallel_2d_grid_map as _parallel_2d_grid_map,
+    lpt_partition as _lpt_partition,
     parallel_pair_reduce as _parallel_pair_reduce,
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
@@ -420,18 +421,21 @@ _DEFAULT_THRESHOLD_TABLE: dict[str, dict[str, int]] = {
         'min_magnus_pairs': 4,
         'min_magnus_terms': 100,
         'min_layer_prop_depth': 16,
+        'min_terms_commuting_product': 1000,
     },
     'medium': {  # 16 < n <= 64 qubits
         'min_km_alpha': 500,
         'min_magnus_pairs': 2,
         'min_magnus_terms': 50,
         'min_layer_prop_depth': 8,
+        'min_terms_commuting_product': 500,
     },
     'large': {   # n > 64 qubits
         'min_km_alpha': 250,
         'min_magnus_pairs': 2,
         'min_magnus_terms': 50,
         'min_layer_prop_depth': 4,
+        'min_terms_commuting_product': 250,
     },
 }
 
@@ -444,6 +448,7 @@ def configure_errorgen_propagation_parallelization(
     min_magnus_pairs: Optional[int] = None,
     min_terms_per_magnus_pair: Optional[int] = None,
     min_layer_prop_depth: Optional[int] = None,
+    min_terms_commuting_product: Optional[int] = None,
     force_parallel: Optional[Union[bool, Sequence[str]]] = None,
     force_serial: Optional[Union[bool, Sequence[str]]] = None,
     reset_to_defaults: bool = False,
@@ -467,9 +472,12 @@ def configure_errorgen_propagation_parallelization(
     min_layer_prop_depth : int, optional
         Minimum circuit layer depth (L) required to engage chunked layer propagation
         in `ErrorGeneratorPropagator.propagate_errorgens`.
+    min_terms_commuting_product : int, optional
+        Minimum workload product W = n1 * n2 of term counts in the two input dictionaries
+        required to engage parallel bilinear slicing in `_commuting_product`.
     force_parallel : bool or sequence of str, optional
         If True, unconditionally enables multiprocessing across all operations regardless
-        of workload size. If a sequence of strings (e.g. ('alpha', 'magnus', 'layer_prop')),
+        of workload size. If a sequence of strings (e.g. ('alpha', 'magnus', 'layer_prop', 'commuting_product')),
         forces parallelization only for the named operations.
     force_serial : bool or sequence of str, optional
         If True, unconditionally forces single-threaded sequential execution across all
@@ -492,7 +500,7 @@ def configure_errorgen_propagation_parallelization(
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
-        return {"status": "reset_to_defaults", "defaults": _DEFAULT_THRESHOLD_TABLE}
+        return {"status": "reset_to_defaults", "defaults": _DEFAULT_THRESHOLD_TABLE.copy()}
 
     if min_km_alpha is not None:
         _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"] = int(min_km_alpha)
@@ -502,12 +510,14 @@ def configure_errorgen_propagation_parallelization(
         _MANUAL_PARALLEL_OVERRIDES["min_terms_per_magnus_pair"] = int(min_terms_per_magnus_pair)
     if min_layer_prop_depth is not None:
         _MANUAL_PARALLEL_OVERRIDES["min_layer_prop_depth"] = int(min_layer_prop_depth)
+    if min_terms_commuting_product is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"] = int(min_terms_commuting_product)
     if force_parallel is not None:
         _MANUAL_PARALLEL_OVERRIDES["force_parallel"] = force_parallel
     if force_serial is not None:
         _MANUAL_PARALLEL_OVERRIDES["force_serial"] = force_serial
 
-    return dict(_MANUAL_PARALLEL_OVERRIDES)
+    return _MANUAL_PARALLEL_OVERRIDES.copy()
 
 
 def measure_lse_entry_size(n_qubits: int) -> int:
@@ -711,6 +721,46 @@ def _should_parallelize_magnus(
     return n_pairs >= cutoffs['min_magnus_pairs'] and avg_terms_per_layer >= cutoffs['min_magnus_terms']
 
 
+def _should_parallelize_commuting_product(
+    n_qubits: int,
+    num_terms_1: int,
+    num_terms_2: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> bool:
+    """
+    Internal helper: determines whether commuting product should be parallelized via bilinear slicing.
+    """
+    if n_qubits is None:
+        raise ValueError("n_qubits must be specified as an integer >= 1.")
+    if not isinstance(n_qubits, (int, _np.integer)) or n_qubits < 1:
+        raise ValueError(f"n_qubits must be an integer >= 1, got {n_qubits}.")
+
+    workers = _determine_num_workers(num_workers)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
+        return False
+
+    w = num_terms_1 * num_terms_2
+    if w <= 0:
+        return False
+
+    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "commuting_product" in force_ser):
+        return False
+
+    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, (list, tuple)) and "commuting_product" in force_par):
+        return True
+
+    if "min_terms_commuting_product" in _MANUAL_PARALLEL_OVERRIDES:
+        return w >= _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"]
+
+    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
+    threshold = _DEFAULT_THRESHOLD_TABLE[scale]['min_terms_commuting_product']
+    return w >= threshold
+
+
 def _lse_from_string_rep(rep: str, n: int) -> _LSE:
     """Losslessly reconstruct a LocalStimErrorgenLabel from its cached string representation."""
     typ = rep[0]
@@ -725,7 +775,7 @@ def _lse_from_string_rep(rep: str, n: int) -> _LSE:
 
 def _merge_string_dictionaries(d1: dict[str, float], d2: dict[str, float]) -> dict[str, float]:
     """Binary reduction merging string rate dictionaries by summing overlapping rates."""
-    res = dict(d1)
+    res = d1.copy()
     get = res.get
     for k, v in d2.items():
         res[k] = get(k, 0.0) + v
@@ -748,43 +798,48 @@ class _MagnusPairEvaluator:
             return {k._hashable_string_rep: v for k, v in target.items()}
 
 
-class _MagnusPhase1Worker:
-    """Worker task evaluating pairwise layer commutators for Phase 1 of joint 2nd/3rd order Magnus expansion."""
+class _MagnusPhase1PairEvaluator:
+    """Worker task evaluating commutators for a single pair of layers in Phase 1 of Magnus expansion."""
     def __init__(self, identity, threshold):
         self.identity = identity
         self.threshold = threshold
 
-    def __call__(self, chunk):
+    def __call__(self, item):
         with _cyclic_gc_paused():
-            res = []
-            for i, k, l1, l2 in chunk:
-                target = {}
-                _accumulate_layer_pairwise_commutators(
-                    target, l1, l2, self.identity, truncation_threshold=self.threshold
-                )
-                res.append((i, k, {lbl._hashable_string_rep: rate for lbl, rate in target.items()}))
-            return res
+            i, k, l1, l2 = item
+            target = {}
+            _accumulate_layer_pairwise_commutators(
+                target, l1, l2, self.identity, truncation_threshold=self.threshold
+            )
+            return {(i, k): {lbl._hashable_string_rep: rate for lbl, rate in target.items()}}
 
 
-class _MagnusPhase2Worker:
+class _MagnusPhase2Evaluator:
     """Worker task evaluating outer commutators for Phase 2 of joint 2nd/3rd order Magnus expansion."""
     def __init__(self, identity, threshold):
         self.identity = identity
         self.threshold = threshold
 
-    def __call__(self, chunk):
+    def __call__(self, task):
         with _cyclic_gc_paused():
+            layer, acc, weight = task
             target = {}
-            for layer, acc, weight in chunk:
-                _accumulate_layer_pairwise_commutators(
-                    target, layer, acc, self.identity, addl_weight=weight, truncation_threshold=self.threshold
-                )
+            _accumulate_layer_pairwise_commutators(
+                target, layer, acc, self.identity, addl_weight=weight, truncation_threshold=self.threshold
+            )
             return {lbl._hashable_string_rep: rate for lbl, rate in target.items()}
+
+
+def _merge_pair_indexed_string_dictionaries(d1: dict, d2: dict) -> dict:
+    """Binary reduction merging (i, k) layer-pair indexed string rate dictionaries."""
+    res = d1.copy()
+    res.update(d2)
+    return res
 
 
 def _merge_dictionaries(d1, d2):
     """Binary reduction merging rate dictionaries by summing overlapping rates."""
-    res = dict(d1)
+    res = d1.copy()
     get = res.get
     for k, v in d2.items():
         res[k] = get(k, 0) + v
@@ -1084,8 +1139,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         return (_truncated(second_order_comm_dict, truncation_threshold),
                 _truncated(third_order_comm_dict, truncation_threshold))
 
-    # Two-Phase Parallel Evaluation with LPT Bin-Packing
-    # Phase 1: Pairwise layer commutators
+    # Two-Phase Parallel Evaluation with LPT Bin-Packing delegated to parallel_pair_reduce
     pair_items = []
     pair_weights = []
     for i in range(num_layers):
@@ -1093,93 +1147,81 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
             pair_items.append((i, k, errorgen_layers[i], errorgen_layers[k]))
             pair_weights.append(len(errorgen_layers[i]) * len(errorgen_layers[k]))
 
-    sorted_pairs = sorted(zip(pair_items, pair_weights), key=lambda x: x[1], reverse=True)
-    bins_p1 = [[] for _ in range(workers)]
-    bw_p1 = [0.0] * workers
-    for p, w in sorted_pairs:
-        m = min(range(workers), key=lambda b: bw_p1[b])
-        bins_p1[m].append(p)
-        bw_p1[m] += w
-    chunks_p1 = [b for b in bins_p1 if b]
+    p1_evaluator = _MagnusPhase1PairEvaluator(identity, truncation_threshold)
+    p2_evaluator = _MagnusPhase2Evaluator(identity, truncation_threshold)
 
-    p1_worker = _MagnusPhase1Worker(identity, truncation_threshold)
-    if pool is not None:
-        p1_results = pool.map(p1_worker, chunks_p1)
-    else:
-        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
-            p1_results = local_pool.map(p1_worker, chunks_p1)
+    def _execute_magnus_phases(active_pool):
+        p1_res = _parallel_pair_reduce(
+            p1_evaluator, pair_items, _merge_pair_indexed_string_dictionaries,
+            pool=active_pool, pair_weights=pair_weights
+        )
+        if p1_res is None:
+            p1_res = {}
 
-    rows = [{} for _ in range(num_layers)]
-    held_columns = [{} for _ in range(num_layers)]
-    for chunk_out in p1_results:
-        for i, k, pw_dict in chunk_out:
+        rows = [{} for _ in range(num_layers)]
+        held_columns = [{} for _ in range(num_layers)]
+        for (i, k), pw_dict in p1_res.items():
             r_i = rows[i]
             c_k = held_columns[k]
             for s_lbl, rate in pw_dict.items():
                 r_i[s_lbl] = r_i.get(s_lbl, 0.0) + rate
                 c_k[s_lbl] = c_k.get(s_lbl, 0.0) + rate
 
-    second_order_comm_str_dict = {}
-    for r in rows:
-        for s_lbl, rate in r.items():
-            second_order_comm_str_dict[s_lbl] = second_order_comm_str_dict.get(s_lbl, 0.0) + 0.5 * rate
+        second_order_str = {}
+        for r in rows:
+            for s_lbl, rate in r.items():
+                second_order_str[s_lbl] = second_order_str.get(s_lbl, 0.0) + 0.5 * rate
 
-    # Intermediate prefix row sums and suffix column sums (< 10 ms on master)
-    R = []
-    running_row = {}
-    for i in range(num_layers):
-        curr = dict(running_row)
-        for s_lbl, rate in rows[i].items():
-            curr[s_lbl] = curr.get(s_lbl, 0.0) + (1/12) * rate
-        curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
-        R.append({_lse_from_string_rep(k, n_q): v for k, v in curr_trunc.items()})
-        for s_lbl, rate in rows[i].items():
-            running_row[s_lbl] = running_row.get(s_lbl, 0.0) + (1/6) * rate
-        running_row = {k: v for k, v in running_row.items() if abs(v) > truncation_threshold}
+        # Intermediate prefix row sums and suffix column sums (< 10 ms on master)
+        R = []
+        running_row = {}
+        for i in range(num_layers):
+            curr = running_row.copy()
+            for s_lbl, rate in rows[i].items():
+                curr[s_lbl] = curr.get(s_lbl, 0.0) + (1/12) * rate
+            curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+            R.append({_lse_from_string_rep(k, n_q): v for k, v in curr_trunc.items()})
+            for s_lbl, rate in rows[i].items():
+                running_row[s_lbl] = running_row.get(s_lbl, 0.0) + (1/6) * rate
+            running_row = {k: v for k, v in running_row.items() if abs(v) > truncation_threshold}
 
-    C = []
-    running_col = {}
-    for k in range(num_layers - 2, -1, -1):
-        col = held_columns[k]
-        curr = dict(running_col)
-        for s_lbl, rate in col.items():
-            curr[s_lbl] = curr.get(s_lbl, 0.0) - (1/12) * rate
-        curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
-        C.append((k, {_lse_from_string_rep(s, n_q): v for s, v in curr_trunc.items()}))
-        for s_lbl, rate in col.items():
-            running_col[s_lbl] = running_col.get(s_lbl, 0.0) - (1/6) * rate
-        running_col = {s: v for s, v in running_col.items() if abs(v) > truncation_threshold}
+        C = []
+        running_col = {}
+        for k in range(num_layers - 2, -1, -1):
+            col = held_columns[k]
+            curr = running_col.copy()
+            for s_lbl, rate in col.items():
+                curr[s_lbl] = curr.get(s_lbl, 0.0) - (1/12) * rate
+            curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+            C.append((k, {_lse_from_string_rep(s, n_q): v for s, v in curr_trunc.items()}))
+            for s_lbl, rate in col.items():
+                running_col[s_lbl] = running_col.get(s_lbl, 0.0) - (1/6) * rate
+            running_col = {s: v for s, v in running_col.items() if abs(v) > truncation_threshold}
 
-    # Phase 2: Outer commutator tasks with LPT bin-packing
-    outer_tasks = []
-    outer_weights = []
-    for i in range(1, num_layers):
-        outer_tasks.append((errorgen_layers[i], R[i], 1.0))
-        outer_weights.append(len(errorgen_layers[i]) * len(R[i]))
-    for k, c_k in C:
-        outer_tasks.append((errorgen_layers[k], c_k, 1.0))
-        outer_weights.append(len(errorgen_layers[k]) * len(c_k))
+        # Phase 2: Outer commutator tasks with LPT bin-packing
+        outer_tasks = []
+        outer_weights = []
+        for i in range(1, num_layers):
+            outer_tasks.append((errorgen_layers[i], R[i], 1.0))
+            outer_weights.append(len(errorgen_layers[i]) * len(R[i]))
+        for k, c_k in C:
+            outer_tasks.append((errorgen_layers[k], c_k, 1.0))
+            outer_weights.append(len(errorgen_layers[k]) * len(c_k))
 
-    sorted_outer = sorted(zip(outer_tasks, outer_weights), key=lambda x: x[1], reverse=True)
-    bins_outer = [[] for _ in range(workers)]
-    bw_outer = [0.0] * workers
-    for t, w in sorted_outer:
-        m = min(range(workers), key=lambda b: bw_outer[b])
-        bins_outer[m].append(t)
-        bw_outer[m] += w
-    chunks_p2 = [b for b in bins_outer if b]
+        third_order_str = _parallel_pair_reduce(
+            p2_evaluator, outer_tasks, _merge_string_dictionaries,
+            pool=active_pool, pair_weights=outer_weights
+        )
+        if third_order_str is None:
+            third_order_str = {}
 
-    p2_worker = _MagnusPhase2Worker(identity, truncation_threshold)
+        return second_order_str, third_order_str
+
     if pool is not None:
-        p2_results = pool.map(p2_worker, chunks_p2)
+        second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(pool)
     else:
         with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
-            p2_results = local_pool.map(p2_worker, chunks_p2)
-
-    third_order_str_dict = {}
-    for d in p2_results:
-        for s_lbl, rate in d.items():
-            third_order_str_dict[s_lbl] = third_order_str_dict.get(s_lbl, 0.0) + rate
+            second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(local_pool)
 
     om2_survivors = {k: v for k, v in second_order_comm_str_dict.items() if abs(v) > truncation_threshold}
     om3_survivors = {k: v for k, v in third_order_str_dict.items() if abs(v) > truncation_threshold}
@@ -3789,6 +3831,54 @@ def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_s
 
 # Courtesy of Gidney 
 # https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
+def tableau_fidelities(target_tableau: stim.Tableau, candidate_tableaus: Sequence[stim.Tableau]) -> _np.ndarray:
+    """
+    Calculate the fidelities between a single target stabilizer state and a collection
+    of candidate stabilizer states.
+
+    This function amortizes the overhead of target tableau inversion and TableauSimulator
+    instantiation across all candidate tableaus.
+
+    Parameters
+    ----------
+    target_tableau : stim.Tableau
+        Stim tableau corresponding to the reference/target stabilizer state.
+    candidate_tableaus : sequence of stim.Tableau
+        Collection of stim tableaus corresponding to candidate stabilizer states.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D array of floats representing the fidelity (in probability units) for each candidate tableau.
+    """
+    n_candidates = len(candidate_tableaus)
+    if n_candidates == 0:
+        return _np.empty(0, dtype=_np.float64)
+
+    n_qubits = len(target_tableau)
+    inv_target = target_tableau.inverse()
+    sim = stim.TableauSimulator()
+    out = _np.empty(n_candidates, dtype=_np.float64)
+
+    for i, cand in enumerate(candidate_tableaus):
+        if len(cand) != n_qubits:
+            raise ValueError(f"Candidate tableau qubit count ({len(cand)}) must match target tableau ({n_qubits}).")
+        t3 = inv_target * cand
+        sim.set_inverse_tableau(t3)
+        p = 1.0
+        for q in range(n_qubits):
+            e = sim.peek_z(q)
+            if e == -1:
+                p = 0.0
+                break
+            if e == 0:
+                p *= 0.5
+                sim.postselect_z(q, desired_value=False)
+        out[i] = p
+
+    return out
+
+
 def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
     """
     Calculate the fidelity between the stabilizer states corresponding to the given stim
@@ -3801,22 +3891,13 @@ def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
         Stim tableau for first stabilizer state.
     tableau2 : stim.Tableau
         Stim tableau for second stabilizer state.
+
+    Returns
+    -------
+    float
+        Fidelity between the two stabilizer states.
     """
-    t3 = tableau2**-1 * tableau1
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(t3)
-    p = 1
-    # note to future selves: stim uses little endian convention by default, and we typically use
-    # big endian. That doesn't make a difference in this case, but does elsewhere to be mindful to
-    # save on grief.
-    for q in range(len(t3)):
-        e = sim.peek_z(q)
-        if e == -1:
-            return 0
-        if e == 0:
-            p *= 0.5
-            sim.postselect_z(q, desired_value=False)
-    return p
+    return float(tableau_fidelities(tableau1, [tableau2])[0])
 
 def bitstring_to_tableau(bitstring: str) -> stim.Tableau:
     """
@@ -5004,12 +5085,31 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict: dict[_EEL, 
     expectation_correction = _np.linalg.multi_dot([pauli_vec.conj().T, taylor_expanded_errorgen,stabilizer_state_dmvec]).item()
     return expectation_correction
 
+def stabilizer_probabilities(tableau: stim.Tableau, bitstrings: Sequence[str]) -> _np.ndarray:
+    """
+    Calculate the output probabilities for a sequence of specified bitstrings.
+
+    Parameters
+    ----------
+    tableau : stim.Tableau
+        Stim tableau for the stabilizer state being measured.
+    bitstrings : sequence of str
+        Sequence of bitstrings (e.g. ['00', '01', ...]) to evaluate output probabilities for.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D array of output probabilities.
+    """
+    if len(bitstrings) == 0:
+        return _np.empty(0, dtype=_np.float64)
+    candidate_tableaus = [bitstring_to_tableau(b) for b in bitstrings]
+    return tableau_fidelities(tableau, candidate_tableaus)
+
+
 def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     Calculate the output probability for the specified output bitstring.
-    
-    TODO: Should be able to do this more efficiently for many bitstrings
-    by looking at the structure of the random support.
     
     Parameters
     ----------
@@ -5024,8 +5124,7 @@ def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> flo
     p : float
         probability of desired bitstring.
     """
-    # compute what Gidney calls the tableau fidelity (which in this case gives the probability).
-    return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
+    return float(stabilizer_probabilities(tableau, [desired_bitstring])[0])
 
 def stabilizer_pauli_expectation(tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
@@ -5248,11 +5347,11 @@ class _ProbWorker:
 def approximate_stabilizer_probabilities(
     errorgen_dict: _ErrorgenDict,
     circuit: Union[_Circuit, stim.Tableau],
+    bitstrings: Optional[Sequence[str]] = None,
     order: int = 1,
     truncation_threshold: float = 1e-14,
     num_workers: Union[int, str, None] = None,
     pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
-    bitstrings: Optional[Sequence[str]] = None,
 ) -> _np.ndarray:
     """
     Calculate the approximate probability distribution over bitstrings using a Taylor series approximation.
@@ -5264,6 +5363,10 @@ def approximate_stabilizer_probabilities(
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
         case this should be a Clifford circuit and convertible to a stim.Tableau.
+    bitstrings : sequence of str, optional
+        Specific bitstrings to compute probabilities for. If None (default), computes
+        the exhaustive probability distribution over all 2^n bitstrings. If 2^n > 1024
+        and bitstrings is None, raises a UserWarning alerting to exponential scaling.
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.
@@ -5274,10 +5377,6 @@ def approximate_stabilizer_probabilities(
         Target worker count for parallel evaluation across sensitivity grid.
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse.
-    bitstrings : sequence of str, optional
-        Specific bitstrings to compute probabilities for. If None (default), computes
-        the exhaustive probability distribution over all 2^n bitstrings. If 2^n > 1024
-        and bitstrings is None, raises a UserWarning alerting to exponential scaling.
 
     Returns
     -------
@@ -5290,6 +5389,10 @@ def approximate_stabilizer_probabilities(
         tableau = circuit
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    num_random = random_support(tableau)
+    if num_random > 2148:
+        raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
 
     num_qubits = len(tableau)
     if bitstrings is None:
@@ -5324,11 +5427,10 @@ def approximate_stabilizer_probabilities(
     # Single bulk_alpha call (vectorized Cython or 2D parallel grid)
     alphas = bulk_alpha(combined_taylor_dict, tableau, bitstrings_list, num_workers=num_workers, pool=pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
-    num_random = random_support(tableau)
-    scale = 1.0 / (2.0 ** num_random) if num_random <= 2148 else 0.0
+    scale = 1.0 / (2.0 ** num_random)
     corrections = scale * (alphas @ rates)
 
-    ideal_probs = _np.array([stabilizer_probability(tableau, b) for b in bitstrings_list], dtype=_np.double)
+    ideal_probs = stabilizer_probabilities(tableau, bitstrings_list)
     return ideal_probs + corrections
 
 
@@ -5448,7 +5550,7 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     """
        
  
-    taylor_order_terms = [dict() for _ in range(order)]
+    taylor_order_terms = [{} for _ in range(order)]
 
     for lbl, rate in errorgen_dict.items():
         if abs(rate) > truncation_threshold:
@@ -5511,7 +5613,8 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
     n1 = len(errorgen_dict_1)
     n2 = len(errorgen_dict_2)
-    if workers == 1 or num_workers is None and pool is None or n1 * n2 < 1000:
+    n_q = len(identity)
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_commuting_product(n_q, n1, n2, num_workers=workers):
         return _raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity)
 
     # Parallel bilinear slicing with term-type load balancing
@@ -5519,14 +5622,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     full = errorgen_dict_2 if n1 <= n2 else errorgen_dict_1
     items = list(target.items())
     weights = [3.0 if k.type_idx in (2, 3) else 1.0 for k, _ in items]
-    sorted_items = sorted(zip(items, weights), key=lambda x: x[1], reverse=True)
-    bins = [[] for _ in range(workers)]
-    bw = [0.0] * workers
-    for (k, v), w in sorted_items:
-        m = min(range(workers), key=lambda b: bw[b])
-        bins[m].append((k, v))
-        bw[m] += w
-    chunks = [dict(b) for b in bins if b]
+    chunks = [dict(b) for b in _lpt_partition(items, weights, workers)]
 
     worker = _CommutingProductSliceWorker(full, identity, truncation_threshold)
     if pool is not None:
@@ -5541,7 +5637,6 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
             merged_str[k] = merged_str.get(k, 0.0) + v
 
     survivors = {k: v for k, v in merged_str.items() if abs(v) > truncation_threshold}
-    n_q = len(identity)
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 
