@@ -10,7 +10,7 @@ Tools for the propagation of error generators through circuits.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-import warnings
+import warnings as _warnings
 import gc as _gc
 from contextlib import contextmanager as _contextmanager
 try:
@@ -19,7 +19,7 @@ except ImportError:
     msg = "Stim is required for use of the error generator propagation tools module, " \
           "and it does not appear to be installed. If you intend to use this module please update" \
           " your environment."
-    warnings.warn(msg)
+    _warnings.warn(msg)
 
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
@@ -5613,7 +5613,7 @@ except ImportError:
           +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them. '\
            'Falling back to python implementation for: pauli_phase_update_all_zeros, pauli_phase_update, amplitude_of_state, ' \
            'bulk_phi, bulk_alpha and bulk_alpha_pauli.'
-    warnings.warn(msg)
+    _warnings.warn(msg)
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
     pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
     amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
