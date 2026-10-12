@@ -73,13 +73,16 @@ class ValidationProfile:
     # `('H', 'ZZ:1,2')` is a weight-2 coherent coupling of the gate's target to the
     # spectator, which no product of local errors reproduces, even to first order.
     spectator_term: tuple[str, ...] = ('S', 'Z:2')
+    # The two-qubit gate connectivity: `'ring'` adds the wraparound edge to the line.
+    topology: Literal['line', 'ring'] = 'line'
 
     @classmethod
     def sparse_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                     scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-                    seed: int = 20260901, spectator_error: float = 0.0) -> 'ValidationProfile':
-        return cls(f'{nqubits}q_sparse_line', nqubits, tuple(max_lengths), shots,
-                   'sparse', scenario, seed, spectator_error)
+                    seed: int = 20260901, spectator_error: float = 0.0,
+                    topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{nqubits}q_sparse_{topology}', nqubits, tuple(max_lengths), shots,
+                   'sparse', scenario, seed, spectator_error, topology=topology)
 
     # S(Z:2) at 0.01 is large enough that the training data reveal it -- the
     # crosstalk-free fit's 2*deltaLogL exceeds the data-generating model's by about 1200
@@ -89,16 +92,19 @@ class ValidationProfile:
     def sparse_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                               seed: int = 20260901,
                               spectator_error: float = 0.01,
-                              spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
-        return cls(f'{nqubits}q_sparse_spectator_line', nqubits, tuple(max_lengths), shots,
-                   'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term))
+                              spectator_term: tuple[str, ...] = ('S', 'Z:2'),
+                              topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{nqubits}q_sparse_spectator_{topology}', nqubits, tuple(max_lengths), shots,
+                   'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term),
+                   topology)
 
     @classmethod
     def full_hs_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                      scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-                     seed: int = 20260901, spectator_error: float = 0.0) -> 'ValidationProfile':
-        return cls(f'{nqubits}q_full_hs_line', nqubits, tuple(max_lengths), shots,
-                   'full_hs', scenario, seed, spectator_error)
+                     seed: int = 20260901, spectator_error: float = 0.0,
+                     topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{nqubits}q_full_hs_{topology}', nqubits, tuple(max_lengths), shots,
+                   'full_hs', scenario, seed, spectator_error, topology=topology)
 
     @functools.cached_property
     def oneq_model(self):
@@ -106,7 +112,7 @@ class ValidationProfile:
 
     @functools.cached_property
     def twoq_model(self):
-        return _build_model(_line_processor_spec(2), self.model_terms, independent_gates=False)
+        return _build_model(_processor_spec(2), self.model_terms, independent_gates=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -125,6 +131,14 @@ FOUR_QUBIT_SPARSE_IN_CLASS = ValidationProfile.sparse_line(
     nqubits=4, max_lengths=(1, 2, 4))
 FOUR_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
     nqubits=4, max_lengths=(1, 2, 4))
+THREE_QUBIT_SPARSE_RING_IN_CLASS = ValidationProfile.sparse_line(
+    nqubits=3, max_lengths=(1, 2, 4), topology='ring')
+THREE_QUBIT_SPARSE_RING_SPECTATOR = ValidationProfile.sparse_spectator_line(
+    nqubits=3, max_lengths=(1, 2, 4), topology='ring')
+FOUR_QUBIT_SPARSE_RING_IN_CLASS = ValidationProfile.sparse_line(
+    nqubits=4, max_lengths=(1, 2, 4), topology='ring')
+FOUR_QUBIT_SPARSE_RING_SPECTATOR = ValidationProfile.sparse_spectator_line(
+    nqubits=4, max_lengths=(1, 2, 4), topology='ring')
 
 
 def _oneq_processor_spec() -> QubitProcessorSpec:
@@ -133,16 +147,22 @@ def _oneq_processor_spec() -> QubitProcessorSpec:
     )
 
 
-def _line_processor_spec(nqubits: int) -> QubitProcessorSpec:
+def _processor_spec(nqubits: int, topology: Literal['line', 'ring'] = 'line') -> QubitProcessorSpec:
     qubits = tuple(range(nqubits))
     oneq_locations = [(qubit,) for qubit in qubits]
-    line_edges = [(qubit, qubit + 1) for qubit in range(nqubits - 1)]
+    edges = [(qubit, qubit + 1) for qubit in range(nqubits - 1)]
+    if topology == 'ring':
+        if nqubits < 3:
+            raise ValueError('A ring needs at least three qubits; on two it is the line')
+        # Oriented (0, n-1), the way edge colorings record it, because the stitcher places
+        # the two-qubit design on each edge in the orientation its patch gives.
+        edges.append((0, nqubits - 1))
     availability = {
         'Gi': oneq_locations,
         'Gxpi2': oneq_locations,
         'Gypi2': oneq_locations,
-        'Gcnot': line_edges,
-        'Gii': line_edges,
+        'Gcnot': edges,
+        'Gii': edges,
     }
     return QubitProcessorSpec(
         nqubits,
@@ -236,7 +256,7 @@ def _set_seeded_error_coefficients(model, seed: int, spectator_gate=None,
 def _build_spectator_datagen_model(profile: ValidationProfile):
     if profile.nqubits < 3:
         raise ValueError('Spectator-crosstalk profiles require at least three qubits')
-    processor_spec = _line_processor_spec(profile.nqubits)
+    processor_spec = _processor_spec(profile.nqubits, profile.topology)
     terms_by_gate = _terms_by_gate(profile.model_terms)
     coefficients = {
         (gate_name,) + tuple(placement): {
@@ -311,8 +331,8 @@ def build_fit_and_datagen_models(profile: ValidationProfile):
 
     The fit model's parameterization defines the hypothesis class.
     """
-    fit_model = _build_model(_line_processor_spec(profile.nqubits), profile.model_terms,
-                             independent_gates=True)
+    fit_model = _build_model(_processor_spec(profile.nqubits, profile.topology),
+                             profile.model_terms, independent_gates=True)
     if profile.scenario == 'spectator_crosstalk':
         datagen_model = _build_spectator_datagen_model(profile)
     else:
@@ -382,7 +402,7 @@ def build_component_designs(profile: ValidationProfile) -> tuple[StandardGSTDesi
     The component models share parameters across gate placements.
     """
     oneq_processor_spec = _oneq_processor_spec()
-    twoq_processor_spec = _line_processor_spec(2)
+    twoq_processor_spec = _processor_spec(2)
     oneq_design = _build_component_design(
         oneq_processor_spec, profile.oneq_model, profile.max_lengths, profile.seed
     )
@@ -417,7 +437,7 @@ def _deepest_increment(design) -> set:
 
 def build_training_design_and_held_out_circuits(profile: ValidationProfile):
     """Build one training design and a reproducible held-out circuit set disjoint from it."""
-    processor_spec = _line_processor_spec(profile.nqubits)
+    processor_spec = _processor_spec(profile.nqubits, profile.topology)
     oneq_design, twoq_design = build_component_designs(profile)
     training_design = make_simultaneous_gst_design(
         processor_spec, oneq_design, twoq_design, seed=profile.seed)

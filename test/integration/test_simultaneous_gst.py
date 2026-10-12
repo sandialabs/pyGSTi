@@ -34,8 +34,12 @@ from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
 from test.helpers.simultaneous_gst_validation import (
     FOUR_QUBIT_SPARSE_IN_CLASS,
+    FOUR_QUBIT_SPARSE_RING_IN_CLASS,
+    FOUR_QUBIT_SPARSE_RING_SPECTATOR,
     FOUR_QUBIT_SPARSE_SPECTATOR,
     THREE_QUBIT_SPARSE_IN_CLASS,
+    THREE_QUBIT_SPARSE_RING_IN_CLASS,
+    THREE_QUBIT_SPARSE_RING_SPECTATOR,
     THREE_QUBIT_SPARSE_SPECTATOR,
     ValidationArtifacts,
     create_run_root,
@@ -274,6 +278,21 @@ class SimultaneousGSTValidationTester:
 
     def test_four_qubit_sparse_spectator_crosstalk(self):
         self.assert_reveals_and_survives_crosstalk(run_profile(FOUR_QUBIT_SPARSE_SPECTATOR))
+
+    # A ring adds the wraparound edge.  On three qubits that edge needs a third color,
+    # and on four it puts every qubit in a two-qubit patch in both colors.
+
+    def test_three_qubit_sparse_ring_in_class_recovery(self):
+        self.assert_recovers_datagen_model(run_profile(THREE_QUBIT_SPARSE_RING_IN_CLASS))
+
+    def test_three_qubit_sparse_ring_spectator_crosstalk(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(THREE_QUBIT_SPARSE_RING_SPECTATOR))
+
+    def test_four_qubit_sparse_ring_in_class_recovery(self):
+        self.assert_recovers_datagen_model(run_profile(FOUR_QUBIT_SPARSE_RING_IN_CLASS))
+
+    def test_four_qubit_sparse_ring_spectator_crosstalk(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(FOUR_QUBIT_SPARSE_RING_SPECTATOR))
 
 if __name__ == '__main__':
     unittest.main()

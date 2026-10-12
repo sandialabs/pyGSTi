@@ -1,5 +1,6 @@
 """Tests for simultaneous-GST validation execution helpers."""
 
+import dataclasses
 import os
 import pathlib
 import subprocess
@@ -207,6 +208,64 @@ def test_four_qubit_sparse_fit_model_has_59_parameters():
     sparse_profile = ValidationProfile.sparse_line(nqubits=4, max_lengths=(1, 2))
     sparse_fit_model, _ = build_fit_and_datagen_models(sparse_profile)
     assert sparse_fit_model.num_params == 59
+
+
+def test_ring_processor_spec_adds_the_wraparound_edge_to_the_line():
+    line = validation._processor_spec(4)
+    ring = validation._processor_spec(4, 'ring')
+    line_edges = [(0, 1), (1, 2), (2, 3)]
+    for gate_name in ('Gcnot', 'Gii'):
+        assert list(line.resolved_availability(gate_name)) == line_edges
+        assert list(ring.resolved_availability(gate_name)) == line_edges + [(0, 3)]
+    with pytest.raises(ValueError, match='at least three qubits'):
+        validation._processor_spec(2, 'ring')
+
+
+def test_ring_fit_models_add_one_edge_of_parameters():
+    # Each edge carries 3 Gcnot and 6 Gii parameters, so the ring adds 9 to the line.
+    for nqubits, num_params in ((3, 51), (4, 68)):
+        profile = ValidationProfile.sparse_line(nqubits=nqubits, max_lengths=(1,), topology='ring')
+        fit_model, _ = build_fit_and_datagen_models(profile)
+        assert profile.name == f'{nqubits}q_sparse_ring'
+        assert fit_model.num_params == num_params
+
+
+def test_three_qubit_ring_design_colors_and_uses_the_wraparound_edge():
+    profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1,), seed=1234, topology='ring')
+    training_design, _ = build_training_design_and_held_out_circuits(profile)
+    # An odd cycle has no proper 2-edge-coloring.
+    assert training_design.color_patches == {0: [(0, 1)], 1: [(1, 2)], 2: [(0, 2)]}
+    cnot_supports = {
+        component.sslbls
+        for circuit in training_design.all_circuits_needing_data
+        for layer in circuit
+        for component in layer.components
+        if component.name == 'Gcnot'
+    }
+    assert cnot_supports == {(0, 1), (1, 2), (0, 2)}
+
+
+def test_canonical_ring_profiles_match_their_line_counterparts():
+    pairs = (
+        (validation.THREE_QUBIT_SPARSE_IN_CLASS, validation.THREE_QUBIT_SPARSE_RING_IN_CLASS),
+        (validation.THREE_QUBIT_SPARSE_SPECTATOR, validation.THREE_QUBIT_SPARSE_RING_SPECTATOR),
+        (validation.FOUR_QUBIT_SPARSE_IN_CLASS, validation.FOUR_QUBIT_SPARSE_RING_IN_CLASS),
+        (validation.FOUR_QUBIT_SPARSE_SPECTATOR, validation.FOUR_QUBIT_SPARSE_RING_SPECTATOR),
+    )
+    for line, ring in pairs:
+        assert (line.topology, ring.topology) == ('line', 'ring')
+        assert ring.name == line.name.replace('_line', '_ring')
+        assert ring == dataclasses.replace(line, name=ring.name, topology='ring')
+
+
+def test_ring_spectator_datagen_model_keeps_the_injected_term():
+    _, datagen_model = build_fit_and_datagen_models(validation.FOUR_QUBIT_SPARSE_RING_SPECTATOR)
+    cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
+    spectator_coefficients = {
+        label: value for label, value in cnot_coefficients.items() if label.support == (2,)
+    }
+    assert len(spectator_coefficients) == 1
+    assert next(iter(spectator_coefficients.values())) == pytest.approx(0.01)
 
 
 def test_canonical_four_qubit_sparse_profile_has_max_length_four():
