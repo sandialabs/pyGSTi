@@ -330,6 +330,29 @@ eprop.configure_errorgen_propagation_parallelization(min_km_alpha=500, min_magnu
 eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 ```
 
+### Dynamic Hardware Calibration with `optimize_errorgen_propagation_parallelization`
+While the built-in multi-scale threshold table provides sensible defaults across small, medium, and large qubit systems, optimal crossover thresholds depend on machine-specific hardware characteristics:
+- Single-threaded CPU throughput ($\tau_\alpha$) for stabilizer tableau operations
+- Inter-process communication (IPC) dispatch latency ($T_{\text{IPC}}$), which varies significantly across operating systems and start methods (`fork` on Linux vs. `spawn` on macOS/Windows)
+- Memory bus bandwidth and core counts
+
+To calibrate thresholds empirically for your specific host machine, you can run `optimize_errorgen_propagation_parallelization`:
+
+```{code-cell} ipython3
+# Empirically profile single-threaded throughput and IPC latency for a 4-qubit circuit:
+calib_results = eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, set_as_default=True)
+print(f"Measured single-term evaluation time: {calib_results['tau_alpha_us']:.2f} µs")
+print(f"Measured round-trip IPC latency:      {calib_results['t_ipc_s']*1000:.3f} ms")
+print(f"Calibrated crossover threshold (KM):  {calib_results['threshold_KM']:,} operations")
+```
+
+When `set_as_default=True` (the default), the calibrated crossover thresholds are cached in the active session and supersede the built-in reference defaults for subsequent `bulk_alpha`, `bulk_alpha_pauli`, and probability calculations. You can pass `num_qubits`, a `Circuit`, or a `Model` to tailor the profiling to your specific circuit geometry.
+
+```{code-cell} ipython3
+# Reset back to built-in reference defaults when finished:
+eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+```
+
 ## Using a Fixed Per-Layer Error Generator
 Up to this point we have constructed an `ErrorGeneratorPropagator` from a full pyGSTi noise model. In many situations, however, it is useful to work with a simpler setup in which the *same* error generator layer is assumed to occur after every circuit layer, independent of the gate actually appearing there.
 
