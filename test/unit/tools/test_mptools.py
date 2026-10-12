@@ -231,6 +231,26 @@ class MPToolsTester(BaseCase):
         )
         self.assertEqual(par_accum, seq_accum)
 
+    def test_parallel_pair_reduce_dynamic(self):
+        pairs = [(i, j) for i in range(10) for j in range(i)]  # 45 pairs
+        weights = [float(i * 10 + j) for i, j in pairs]
+
+        seq_accum = None
+        for p in pairs:
+            res = _eval_pair(p)
+            seq_accum = res if seq_accum is None else _reduce_dicts(seq_accum, res)
+
+        dyn_accum = mpt.parallel_pair_reduce(
+            _eval_pair, pairs, _reduce_dicts, num_workers=4, pair_weights=weights, dynamic=True
+        )
+        self.assertEqual(dyn_accum, seq_accum)
+
+        with mpt.SharedWorkerPool(num_workers=4) as pool:
+            pool_dyn_accum = mpt.parallel_pair_reduce(
+                _eval_pair, pairs, _reduce_dicts, pool=pool, pair_weights=weights, dynamic=True
+            )
+            self.assertEqual(pool_dyn_accum, seq_accum)
+
     def test_lpt_partition(self):
         items = ["a", "b", "c", "d", "e", "f"]
         weights = [10.0, 8.0, 7.0, 5.0, 3.0, 1.0]

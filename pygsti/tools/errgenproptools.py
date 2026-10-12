@@ -830,10 +830,108 @@ class _MagnusPhase2Evaluator:
 
 
 def _merge_pair_indexed_string_dictionaries(d1: dict, d2: dict) -> dict:
-    """Binary reduction merging (i, k) layer-pair indexed string rate dictionaries."""
+    """Binary reduction merging (i, k) layer-pair indexed string rate dictionaries additively."""
     res = d1.copy()
-    res.update(d2)
+    for pair_key, rates in d2.items():
+        if pair_key in res:
+            sub = res[pair_key].copy()
+            get = sub.get
+            for lbl, rate in rates.items():
+                sub[lbl] = get(lbl, 0.0) + rate
+            res[pair_key] = sub
+        else:
+            res[pair_key] = rates.copy()
     return res
+
+
+def _generate_balanced_magnus_pairs(
+    errorgen_layers: list[_ErrorgenDict],
+    num_workers: int,
+    alpha: float = 0.45,
+    min_slice_terms: int = 500,
+    include_indices: bool = False,
+) -> tuple[list[Any], list[float]]:
+    """
+    Decompose Magnus layer pairs into load-balanced tasks using Dynamic Worker-Budget
+    Capacity Slicing with order-preserving strided partitioning.
+
+    Parameters
+    ----------
+    errorgen_layers : list of dicts
+        List of error generator layer dictionaries.
+    num_workers : int
+        Active worker process count.
+    alpha : float, optional (default 0.45)
+        Fraction of ideal worker capacity defining the maximum task budget.
+    min_slice_terms : int, optional (default 500)
+        Minimum number of terms in a slice to prevent micro-task fragmentation.
+    include_indices : bool, optional (default False)
+        If True, tasks include layer indices (i, k, ...) for Phase 1 of 3rd-order expansion.
+
+    Returns
+    -------
+    tasks : list
+        List of task tuples.
+    task_weights : list of float
+        Estimated computational weights corresponding to each task.
+    """
+    num_layers = len(errorgen_layers)
+    if num_layers <= 1:
+        return [], []
+
+    raw_pairs = []
+    total_work = 0.0
+    for i in range(num_layers):
+        for j in range(i):
+            w = len(errorgen_layers[i]) * len(errorgen_layers[j])
+            raw_pairs.append((i, j, errorgen_layers[i], errorgen_layers[j], w))
+            total_work += w
+
+    w_ideal = total_work / max(1, num_workers)
+    t_max = alpha * w_ideal
+
+    tasks = []
+    task_weights = []
+
+    for i, j, l1, l2, w in raw_pairs:
+        if w <= t_max or num_workers <= 2 or t_max <= 0:
+            s_ij = 1
+        else:
+            s_ideal = int(_math.ceil(w / t_max))
+            max_terms = max(len(l1), len(l2))
+            s_clamp = max(1, max_terms // min_slice_terms)
+            s_ij = min(s_ideal, s_clamp)
+
+        if s_ij <= 1:
+            if include_indices:
+                tasks.append((i, j, l1, l2))
+            else:
+                tasks.append((l1, l2))
+            task_weights.append(float(w))
+        else:
+            w_slice = float(w) / s_ij
+            if len(l1) >= len(l2):
+                # Slice first operand l1; l2 remains intact
+                items = list(l1.items())
+                for k in range(s_ij):
+                    sub = dict(items[k::s_ij])
+                    if include_indices:
+                        tasks.append((i, j, sub, l2))
+                    else:
+                        tasks.append((sub, l2))
+                    task_weights.append(w_slice)
+            else:
+                # Slice second operand l2; l1 remains intact (OPERAND ORDER PRESERVED)
+                items = list(l2.items())
+                for k in range(s_ij):
+                    sub = dict(items[k::s_ij])
+                    if include_indices:
+                        tasks.append((i, j, l1, sub))
+                    else:
+                        tasks.append((l1, sub))
+                    task_weights.append(w_slice)
+
+    return tasks, task_weights
 
 
 @_with_cyclic_gc_paused
@@ -1006,19 +1104,15 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
                                                    addl_weight=0.5, truncation_threshold=truncation_threshold)
         return _truncated(second_order_comm_dict, truncation_threshold)
 
-    # Parallel pairwise reduction across workers with LPT bin-packing and string-key deferred materialization
+    # Parallel pairwise reduction across workers with dynamic capacity slicing and streaming reduction
+    tasks, task_weights = _generate_balanced_magnus_pairs(
+        errorgen_layers, workers, alpha=0.45, include_indices=False
+    )
     evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
-    if pool is not None:
-        second_order_str_dict = _parallel_pair_reduce(
-            evaluator, errorgen_pairs, _merge_string_dictionaries, num_workers=workers, pool=pool,
-            pair_weights=pair_weights
-        )
-    else:
-        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
-            second_order_str_dict = _parallel_pair_reduce(
-                evaluator, errorgen_pairs, _merge_string_dictionaries, pool=local_pool,
-                pair_weights=pair_weights
-            )
+    second_order_str_dict = _parallel_pair_reduce(
+        evaluator, tasks, _merge_string_dictionaries, num_workers=workers, pool=pool,
+        prewarm_packages=_EGPROP_PREWARM_PACKAGES, pair_weights=task_weights, dynamic=True
+    )
     if second_order_str_dict is None:
         return {}
     survivors = _truncated(second_order_str_dict, truncation_threshold)
@@ -1152,21 +1246,18 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         return (_truncated(second_order_comm_dict, truncation_threshold),
                 _truncated(third_order_comm_dict, truncation_threshold))
 
-    # Two-Phase Parallel Evaluation with LPT Bin-Packing delegated to parallel_pair_reduce
-    pair_items = []
-    pair_weights = []
-    for i in range(num_layers):
-        for k in range(i):
-            pair_items.append((i, k, errorgen_layers[i], errorgen_layers[k]))
-            pair_weights.append(len(errorgen_layers[i]) * len(errorgen_layers[k]))
+    # Two-Phase Parallel Evaluation with Dynamic Capacity Slicing and Streaming Reduction
+    p1_tasks, p1_weights = _generate_balanced_magnus_pairs(
+        errorgen_layers, workers, alpha=0.45, include_indices=True
+    )
 
     p1_evaluator = _MagnusPhase1PairEvaluator(identity, truncation_threshold)
     p2_evaluator = _MagnusPhase2Evaluator(identity, truncation_threshold)
 
     def _execute_magnus_phases(active_pool):
         p1_res = _parallel_pair_reduce(
-            p1_evaluator, pair_items, _merge_pair_indexed_string_dictionaries,
-            pool=active_pool, pair_weights=pair_weights
+            p1_evaluator, p1_tasks, _merge_pair_indexed_string_dictionaries,
+            pool=active_pool, pair_weights=p1_weights, dynamic=True
         )
         if p1_res is None:
             p1_res = {}
@@ -1223,7 +1314,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
 
         third_order_str = _parallel_pair_reduce(
             p2_evaluator, outer_tasks, _merge_string_dictionaries,
-            pool=active_pool, pair_weights=outer_weights
+            pool=active_pool, pair_weights=outer_weights, dynamic=True
         )
         if third_order_str is None:
             third_order_str = {}

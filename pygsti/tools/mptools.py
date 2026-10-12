@@ -368,6 +368,14 @@ class SharedWorkerPool:
             return [func(*args) for args in iterable]
         return self._pool.starmap(func, iterable, chunksize=chunksize)
 
+    def imap_unordered(self, func: Callable, iterable: Sequence, chunksize: int = 1):
+        """Stream func(x) results across workers as they complete, falling back to serial execution if pool has 1 worker."""
+        if self._pool is None:
+            for x in iterable:
+                yield func(x)
+        else:
+            yield from self._pool.imap_unordered(func, iterable, chunksize=chunksize)
+
 
 def resolve_pool_workers(pool: Any) -> int:
     """
@@ -558,6 +566,7 @@ def parallel_pair_reduce(
     pool: Optional[Union[SharedWorkerPool, _mppool.Pool]] = None,
     prewarm_packages: Optional[Sequence[str]] = None,
     pair_weights: Optional[Sequence[float]] = None,
+    dynamic: bool = False,
 ) -> Any:
     """
     Execute pair_eval_fn over pairs in parallel chunks and aggregate results via reduce_fn.
@@ -580,6 +589,10 @@ def parallel_pair_reduce(
         Optional packages to pre-warm in workers if an ephemeral pool is created.
     pair_weights : sequence of float, optional
         Estimated relative computational costs per pair for greedy LPT load balancing.
+    dynamic : bool, optional (default False)
+        If True, dispatches individual tasks dynamically to workers on-demand (longest-first),
+        streaming and reducing results as they arrive. If False, pre-partitions tasks into
+        static worker chunks.
 
     Returns
     -------
@@ -600,6 +613,25 @@ def parallel_pair_reduce(
             res = pair_eval_fn(p)
             accum = res if accum is None else reduce_fn(accum, res)
         return accum
+
+    if dynamic:
+        if pair_weights is not None and len(pair_weights) == n_pairs:
+            sorted_items = [item for item, _ in sorted(zip(pair_items, pair_weights), key=lambda x: x[1], reverse=True)]
+        else:
+            sorted_items = pair_items
+
+        def _run_dynamic(active_pool):
+            final_accum = None
+            for res in active_pool.imap_unordered(pair_eval_fn, sorted_items, chunksize=1):
+                if res is not None:
+                    final_accum = res if final_accum is None else reduce_fn(final_accum, res)
+            return final_accum
+
+        if pool is not None:
+            return _run_dynamic(pool)
+        else:
+            with SharedWorkerPool(num_workers=workers, prewarm_packages=prewarm_packages) as local_pool:
+                return _run_dynamic(local_pool)
 
     if pair_weights is not None and len(pair_weights) == n_pairs:
         chunks = lpt_partition(pair_items, pair_weights, workers)

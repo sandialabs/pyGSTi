@@ -1375,6 +1375,32 @@ class ApproxStabilizerMethodTester(BaseCase):
         finally:
             _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
+    def test_generate_balanced_magnus_pairs(self):
+        # Empty or single layer -> empty tasks
+        self.assertEqual(_eprop._generate_balanced_magnus_pairs([], 4), ([], []))
+        self.assertEqual(_eprop._generate_balanced_magnus_pairs([{}], 4), ([], []))
+
+        # Check order-preserving splitting
+        l0 = {f"k{i}": 0.1 for i in range(100)}
+        l1 = {f"k{i}": 0.1 for i in range(2000)}
+
+        # With 16 workers, l1*l0 = 200,000, if alpha is small, it splits l1
+        tasks, weights = _eprop._generate_balanced_magnus_pairs([l0, l1], num_workers=16, alpha=0.3, min_slice_terms=200)
+        self.assertGreater(len(tasks), 1)
+        # Check that operand order is strictly preserved: l1 is layer 1 (first arg), l0 is layer 0 (second arg)
+        for t in tasks:
+            sub_l1, intact_l0 = t
+            self.assertIs(intact_l0, l0)
+            self.assertTrue(set(sub_l1.keys()).issubset(set(l1.keys())))
+
+        # If earlier layer l0 is larger than later layer l1:
+        tasks_rev, _ = _eprop._generate_balanced_magnus_pairs([l1, l0], num_workers=16, alpha=0.3, min_slice_terms=200)
+        self.assertGreater(len(tasks_rev), 1)
+        for t in tasks_rev:
+            intact_l0, sub_l1 = t
+            self.assertIs(intact_l0, l0)
+            self.assertTrue(set(sub_l1.keys()).issubset(set(l1.keys())))
+
     def test_approximate_stabilizer_pauli_expectations_bulk(self):
         paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY'), 'XIII']
         bulk_exp = _eprop.approximate_stabilizer_pauli_expectations(
