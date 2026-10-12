@@ -585,11 +585,11 @@ def estimate_magnus_peak_memory(
     master_base = 50 * 1024 * 1024
     worker_base = 45 * 1024 * 1024 if w > 1 else 0
     bytes_per_term = measure_lse_entry_size(n_qubits)
-    max_distinct_terms = 4**n_qubits - 1 if n_qubits <= 30 else 10**18
+    max_distinct_terms = 4**n_qubits - 1
 
     K = avg_errorgens_per_layer
-    # In the worst case, each pair of elementary error generators in a layer pair emits at most 7 terms
-    max_terms_per_pair = min(7 * (K ** 2), max_distinct_terms) if K > 0 else 0
+    # In the worst case, each pair of elementary error generators in a layer pair emits at most 4 terms
+    max_terms_per_pair = min(4 * (K ** 2), max_distinct_terms) if K > 0 else 0
 
     if magnus_order == 1 or n_layers <= 1:
         input_bytes = n_layers * K * bytes_per_term
@@ -608,7 +608,7 @@ def estimate_magnus_peak_memory(
     held_columns_bytes = n_layers * col_terms * bytes_per_term
 
     outer_per_worker = max(1, n_layers // max(1, w))
-    outer_terms_per_task = min(7 * K * max(1, col_terms), max_distinct_terms)
+    outer_terms_per_task = min(4 * K * max(1, col_terms), max_distinct_terms)
     p2_worker_buffer = min(outer_per_worker * outer_terms_per_task, max_distinct_terms) * bytes_per_term
 
     worker_buffer = max(p1_worker_buffer, p2_worker_buffer)
@@ -650,7 +650,7 @@ def estimate_taylor_peak_memory(
     master_base = 50 * 1024 * 1024
     worker_base = 45 * 1024 * 1024 if w > 1 else 0
     entry_bytes = measure_lse_entry_size(n_qubits)
-    max_distinct_terms = 4**n_qubits - 1 if n_qubits <= 30 else 10**18
+    max_distinct_terms = 4**n_qubits - 1
 
     K = num_errorgens
     if order == 1 or K == 0:
