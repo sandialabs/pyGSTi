@@ -848,7 +848,6 @@ def _generate_balanced_magnus_pairs(
     errorgen_layers: list[_ErrorgenDict],
     num_workers: int,
     alpha: float = 0.45,
-    min_slice_terms: int = 500,
     include_indices: bool = False,
 ) -> tuple[list[Any], list[float]]:
     """
@@ -863,8 +862,6 @@ def _generate_balanced_magnus_pairs(
         Active worker process count.
     alpha : float, optional (default 0.45)
         Fraction of ideal worker capacity defining the maximum task budget.
-    min_slice_terms : int, optional (default 500)
-        Minimum number of terms in a slice to prevent micro-task fragmentation.
     include_indices : bool, optional (default False)
         If True, tasks include layer indices (i, k, ...) for Phase 1 of 3rd-order expansion.
 
@@ -899,8 +896,7 @@ def _generate_balanced_magnus_pairs(
         else:
             s_ideal = int(_math.ceil(w / t_max))
             max_terms = max(len(l1), len(l2))
-            s_clamp = max(1, max_terms // min_slice_terms)
-            s_ij = min(s_ideal, s_clamp)
+            s_ij = min(s_ideal, max_terms)
 
         if s_ij <= 1:
             if include_indices:

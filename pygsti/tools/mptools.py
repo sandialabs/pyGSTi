@@ -88,6 +88,8 @@ def determine_num_workers(
           logical threads) via `psutil.cpu_count(logical=False)` with a fallback to
           `os.cpu_count()`. On Linux, inspects cgroups v2 (`/sys/fs/cgroup/cpu.max`) and
           cgroups v1 (`cpu.cfs_quota_us`) to determine container CPU quota.
+          On systems with >= 4 cores, reserves 1 core for the main orchestration process
+          to prevent core oversubscription and CFS throttling during streaming IPC reduction.
     max_limit : int, optional
         Maximum upper bound on workers to return.
 
@@ -160,6 +162,8 @@ def determine_num_workers(
 
             if max_limit is not None and max_limit > 0:
                 n_phys = min(n_phys, int(max_limit))
+            if n_phys >= 4:
+                return max(1, int(n_phys) - 1)
             return max(1, int(n_phys))
 
     raise ValueError(f"Invalid num_workers specification: {num_workers!r}. Expected int, None, or 'auto'.")

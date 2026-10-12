@@ -59,6 +59,7 @@ class MPToolsTester(BaseCase):
     def test_determine_num_workers_none_and_integers(self):
         self.assertEqual(mpt.determine_num_workers(None), 1)
         self.assertEqual(mpt.determine_num_workers(4), 4)
+        self.assertEqual(mpt.determine_num_workers(16), 16)
         self.assertEqual(mpt.determine_num_workers(16, max_limit=8), 8)
         self.assertEqual(mpt.determine_num_workers(4, max_limit=8), 4)
         with self.assertRaises(ValueError):
@@ -92,7 +93,7 @@ class MPToolsTester(BaseCase):
              mock.patch("builtins.open", mock_file), \
              mock.patch("psutil.cpu_count", return_value=64):
             workers = mpt.determine_num_workers("auto")
-            self.assertEqual(workers, 4)
+            self.assertEqual(workers, 3)
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
     def test_determine_num_workers_cgroup_v1_clamping(self):
