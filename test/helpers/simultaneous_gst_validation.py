@@ -29,7 +29,10 @@ from pygsti.tools import two_delta_logl, tvd
 REPO = pathlib.Path(__file__).resolve().parents[2]
 
 
-SPARSE_TERMS = {
+# Both term sets hold only H and S elementary error generators, a small part of the space
+# once the C and A sectors are counted.  `SOME_HS_TERMS` picks a few of them per gate;
+# `ALL_HS_TERMS` holds every one supported on the gate's qubits.
+SOME_HS_TERMS = {
     'Gi': (('H', 'Z'), ('S', 'X'), ('S', 'Y'), ('S', 'Z')),
     'Gxpi2': (('H', 'Z'), ('S', 'Z')),
     'Gypi2': (('H', 'X'), ('S', 'Z')),
@@ -38,7 +41,7 @@ SPARSE_TERMS = {
 }
 
 
-def _full_hs_terms(num_qubits: int) -> tuple[tuple[str, str], ...]:
+def _all_hs_terms(num_qubits: int) -> tuple[tuple[str, str], ...]:
     pauli_labels = (
         ''.join(label)
         for label in itertools.product('IXYZ', repeat=num_qubits)
@@ -48,10 +51,19 @@ def _full_hs_terms(num_qubits: int) -> tuple[tuple[str, str], ...]:
     return tuple((term_type, label) for term_type in ('H', 'S') for label in labels)
 
 
-FULL_HS_TERMS = {
-    gate_name: _full_hs_terms(2 if gate_name in ('Gcnot', 'Gii') else 1)
-    for gate_name in SPARSE_TERMS
+ALL_HS_TERMS = {
+    gate_name: _all_hs_terms(2 if gate_name in ('Gcnot', 'Gii') else 1)
+    for gate_name in SOME_HS_TERMS
 }
+
+ModelTerms = Literal['some_hs', 'all_hs']
+Scenario = Literal['in_class', 'out_of_class_spectator']
+Topology = Literal['line', 'ring']
+
+
+def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
+                  scenario: Scenario) -> str:
+    return f'{topology}_{nqubits}q_{model_terms}_{scenario}'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,11 +74,13 @@ class ValidationProfile:
     nqubits: int
     max_lengths: tuple[int, ...]
     shots: int
-    model_terms: Literal['sparse', 'full_hs']
-    scenario: Literal['in_class', 'spectator_crosstalk']
+    model_terms: ModelTerms
+    # Whether the data-generating model lies in the fit's hypothesis class, and if not,
+    # the mechanism that takes it outside.
+    scenario: Scenario
     seed: int
     spectator_error: float = 0.0
-    # The error injected into `Gcnot(0, 1)` for spectator-crosstalk scenarios, as a
+    # The error injected into `Gcnot(0, 1)` for out-of-class spectator scenarios, as a
     # `create_cloud_crosstalk_model` coefficient key.  `('S', 'Z:2')` dephases the
     # spectator.  It is weight-1, so the hypothesis class can absorb part of it, but only as
     # error on qubit 2's own gates in every layer, not just the layers containing the CNOT.
@@ -74,37 +88,30 @@ class ValidationProfile:
     # spectator, which no product of local errors reproduces, even to first order.
     spectator_term: tuple[str, ...] = ('S', 'Z:2')
     # The two-qubit gate connectivity: `'ring'` adds the wraparound edge to the line.
-    topology: Literal['line', 'ring'] = 'line'
+    topology: Topology = 'line'
 
     @classmethod
-    def sparse(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-               scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-               seed: int = 20260901, spectator_error: float = 0.0,
-               topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{topology}_{nqubits}q_sparse', nqubits, tuple(max_lengths), shots,
-                   'sparse', scenario, seed, spectator_error, topology=topology)
+    def in_class(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                 seed: int = 20260901, model_terms: ModelTerms = 'some_hs',
+                 topology: Topology = 'line') -> 'ValidationProfile':
+        """Build a profile whose data-generating model is a seeded point in the hypothesis class."""
+        return cls(_profile_name(topology, nqubits, model_terms, 'in_class'), nqubits,
+                   tuple(max_lengths), shots, model_terms, 'in_class', seed, topology=topology)
 
     # S(Z:2) at 0.01 is large enough that the training data reveal it -- the
     # crosstalk-free fit's 2*deltaLogL exceeds the data-generating model's by about 1200
     # at 3Q -- while that fit still removes most of the held-out error.  The earlier
     # default, H(Z:2) at 0.005, left the training likelihood unchanged.
     @classmethod
-    def sparse_spectator(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                         seed: int = 20260901,
-                         spectator_error: float = 0.01,
-                         spectator_term: tuple[str, ...] = ('S', 'Z:2'),
-                         topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{topology}_{nqubits}q_sparse_spectator', nqubits, tuple(max_lengths), shots,
-                   'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term),
-                   topology)
-
-    @classmethod
-    def full_hs(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-                seed: int = 20260901, spectator_error: float = 0.0,
-                topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{topology}_{nqubits}q_full_hs', nqubits, tuple(max_lengths), shots,
-                   'full_hs', scenario, seed, spectator_error, topology=topology)
+    def out_of_class_spectator(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                               seed: int = 20260901, model_terms: ModelTerms = 'some_hs',
+                               topology: Topology = 'line', spectator_error: float = 0.01,
+                               spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
+        """Build a profile whose data-generating model adds `spectator_term` to `Gcnot(0, 1)`."""
+        scenario = 'out_of_class_spectator'
+        return cls(_profile_name(topology, nqubits, model_terms, scenario), nqubits,
+                   tuple(max_lengths), shots, model_terms, scenario, seed, spectator_error,
+                   tuple(spectator_term), topology)
 
     @functools.cached_property
     def oneq_model(self):
@@ -123,21 +130,21 @@ class ValidationArtifacts:
     manifest_path: pathlib.Path
 
 
-LINE_3Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
+LINE_3Q_IN_CLASS = ValidationProfile.in_class(
     nqubits=3, max_lengths=(1, 2, 4))
-LINE_3Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
+LINE_3Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
     nqubits=3, max_lengths=(1, 2, 4))
-LINE_4Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
+LINE_4Q_IN_CLASS = ValidationProfile.in_class(
     nqubits=4, max_lengths=(1, 2, 4))
-LINE_4Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
+LINE_4Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
     nqubits=4, max_lengths=(1, 2, 4))
-RING_3Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
+RING_3Q_IN_CLASS = ValidationProfile.in_class(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-RING_3Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
+RING_3Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-RING_4Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
+RING_4Q_IN_CLASS = ValidationProfile.in_class(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
-RING_4Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
+RING_4Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
 
 
@@ -147,7 +154,7 @@ def _oneq_processor_spec() -> QubitProcessorSpec:
     )
 
 
-def _processor_spec(nqubits: int, topology: Literal['line', 'ring'] = 'line') -> QubitProcessorSpec:
+def _processor_spec(nqubits: int, topology: Topology = 'line') -> QubitProcessorSpec:
     qubits = tuple(range(nqubits))
     oneq_locations = [(qubit,) for qubit in qubits]
     edges = [(qubit, qubit + 1) for qubit in range(nqubits - 1)]
@@ -173,13 +180,15 @@ def _processor_spec(nqubits: int, topology: Literal['line', 'ring'] = 'line') ->
     )
 
 
-def _terms_by_gate(model_terms: Literal['sparse', 'full_hs']) -> dict:
-    if model_terms == 'sparse':
-        return SPARSE_TERMS
-    return FULL_HS_TERMS
+def _terms_by_gate(model_terms: ModelTerms) -> dict:
+    if model_terms == 'some_hs':
+        return SOME_HS_TERMS
+    if model_terms == 'all_hs':
+        return ALL_HS_TERMS
+    raise ValueError(f'Unknown model terms {model_terms!r}; expected some_hs or all_hs')
 
 
-def _zero_term_dict(model_terms: Literal['sparse', 'full_hs'], gate_names) -> dict:
+def _zero_term_dict(model_terms: ModelTerms, gate_names) -> dict:
     terms_by_gate = _terms_by_gate(model_terms)
     return {
         gate_name: {term: 0.0 for term in terms_by_gate[gate_name]}
@@ -188,7 +197,7 @@ def _zero_term_dict(model_terms: Literal['sparse', 'full_hs'], gate_names) -> di
 
 
 def _build_model(processor_spec: QubitProcessorSpec,
-                 model_terms: Literal['sparse', 'full_hs'], independent_gates: bool):
+                 model_terms: ModelTerms, independent_gates: bool):
     return create_crosstalk_free_model(
         processor_spec,
         lindblad_error_coeffs=_zero_term_dict(model_terms, processor_spec.gate_names),
@@ -255,7 +264,7 @@ def _set_seeded_error_coefficients(model, seed: int, spectator_gate=None,
 
 def _build_spectator_datagen_model(profile: ValidationProfile):
     if profile.nqubits < 3:
-        raise ValueError('Spectator-crosstalk profiles require at least three qubits')
+        raise ValueError('Out-of-class spectator profiles require at least three qubits')
     processor_spec = _processor_spec(profile.nqubits, profile.topology)
     terms_by_gate = _terms_by_gate(profile.model_terms)
     coefficients = {
@@ -300,7 +309,7 @@ def _spectator_parameterization(spectator_term: Sequence[str]) -> str:
 def _assert_spectator_term_survived(model, spectator_gate, profile: ValidationProfile) -> None:
     """Fail loudly if the injected crosstalk is not in the constructed model.
 
-    Without this the `H+S` silent drop produces a spectator-crosstalk run containing no
+    Without this the `H+S` silent drop produces an out-of-class spectator run containing no
     crosstalk, which is indistinguishable from an in-class run and looks entirely healthy.
     """
     wanted_type = profile.spectator_term[0]
@@ -333,7 +342,7 @@ def build_fit_and_datagen_models(profile: ValidationProfile):
     """
     fit_model = _build_model(_processor_spec(profile.nqubits, profile.topology),
                              profile.model_terms, independent_gates=True)
-    if profile.scenario == 'spectator_crosstalk':
+    if profile.scenario == 'out_of_class_spectator':
         datagen_model = _build_spectator_datagen_model(profile)
     else:
         datagen_model = fit_model.copy()
