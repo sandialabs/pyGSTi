@@ -33,9 +33,9 @@ from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
 from test.helpers.simultaneous_gst_validation import (
-    FOUR_QUBIT_SPARSE_MARKOVIAN,
+    FOUR_QUBIT_SPARSE_IN_CLASS,
     FOUR_QUBIT_SPARSE_SPECTATOR,
-    THREE_QUBIT_SPARSE_MARKOVIAN,
+    THREE_QUBIT_SPARSE_IN_CLASS,
     THREE_QUBIT_SPARSE_SPECTATOR,
     ValidationArtifacts,
     create_run_root,
@@ -73,7 +73,7 @@ def profile_with_overrides(profile):
 
     The spectator overrides let one queue sweep crosstalk strength and character
     without editing the canonical profiles. ``PYGSTI_SGST_SPECTATOR_TERM`` is
-    pipe-separated because a correlated coefficient key already contains commas,
+    pipe-separated because a weight-2 coefficient key already contains commas,
     e.g. ``H|ZZ:1,2``.
     """
     changes = {}
@@ -229,44 +229,48 @@ class SimultaneousGSTValidationTester:
     * ``datagen_two_delta_logl`` is what the data-generating model scores on exactly the
       training data.  Comparing the fit against it avoids the degrees-of-freedom
       convention behind ``nsigma``, which sparse multi-qubit outcome counts make unusable.
-    * ``ideal_validation_mean_tvd`` is the held-out error of the noiseless starting model,
-      that is, of a fit that learned nothing.
-    * ``shot_noise_validation_*_tvd_q999`` bound the held-out error that shot noise in the
-      training data gives a correct fit (Markovian profiles only).
+    * ``target_held_out_mean_tvd`` is the held-out error of the target model, the fit's
+      noiseless starting point, that is, of a fit that learned nothing.
+    * ``shot_noise_held_out_*_tvd_q999`` are 99.9th percentiles of the held-out error that
+      shot noise in the training data alone gives the fit (in-class profiles only).
     """
 
     @staticmethod
-    def assert_recovers_markovian_model(result):
+    def assert_recovers_datagen_model(result):
         likelihood_gain = result['datagen_two_delta_logl'] - result['two_delta_logl']
-        # The generator is in the fit's model family, so the maximum-likelihood fit explains
-        # the training data at least as well as the generator does, and by Wilks' theorem
-        # better by no more than a chi-squared with one degree per parameter allows.
+        # The data-generating model lies in the hypothesis class, so the maximum-likelihood
+        # fit explains the training data at least as well as that model does.  By Wilks'
+        # theorem the gain is asymptotically chi-squared with one degree of freedom per
+        # identifiable parameter (the rank of the Fisher information).
         assert likelihood_gain >= 0.0
-        assert likelihood_gain <= chi2.ppf(0.999, result['fit_model_params'])
+        assert likelihood_gain <= chi2.ppf(0.999, result['identifiable_params'])
         # Its held-out predictions are as accurate as shot noise in the training data allows.
-        assert result['validation_mean_tvd'] <= result['shot_noise_validation_mean_tvd_q999']
-        assert result['validation_max_tvd'] <= result['shot_noise_validation_max_tvd_q999']
+        assert result['held_out_mean_tvd'] <= result['shot_noise_held_out_mean_tvd_q999']
+        assert result['held_out_max_tvd'] <= result['shot_noise_held_out_max_tvd_q999']
         # And the profile can tell a fit from no fit: the noise it injects is large enough
-        # that fitting removes most of the noiseless model's held-out error.
-        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+        # that fitting removes most of the target model's held-out error.
+        assert result['held_out_mean_tvd'] <= 0.5 * result['target_held_out_mean_tvd']
 
     @staticmethod
     def assert_reveals_and_survives_crosstalk(result):
-        # The generator is outside the crosstalk-free family, and the training data show it
-        # exactly when the best crosstalk-free fit explains them worse than the generator does.
+        # The data-generating model lies outside the crosstalk-free hypothesis class.  If the
+        # best fit explains the training data worse than that model does, the data reveal the
+        # crosstalk, since an in-class fit can never do worse.  The converse fails: crosstalk
+        # whose likelihood cost is smaller than the fit's overfitting gain (about chi-squared
+        # in the identifiable parameters) goes unflagged here.
         assert result['two_delta_logl'] > result['datagen_two_delta_logl']
-        # The violation is modest: the fit still removes most of the noiseless model's
+        # The violation is modest: the fit still removes most of the target model's
         # held-out error.
-        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+        assert result['held_out_mean_tvd'] <= 0.5 * result['target_held_out_mean_tvd']
 
-    def test_three_qubit_sparse_markovian_recovery(self):
-        self.assert_recovers_markovian_model(run_profile(THREE_QUBIT_SPARSE_MARKOVIAN))
+    def test_three_qubit_sparse_in_class_recovery(self):
+        self.assert_recovers_datagen_model(run_profile(THREE_QUBIT_SPARSE_IN_CLASS))
 
     def test_three_qubit_sparse_spectator_crosstalk(self):
         self.assert_reveals_and_survives_crosstalk(run_profile(THREE_QUBIT_SPARSE_SPECTATOR))
 
-    def test_four_qubit_sparse_markovian_bridge(self):
-        self.assert_recovers_markovian_model(run_profile(FOUR_QUBIT_SPARSE_MARKOVIAN))
+    def test_four_qubit_sparse_in_class_recovery(self):
+        self.assert_recovers_datagen_model(run_profile(FOUR_QUBIT_SPARSE_IN_CLASS))
 
     def test_four_qubit_sparse_spectator_crosstalk(self):
         self.assert_reveals_and_survives_crosstalk(run_profile(FOUR_QUBIT_SPARSE_SPECTATOR))

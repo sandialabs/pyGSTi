@@ -19,10 +19,11 @@ from test.helpers.simultaneous_gst_validation import (
     ValidationProfile,
     build_component_designs,
     build_fit_and_datagen_models,
-    build_training_design_and_validation_circuits,
+    build_training_design_and_held_out_circuits,
     create_run_root,
     expected_fisher_information,
     generate_finite_shot_data,
+    identifiable_parameter_count,
     shot_noise_held_out_tvd_quantiles,
     spectator_support,
     spectator_term_text,
@@ -62,7 +63,7 @@ def test_full_hs_fourqubit_model_has_independent_placement_parameters():
     assert fit_model.num_params == 252
 
 
-def test_markovian_generator_matches_the_fit_hypothesis():
+def test_in_class_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
     profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2))
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
     assert fit_model.num_params == datagen_model.num_params
@@ -101,7 +102,7 @@ def test_profile_overrides_are_immutable_and_optional(monkeypatch):
         20260901, 0.01, ('S', 'Z:2'))
 
 
-def test_spectator_generator_differs_from_the_local_fit_hypothesis():
+def test_spectator_datagen_model_lies_outside_the_hypothesis_class():
     profile = ValidationProfile.sparse_spectator_line(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.001)
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
@@ -118,7 +119,7 @@ def test_spectator_generator_differs_from_the_local_fit_hypothesis():
     assert spectator_value == pytest.approx(0.001)
 
 
-def test_spectator_support_parses_local_and_correlated_coefficient_keys():
+def test_spectator_support_reads_qubits_from_coefficient_keys():
     assert spectator_support(('H', 'Z:2')) == (2,)
     assert spectator_support(('H', 'ZZ:1,2')) == (1, 2)
     assert spectator_support(('S', 'ZZZ:0,1,2')) == (0, 1, 2)
@@ -126,19 +127,19 @@ def test_spectator_support_parses_local_and_correlated_coefficient_keys():
     assert spectator_term_text(('H', 'ZZ:1,2')) == 'H(ZZ:1,2)'
 
 
-def test_correlated_spectator_term_survives_the_deterministic_local_noise():
-    """A correlated key has support (1, 2), so the (2,)-only guard would not protect it."""
+def test_weight_two_spectator_term_survives_the_seeded_local_noise():
+    """A weight-2 key has support (1, 2), so the (2,)-only guard would not protect it."""
     profile = ValidationProfile.sparse_spectator_line(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.02, spectator_term=('H', 'ZZ:1,2'))
     _, datagen_model = build_fit_and_datagen_models(profile)
 
-    correlated = {
+    weight_two = {
         label: value
         for label, value in datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)].items()
         if label.support == (1, 2)
     }
-    assert len(correlated) == 1
-    label, value = next(iter(correlated.items()))
+    assert len(weight_two) == 1
+    label, value = next(iter(weight_two.items()))
     assert label.errorgen_type == 'H'
     assert value == pytest.approx(0.02)
 
@@ -163,7 +164,7 @@ def test_correlation_spectator_terms_are_built_rather_than_silently_discarded():
 
 
 def test_hamiltonian_and_stochastic_terms_keep_the_original_parameterization():
-    """Promoting every data generator to `GLNDU` would change runs that do not need it."""
+    """Promoting every data-generating model to `GLNDU` would change runs that do not need it."""
     assert validation._spectator_parameterization(('H', 'Z:2')) == 'H+S'
     assert validation._spectator_parameterization(('S', 'Z:2')) == 'H+S'
     assert validation._spectator_parameterization(('C', 'Z:2', 'X:2')) == 'GLNDU'
@@ -173,7 +174,7 @@ def test_hamiltonian_and_stochastic_terms_keep_the_original_parameterization():
 def test_held_out_circuits_are_distinct_so_the_mean_is_not_reweighted():
     """A circuit reached by two germ powers is listed twice; averaging would double it."""
     profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2, 4), seed=20260902)
-    _, held_out = build_training_design_and_validation_circuits(profile)
+    _, held_out = build_training_design_and_held_out_circuits(profile)
 
     assert len(set(held_out.circuits)) == len(held_out.circuits)
     assert len(set(held_out.deepest)) == len(held_out.deepest)
@@ -188,9 +189,9 @@ def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
         build_fit_and_datagen_models(profile)
 
 
-def test_deepest_held_out_circuits_come_from_the_largest_germ_power():
+def test_deepest_held_out_circuits_come_from_the_largest_max_length():
     profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2, 4), seed=1234)
-    _, held_out = build_training_design_and_validation_circuits(profile)
+    _, held_out = build_training_design_and_held_out_circuits(profile)
 
     assert held_out.deepest
     assert set(held_out.deepest) <= set(held_out.circuits)
@@ -202,17 +203,17 @@ def test_deepest_held_out_circuits_come_from_the_largest_germ_power():
             > min(circuit.depth for circuit in held_out.circuits))
 
 
-def test_four_qubit_fit_profile_has_bridge_parameter_count():
+def test_four_qubit_sparse_fit_model_has_59_parameters():
     sparse_profile = ValidationProfile.sparse_line(nqubits=4, max_lengths=(1, 2))
     sparse_fit_model, _ = build_fit_and_datagen_models(sparse_profile)
     assert sparse_fit_model.num_params == 59
 
 
-def test_canonical_four_qubit_sparse_profile_uses_routine_l4_depth():
-    assert validation.FOUR_QUBIT_SPARSE_MARKOVIAN.max_lengths == (1, 2, 4)
+def test_canonical_four_qubit_sparse_profile_has_max_length_four():
+    assert validation.FOUR_QUBIT_SPARSE_IN_CLASS.max_lengths == (1, 2, 4)
 
 
-def test_canonical_four_qubit_sparse_spectator_profile_matches_the_l4_bridge():
+def test_canonical_four_qubit_spectator_profile_adds_s_z2_to_the_in_class_setup():
     profile = validation.FOUR_QUBIT_SPARSE_SPECTATOR
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
 
@@ -273,10 +274,10 @@ def test_component_design_selection_is_reproducible():
     assert tuple(map(serialize, first_designs)) == tuple(map(serialize, second_designs))
 
 
-def test_validation_circuits_are_deterministic_and_disjoint_from_training():
+def test_held_out_circuits_are_reproducible_and_disjoint_from_training():
     profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2), seed=1234)
-    training_design, held_out = build_training_design_and_validation_circuits(profile)
-    _, repeated_held_out = build_training_design_and_validation_circuits(profile)
+    training_design, held_out = build_training_design_and_held_out_circuits(profile)
+    _, repeated_held_out = build_training_design_and_held_out_circuits(profile)
     training_circuits = set(training_design.all_circuits_needing_data)
     assert held_out.circuits
     assert training_circuits.isdisjoint(held_out.circuits)
@@ -346,6 +347,19 @@ def test_expected_fisher_information_is_the_expected_negative_loglikelihood_hess
 
     fisher = expected_fisher_information(model, dataset)
     np.testing.assert_allclose(fisher, -hessian, rtol=1e-3, atol=1e-6 * np.abs(fisher).max())
+
+
+def test_identifiable_parameter_count_is_the_fisher_information_rank():
+    model, dataset, _ = _noisy_oneq_model_and_circuits(shots=1000)
+    fisher = expected_fisher_information(model, dataset)
+    assert identifiable_parameter_count(model, dataset) == np.linalg.matrix_rank(fisher)
+
+    # One informative circuit identifies one direction: its two outcome rows of the Jacobian
+    # are r and -r, because the probabilities sum to one, so F is a multiple of r r^T.
+    single_circuit = simulate_data(
+        model, [Circuit([], line_labels=(0,)), Circuit([('Gi', 0)], line_labels=(0,))],
+        num_samples=1000, seed=0)
+    assert identifiable_parameter_count(model, single_circuit) == 1
 
 
 def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
