@@ -11,10 +11,9 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Literal, Mapping, Sequence
+from typing import Literal, Sequence
 
 import numpy as np
-from scipy.optimize import nnls
 
 from pygsti.algorithms.fiducialselection import find_fiducials
 from pygsti.algorithms.germselection import find_germs
@@ -116,15 +115,6 @@ class ValidationArtifacts:
     manifest_path: pathlib.Path
 
 
-@dataclasses.dataclass(frozen=True)
-class RuntimeEstimate:
-    """Predicted wall time and the auditable inputs used to predict it."""
-
-    median_seconds: float
-    upper_seconds: float
-    factors: dict
-
-
 THREE_QUBIT_SPARSE_MARKOVIAN = ValidationProfile.sparse_line(
     nqubits=3, max_lengths=(1, 2, 4))
 THREE_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
@@ -133,73 +123,6 @@ FOUR_QUBIT_SPARSE_MARKOVIAN = ValidationProfile.sparse_line(
     nqubits=4, max_lengths=(1, 2, 4))
 FOUR_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
     nqubits=4, max_lengths=(1, 2, 4))
-
-
-def eligible_to_launch(estimate: RuntimeEstimate, remaining_seconds: float) -> bool:
-    """Return whether the conservative estimate fits within the remaining budget."""
-    return estimate.upper_seconds <= remaining_seconds
-
-
-def estimate_runtime(
-        profiles: Mapping[str, Mapping[str, int | list[int]]],
-        twoq_observations: Sequence[Mapping[str, float | int]],
-        microbenchmarks: Mapping[str, Mapping[str, float]],
-) -> dict[str, RuntimeEstimate]:
-    """Fit the specified nonnegative predictor to exactly 18 two-qubit observations."""
-    if len(twoq_observations) != 18:
-        raise ValueError(f'Expected 18 two-qubit observations, got {len(twoq_observations)}')
-
-    design_matrix = np.asarray([
-        (
-            float(observation['fit_circuits'])
-            * float(observation['dprob_seconds_per_circuit']),
-            float(observation['normal_equation_work']),
-            1.0,
-        )
-        for observation in twoq_observations
-    ], dtype=float)
-    elapsed = np.asarray([
-        float(observation['elapsed_seconds']) for observation in twoq_observations
-    ], dtype=float)
-
-    # The normal-equation proxy is many orders of magnitude larger than the
-    # timed-Jacobian feature.  Column scaling preserves the model while keeping
-    # NNLS well-conditioned.
-    scales = np.maximum(np.max(np.abs(design_matrix), axis=0), 1.0)
-    scaled_coefficients, _ = nnls(design_matrix / scales, elapsed)
-    coefficients = scaled_coefficients / scales
-    fitted = design_matrix @ coefficients
-    residuals = elapsed - fitted
-    largest_abs_residual = float(np.max(np.abs(residuals)))
-    coefficient_record = {
-        'fit_circuit_dprob': float(coefficients[0]),
-        'normal_equation_work': float(coefficients[1]),
-        'intercept': float(coefficients[2]),
-    }
-
-    estimates = {}
-    for name, work in profiles.items():
-        dprob_rate = float(microbenchmarks[name]['dprob_seconds_per_circuit'])
-        median_seconds = float(
-            coefficients[0] * int(work['fit_circuits']) * dprob_rate
-            + coefficients[1] * int(work['normal_equation_work'])
-            + coefficients[2]
-        )
-        upper_seconds = max(
-            1.5 * median_seconds,
-            median_seconds + 2.0 * largest_abs_residual,
-        )
-        estimates[name] = RuntimeEstimate(
-            median_seconds=median_seconds,
-            upper_seconds=upper_seconds,
-            factors={
-                **work,
-                'dprob_seconds_per_circuit': dprob_rate,
-                'coefficients': coefficient_record,
-                'largest_absolute_residual': largest_abs_residual,
-            },
-        )
-    return estimates
 
 
 def _oneq_processor_spec() -> QubitProcessorSpec:
@@ -701,28 +624,6 @@ def run_validation_profile(
         metrics['shot_noise_validation_max_tvd_q999'] = max_bound
     (artifacts.root / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')
     return metrics
-
-
-def static_work_units(profile: ValidationProfile) -> dict[str, int | list[int]]:
-    """Build the exact stitched design and count its fitting work without fitting."""
-    oneq_design, twoq_design = build_component_designs(profile)
-    simultaneous_design = make_simultaneous_gst_design(
-        _line_processor_spec(profile.nqubits), oneq_design, twoq_design,
-        seed=profile.seed,
-    )
-    fit_model, _ = build_fit_and_datagen_models(profile)
-    circuits_per_iteration = [len(circuit_list) for circuit_list in simultaneous_design.circuit_lists]
-    fit_circuits = sum(circuits_per_iteration)
-    outcomes = 2 ** profile.nqubits
-    parameter_count = fit_model.num_params
-    return {
-        'circuits_per_iteration': circuits_per_iteration,
-        'fit_circuits': fit_circuits,
-        'parameter_count': parameter_count,
-        'outcomes': outcomes,
-        'jacobian_rows': fit_circuits * outcomes * parameter_count,
-        'normal_equation_work': len(simultaneous_design.circuit_lists) * parameter_count ** 3,
-    }
 
 
 def create_run_root(artifact_root: pathlib.Path, profile_name: str) -> pathlib.Path:

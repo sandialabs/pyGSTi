@@ -14,7 +14,6 @@ from pygsti.tools import tvd
 import test.helpers.simultaneous_gst_validation as validation
 from test.integration.test_simultaneous_gst import profile_with_overrides
 from test.helpers.simultaneous_gst_validation import (
-    RuntimeEstimate,
     THREE_QUBIT_SPARSE_SPECTATOR,
     ValidationArtifacts,
     ValidationProfile,
@@ -22,14 +21,11 @@ from test.helpers.simultaneous_gst_validation import (
     build_fit_and_datagen_models,
     build_training_design_and_validation_circuits,
     create_run_root,
-    eligible_to_launch,
-    estimate_runtime,
     expected_fisher_information,
     generate_finite_shot_data,
     shot_noise_held_out_tvd_quantiles,
     spectator_support,
     spectator_term_text,
-    static_work_units,
 )
 
 
@@ -460,44 +456,3 @@ def test_mpi_worker_environment_imports_active_repo_before_existing_pythonpath(t
     )
     assert completed.returncode == 0, completed.stderr
     assert pathlib.Path(completed.stdout.splitlines()[-1]).is_relative_to(validation.REPO)
-
-
-def test_work_units_count_all_nested_gst_iterations():
-    profile = ValidationProfile.sparse_line(nqubits=4, max_lengths=(1, 2, 4))
-    work = static_work_units(profile)
-    assert work['fit_circuits'] == sum(work['circuits_per_iteration'])
-    assert work['jacobian_rows'] == work['fit_circuits'] * 16 * 59
-
-
-def test_scheduler_rejects_a_profile_above_remaining_budget():
-    estimate = RuntimeEstimate(median_seconds=3600, upper_seconds=7200, factors={})
-    assert not eligible_to_launch(estimate, remaining_seconds=7199)
-    assert eligible_to_launch(estimate, remaining_seconds=7200)
-
-
-def test_runtime_predictor_fits_nonnegative_coefficients_and_conservative_upper_bound():
-    observations = [
-        {
-            'fit_circuits': index,
-            'normal_equation_work': index ** 2,
-            'dprob_seconds_per_circuit': 2.0,
-            'elapsed_seconds': 6.0 * index + 0.5 * index ** 2 + 7.0,
-        }
-        for index in range(1, 19)
-    ]
-    profiles = {
-        'candidate': {'fit_circuits': 10, 'normal_equation_work': 100},
-    }
-    microbenchmarks = {
-        'candidate': {'dprob_seconds_per_circuit': 2.0},
-    }
-
-    estimates = estimate_runtime(profiles, observations, microbenchmarks)
-
-    assert estimates['candidate'].median_seconds == pytest.approx(117.0)
-    assert estimates['candidate'].upper_seconds == pytest.approx(175.5)
-    assert estimates['candidate'].factors['coefficients'] == pytest.approx({
-        'fit_circuit_dprob': 3.0,
-        'normal_equation_work': 0.5,
-        'intercept': 7.0,
-    })
