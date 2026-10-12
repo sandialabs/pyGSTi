@@ -77,11 +77,11 @@ class ValidationProfile:
     topology: Literal['line', 'ring'] = 'line'
 
     @classmethod
-    def sparse_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                    scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-                    seed: int = 20260901, spectator_error: float = 0.0,
-                    topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{nqubits}q_sparse_{topology}', nqubits, tuple(max_lengths), shots,
+    def sparse(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+               scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
+               seed: int = 20260901, spectator_error: float = 0.0,
+               topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{topology}_{nqubits}q_sparse', nqubits, tuple(max_lengths), shots,
                    'sparse', scenario, seed, spectator_error, topology=topology)
 
     # S(Z:2) at 0.01 is large enough that the training data reveal it -- the
@@ -89,21 +89,21 @@ class ValidationProfile:
     # at 3Q -- while that fit still removes most of the held-out error.  The earlier
     # default, H(Z:2) at 0.005, left the training likelihood unchanged.
     @classmethod
-    def sparse_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                              seed: int = 20260901,
-                              spectator_error: float = 0.01,
-                              spectator_term: tuple[str, ...] = ('S', 'Z:2'),
-                              topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{nqubits}q_sparse_spectator_{topology}', nqubits, tuple(max_lengths), shots,
+    def sparse_spectator(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                         seed: int = 20260901,
+                         spectator_error: float = 0.01,
+                         spectator_term: tuple[str, ...] = ('S', 'Z:2'),
+                         topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{topology}_{nqubits}q_sparse_spectator', nqubits, tuple(max_lengths), shots,
                    'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term),
                    topology)
 
     @classmethod
-    def full_hs_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                     scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
-                     seed: int = 20260901, spectator_error: float = 0.0,
-                     topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
-        return cls(f'{nqubits}q_full_hs_{topology}', nqubits, tuple(max_lengths), shots,
+    def full_hs(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                scenario: Literal['in_class', 'spectator_crosstalk'] = 'in_class',
+                seed: int = 20260901, spectator_error: float = 0.0,
+                topology: Literal['line', 'ring'] = 'line') -> 'ValidationProfile':
+        return cls(f'{topology}_{nqubits}q_full_hs', nqubits, tuple(max_lengths), shots,
                    'full_hs', scenario, seed, spectator_error, topology=topology)
 
     @functools.cached_property
@@ -123,21 +123,21 @@ class ValidationArtifacts:
     manifest_path: pathlib.Path
 
 
-THREE_QUBIT_SPARSE_IN_CLASS = ValidationProfile.sparse_line(
+LINE_3Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
     nqubits=3, max_lengths=(1, 2, 4))
-THREE_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
+LINE_3Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
     nqubits=3, max_lengths=(1, 2, 4))
-FOUR_QUBIT_SPARSE_IN_CLASS = ValidationProfile.sparse_line(
+LINE_4Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
     nqubits=4, max_lengths=(1, 2, 4))
-FOUR_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
+LINE_4Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
     nqubits=4, max_lengths=(1, 2, 4))
-THREE_QUBIT_SPARSE_RING_IN_CLASS = ValidationProfile.sparse_line(
+RING_3Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-THREE_QUBIT_SPARSE_RING_SPECTATOR = ValidationProfile.sparse_spectator_line(
+RING_3Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-FOUR_QUBIT_SPARSE_RING_IN_CLASS = ValidationProfile.sparse_line(
+RING_4Q_SPARSE_IN_CLASS = ValidationProfile.sparse(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
-FOUR_QUBIT_SPARSE_RING_SPECTATOR = ValidationProfile.sparse_spectator_line(
+RING_4Q_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
 
 
