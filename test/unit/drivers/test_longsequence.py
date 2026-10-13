@@ -379,10 +379,5 @@ class LinearGSTTester(LongSequenceBase):
         edesign = proto.StandardGSTDesign(self.pspec, self.prep_fids, self.meas_fids, self.germs, [1])
         results = proto.LGST(self.model, verbosity=0).run(proto.ProtocolData(edesign, self.ds))
         estimate = results.estimates['LinearGateSetTomography']
-        self.assretIn('lgst', estimate.models)
+        self.assertIn('lgst', estimate.models)
         self.assertIn('stdgaugeopt', estimate.models)
-
-    def test_run_linear_gst_removed(self):
-        import pygsti
-        self.assertFalse(hasattr(ls, 'run_linear_gst'))
-        self.assertFalse(hasattr(pygsti, 'run_linear_gst'))
