@@ -25,7 +25,7 @@ from pygsti.baseobjs.label import Label
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.simultaneous_gst import (
-    SimultaneousGSTDesign, _normalize_coloring, _recordable_seed, _seed_from_record,
+    SimultaneousGSTDesign, _normalize_coloring, _recordable_seed,
     make_simultaneous_gst_design,
 )
 from pygsti.protocols._stitchers import (
@@ -35,6 +35,7 @@ from pygsti.protocols._stitchers import (
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
+from pygsti.tools.edesigntools import BlockDoptReducer, CallableReducer
 from pygsti.tools.graphs.coloring import check_valid_edge_coloring
 from ..util import BaseCase, with_temp_path
 
@@ -1147,34 +1148,46 @@ class CircuitStitcherTester(BaseCase):
                     CircuitStitcher.from_nice_serialization(state)
 
 
+def _rebuild(design, debug_check=True):
+    """Stitch `design` again from its recorded inputs, stitcher, and seed."""
+    record = design.stitch_seed
+    if isinstance(record, dict):
+        record = np.random.SeedSequence(entropy=record['entropy'],
+                                        spawn_key=tuple(record['spawn_key']))
+    return SimultaneousGSTDesign(
+        design.processor_spec, design.oneq_gstdesign, design.twoq_gstdesign,
+        design.color_patches, circuit_stitcher=design.circuit_stitcher, seed=record,
+        nested=design.nested, debug_check=debug_check)
+
+
 class SeedRecordTester(BaseCase):
-    """`stitch_seed` is what lets a reloaded design re-stitch, so it has to be data."""
+    """`stitch_seed` records how a design was stitched, so it has to be data."""
 
     def test_an_int_is_recorded_as_itself(self):
         self.assertEqual(_recordable_seed(7), 7)
-        self.assertEqual(_seed_from_record(7), 7)
 
     def test_none_stays_none(self):
         self.assertIsNone(_recordable_seed(None))
-        self.assertIsNone(_seed_from_record(None))
 
     def test_a_seed_sequence_round_trips_to_the_same_stream(self):
         original = np.random.SeedSequence(12345).spawn(2)[1]
         record = _recordable_seed(original)
         self.assertIsInstance(record, dict)
         json.dumps(record)  # must survive meta.json
-        restored = _seed_from_record(record)
+        # The rebuild the SimultaneousGSTDesign docstring gives.
+        restored = np.random.SeedSequence(entropy=record['entropy'],
+                                          spawn_key=tuple(record['spawn_key']))
         self.assertEqual(np.random.default_rng(restored).random(),
                          np.random.default_rng(original).random())
 
     def test_a_live_generator_cannot_be_recorded_and_says_so(self):
         with self.assertWarns(Warning) as ctx:
             self.assertIsNone(_recordable_seed(np.random.default_rng(0)))
-        self.assertIn('re-stitch', str(ctx.warning))
+        self.assertIn('stitch_seed', str(ctx.warning))
 
 
 class DefaultSeedTester(_SGSTFixture, BaseCase):
-    """An omitted `seed` still records something restitchable -- it must not go
+    """An omitted `seed` still records something reproducible -- it must not go
     through the same silently-non-reproducible path as an unrecordable live Generator."""
 
     COLOR_PATCHES = {0: [(0, 1)], 1: [(1, 2)]}
@@ -1186,25 +1199,23 @@ class DefaultSeedTester(_SGSTFixture, BaseCase):
     def test_an_omitted_seed_is_still_recorded(self):
         self.assertIsNotNone(self._build().stitch_seed)
 
-    def test_an_omitted_seed_still_restitches_identically(self):
+    def test_an_omitted_seed_still_reproduces_the_circuits(self):
         design = self._build()
-        restitched = design.restitch()
-        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+        rebuilt = _rebuild(design, debug_check=False)
+        self.assertEqual([list(cl) for cl in rebuilt.circuit_lists],
                          [list(cl) for cl in design.circuit_lists])
 
     def test_two_designs_with_omitted_seeds_still_differ(self):
         # The fix records a recoverable seed -- it must not make separate unseeded
-        # constructions deterministic, only restitch() of the same one.
+        # constructions deterministic, only rebuilding the same one.
         d1, d2 = self._build(), self._build()
         self.assertNotEqual([list(cl) for cl in d1.circuit_lists],
                             [list(cl) for cl in d2.circuit_lists])
 
-    def test_a_live_generator_cannot_restitch(self):
+    def test_a_live_generator_is_not_recorded(self):
         with self.assertWarns(UserWarning):
             design = self._build(seed=np.random.default_rng(0))
-        with self.assertRaises(ValueError) as ctx:
-            design.restitch()
-        self.assertIn('no recorded seed', str(ctx.exception))
+        self.assertIsNone(design.stitch_seed)
 
 
 class SerializationTester(_SGSTFixture, BaseCase):
@@ -1241,7 +1252,7 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual(loaded.qubit_labels, self.design.qubit_labels)
         self.assertEqual(loaded.processor_spec.qubit_labels,
                          self.design.processor_spec.qubit_labels)
-        # The seed is preserved as data, so the loaded design can re-stitch.
+        # The seed is preserved as data, as part of the record of how it was stitched.
         self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
 
     @with_temp_path
@@ -1374,8 +1385,8 @@ class SerializationTester(_SGSTFixture, BaseCase):
                 self.assertEqual(set(loaded.all_circuits_needing_data),
                                  set(design.all_circuits_needing_data))
                 with self.assertRaisesRegex(ValueError, 'recipe.*restored'):
-                    loaded.restitch(debug_check=False)
-                self.assertEqual([list(cl) for cl in design.restitch(debug_check=False).circuit_lists],
+                    _rebuild(loaded, debug_check=False)
+                self.assertEqual([list(cl) for cl in _rebuild(design, debug_check=False).circuit_lists],
                                  expected)
 
     @with_temp_path
@@ -1384,12 +1395,12 @@ class SerializationTester(_SGSTFixture, BaseCase):
         with self.assertWarns(UserWarning):
             _, loaded = self._roundtrip(root_path, design, name='original')
         with self.assertRaises(ValueError) as first:
-            loaded.restitch()
+            _rebuild(loaded)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
             _, reloaded = self._roundtrip(root_path, loaded, name='resaved')
         with self.assertRaises(ValueError) as second:
-            reloaded.restitch()
+            _rebuild(reloaded)
         self.assertEqual(str(second.exception), str(first.exception))
         self.assertEqual([list(cl) for cl in reloaded.circuit_lists],
                          [list(cl) for cl in design.circuit_lists])
@@ -1411,7 +1422,7 @@ class SerializationTester(_SGSTFixture, BaseCase):
                 self.assertEqual([list(cl) for cl in loaded.circuit_lists],
                                  [list(cl) for cl in design.circuit_lists])
                 with self.assertRaisesRegex(ValueError, 'recipe.*restored'):
-                    loaded.restitch()
+                    _rebuild(loaded)
 
     @with_temp_path
     def test_a_public_callable_stitcher_preserves_its_options_after_loading(self, root_path):
@@ -1425,7 +1436,7 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertTrue(all(len(cl) == 3 for cl in design.circuit_lists))
         _, loaded = self._roundtrip(root_path, design)
         self.assertEqual(loaded.circuit_stitcher.kwargs, {'config': config})
-        self.assertEqual([list(cl) for cl in loaded.restitch().circuit_lists],
+        self.assertEqual([list(cl) for cl in _rebuild(loaded).circuit_lists],
                          [list(cl) for cl in design.circuit_lists])
 
     @with_temp_path
@@ -1449,13 +1460,12 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual(loaded.circuit_stitcher.tag, 'from-a-test-module')
 
     @with_temp_path
-    def test_a_loaded_design_can_restitch_its_own_circuits(self, root_path):
+    def test_a_loaded_design_records_enough_to_rebuild_its_circuits(self, root_path):
         """What the callable stitcher could not do: `stitcher_kwargs` held a live
-        Generator, so a reloaded design reproduced its circuits but could not rebuild
-        them."""
+        Generator, so a reloaded design kept its circuits but not how they were made."""
         _, loaded = self._roundtrip(root_path)
-        restitched = loaded.restitch()
-        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+        rebuilt = _rebuild(loaded)
+        self.assertEqual([list(cl) for cl in rebuilt.circuit_lists],
                          [list(cl) for cl in self.design.circuit_lists])
 
 
@@ -1706,3 +1716,110 @@ class AssignDesignsDefaultRandgenTester(BaseCase):
         # Confirms the default is a real generator being consumed
         explicit_other = _stitch(3, 5, seed=12345)
         self.assertNotEqual(omitted, explicit_other)
+
+
+class ReduceByDoptTester(_SGSTFixture, BaseCase):
+    """Reducing a ``SimultaneousGSTDesign`` by D-optimality: the reason truncation was wanted.
+
+    The kernel and the ranking are tested in test/unit/tools/test_blockdopt.py. What
+    matters here is that reducing a *stitched* design gives back a well-formed
+    SimultaneousGSTDesign, since that is exactly what the class used to refuse.
+
+    The design is cut down before ranking: greedy selection costs one QR per remaining
+    candidate per pick, so ranking the full design against this model takes minutes.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.small = cls.design.truncate_to_circuits(list(cls.design.circuit_lists[0])[:30])
+        model = pygsti.models.create_crosstalk_free_model(
+            cls.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        # Not the target model: at the target, every cholesky-mode stochastic column of
+        # the Jacobian is exactly zero. See perturb_errorgen_rates.
+        cls.model = pygsti.tools.perturb_errorgen_rates(model, 1e-3, seed=0)
+        cls.dopt = BlockDoptReducer(cls.model)
+
+    def test_reducing_gives_back_a_well_formed_simultaneous_design(self):
+        reduced = self.small.reduce_with(self.dopt, 8)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 8)
+        self.assertTrue(reduced.nested)
+        _validate_stitched_circuits(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+        self.assertEqual(reduced.color_patches, self.small.color_patches)
+        self.assertTrue(set(reduced.all_circuits_needing_data)
+                        <= set(self.small.all_circuits_needing_data))
+
+    def test_the_score_curve_comes_back_on_the_design(self):
+        reduced = self.small.reduce_with(self.dopt, 6)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        scores = reduced.selection.scores
+        self.assertEqual(len(scores), 6)
+        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_the_reduced_design_records_what_reduced_it(self):
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
+        self.assertIsInstance(reduced.selection.reducer, BlockDoptReducer)
+        self.assertEqual(reduced.selection.reducer.ridge, 2.0)
+        self.assertEqual(reduced.selection.metadata['num_candidates'],
+                         len(self.small.all_circuits_needing_data))
+
+    def test_an_unreduced_design_records_no_selection(self):
+        self.assertIsNone(self.small.selection)
+
+    def test_reduce_with_takes_any_reducer(self):
+        """The point of the interface: a rule we did not write, on a stitched design."""
+        shallowest = sorted(self.small.all_circuits_needing_data, key=len)[:7]
+        reduced = self.small.reduce_with(CallableReducer(lambda design, n: shallowest), 7)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(shallowest))
+        _validate_stitched_circuits(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+
+    def test_a_target_model_warns_here_too(self):
+        target = pygsti.models.create_crosstalk_free_model(
+            self.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        with self.assertWarns(UserWarning):
+            self.small.reduce_with(BlockDoptReducer(target), 4)
+
+    def test_relabelling_a_reduced_design_keeps_the_record(self):
+        """map_qubit_labels bypasses __init__, so `selection` has to be carried by hand."""
+        reduced = self.small.reduce_with(self.dopt, 6)
+        mapper = {q: 'Q%s' % q for q in reduced.qubit_labels}
+        self.assertIs(reduced.map_qubit_labels(mapper).selection, reduced.selection)
+
+    @with_temp_path
+    def test_a_reduced_design_round_trips_with_its_record(self, root):
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
+        root = pathlib.Path(root) / 'reduced'
+        reduced.write(root)
+        loaded = SimultaneousGSTDesign.from_dir(root)
+        self.assertIsInstance(loaded.selection.reducer, BlockDoptReducer)
+        self.assertEqual(loaded.selection.reducer.ridge, 2.0)
+        self.assertEqual(list(loaded.selection.circuits), list(reduced.selection.circuits))
+        self.assertArraysAlmostEqual(loaded.selection.scores, reduced.selection.scores)
+        self.assertEqual(set(loaded.all_circuits_needing_data),
+                         set(reduced.all_circuits_needing_data))
+        self.assertIsInstance(loaded.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertEqual(loaded.circuit_stitcher.share_same_shape_schedules,
+                         self.design.circuit_stitcher.share_same_shape_schedules)
+        self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
+
+    def test_the_reduction_beats_taking_the_first_n_circuits(self):
+        """Otherwise there is no point to any of this.
+
+        Judged by log-volume under the independent scorer, not by the selector's own
+        numbers.
+        """
+        candidates = list(self.small.all_circuits_needing_data)
+        jac_dict = self.model.sim.bulk_dprobs(candidates)
+        jac, block_size = pygsti.tools.edesigntools.blockdopt._jacobian_dict_to_array(jac_dict)
+        keys = list(jac_dict)
+
+        chosen = set(self.small.reduce_with(self.dopt, 8).all_circuits_needing_data)
+        greedy = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, [i for i, c in enumerate(keys) if c in chosen])[-1]
+        first_n = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, range(8))[-1]
+        self.assertGreater(greedy, first_n)

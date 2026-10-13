@@ -7,13 +7,10 @@ re-exported by the package ``__init__``, which declares ``__all__``.
 before, so every pre-existing import spelling keeps working.  These tests pin
 that arrangement.
 """
-import ast
 import importlib
-from pathlib import Path
 
 import pygsti.tools as tools
 import pygsti.tools.edesigntools as edesigntools
-from pygsti.tools.edesigntools import blockdopt as blockdopt_module
 
 from ..util import BaseCase
 
@@ -40,6 +37,7 @@ class EdesignLayoutTester(BaseCase):
                   '_fisher': ['calculate_fisher_information_per_circuit',
                               'calculate_fisher_information_matrix',
                               'calculate_fisher_information_matrices_by_L'],
+                  '_reduction': ['CircuitSelection', 'DesignReducer', 'CallableReducer'],
         }
         for modname, names in owners.items():
             mod = importlib.import_module('pygsti.tools.edesigntools.' + modname)
@@ -47,28 +45,14 @@ class EdesignLayoutTester(BaseCase):
                 with self.subTest(module=modname, name=name):
                     self.assertIs(getattr(mod, name), getattr(edesigntools, name))
 
-    def test_blockdopt_is_a_public_submodule_owning_the_kernel_names(self):
-        kernel_names = ['block_linear_dopt', 'greedy_candidate_scores',
-                        'greedy_path_log_volumes']
+    def test_blockdopt_is_a_public_submodule_whose_names_are_all_re_exported(self):
         blockdopt = importlib.import_module('pygsti.tools.edesigntools.blockdopt')
         self.assertIs(blockdopt, edesigntools.blockdopt)
-        self.assertEqual(sorted(blockdopt.__all__), kernel_names)
-        for name in kernel_names:
+        for name in ['block_linear_dopt', 'BlockDoptReducer']:
+            self.assertIn(name, blockdopt.__all__)
+        for name in blockdopt.__all__:
             with self.subTest(name=name):
                 self.assertIs(getattr(blockdopt, name), getattr(edesigntools, name))
-
-    def test_blockdopt_does_not_import_pygsti(self):
-        # The kernel is numpy and scipy only, so it can be read, tested and
-        # lifted out without any experiment-design context.  Checked on the
-        # source rather than at runtime, since an unused import would not show.
-        tree = ast.parse(Path(blockdopt_module.__file__).read_text())
-        imported = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imported.update(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imported.add(node.module or '.')
-        self.assertEqual(imported, {'numpy', 'scipy.linalg'})
 
     def test_star_import_namespace_is_curated(self):
         # edesigntools used to leak math.ceil into pygsti.tools via star-import,

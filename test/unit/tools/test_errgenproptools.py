@@ -5,18 +5,22 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than, bel_str
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
+from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import warnings
 from ..util import BaseCase
 from itertools import product, chain
+from math import factorial
 import random
 import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
-#TODO: errorgen_layer_to_matrix, stim_pauli_string_less_than 
+#TODO: errorgen_layer_to_matrix 
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -76,6 +80,49 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print('analytic_commutator_mat=')
                 print_mx(analytic_commutator_mat)
                 raise ValueError()
+
+    def test_layer_pairwise_commutator_skips_disjoint_support(self):
+        # Error generators supported on disjoint sets of qubits commute exactly.
+        # error_generator_commutator does not special-case them (its emitted terms cancel only
+        # once aggregated), whereas _accumulate_layer_pairwise_commutators skips such pairs
+        # outright using the labels' support masks. Check, on the weight-1 3-qubit basis, that
+        # (a) the per-pair terms of every disjoint pair indeed sum to zero label by label (which
+        # is what makes the skip exact) while every overlapping pair matches the numerical
+        # commutator, and (b) the layerwise accumulation equals a direct sum over all pairs.
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', max_weights={'H': 1, 'S': 1, 'C': 1, 'A': 1})
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+        stim_lbls = [_LSE.cast(lbl) for lbl in errorgen_lbls]
+        num_disjoint = 0
+        for (lbl1, slbl1), (lbl2, slbl2) in product(zip(errorgen_lbls, stim_lbls), repeat=2):
+            analytic = _eprop.error_generator_commutator(slbl1, slbl2)
+            if slbl1.support_mask & slbl2.support_mask == 0:
+                num_disjoint += 1
+                summed = {}
+                for lbl, rate in analytic:
+                    summed[lbl] = summed.get(lbl, 0) + rate
+                self.assertTrue(all(abs(rate) < 1e-12 for rate in summed.values()))
+            else:
+                # (the cancelling terms of disjoint pairs are weight-2 labels, outside this basis)
+                numeric = _eprop.error_generator_commutator_numerical(lbl1, lbl2, errorgen_lbl_matrix_dict)
+                analytic_mat = _eprop.errorgen_layer_to_matrix(analytic, 3, errorgen_lbl_matrix_dict)
+                self.assertLess(np.linalg.norm(numeric - analytic_mat), 1e-10)
+        self.assertGreater(num_disjoint, 0)
+
+        rng = np.random.default_rng(1)
+        layer_1 = {lbl: r for lbl, r in zip(stim_lbls, rng.normal(size=len(stim_lbls)))}
+        layer_2 = {lbl: r for lbl, r in zip(stim_lbls, rng.normal(size=len(stim_lbls)))}
+        accumulated = {}
+        _eprop._accumulate_layer_pairwise_commutators(accumulated, layer_1, layer_2, 'III', addl_weight=0.5)
+        expected = {}
+        for lbl1, r1 in layer_1.items():
+            for lbl2, r2 in layer_2.items():
+                for lbl, rate in _eprop.error_generator_commutator(lbl1, lbl2, weight=0.5 * r1 * r2, identity='III'):
+                    expected[lbl] = expected.get(lbl, 0) + rate
+        # the direct sum also holds the exactly-cancelled labels of the skipped pairs
+        self.assertTrue(set(accumulated) <= set(expected))
+        for lbl, rate in expected.items():
+            self.assertAlmostEqual(accumulated.get(lbl, 0), rate, places=12)
 
     def test_errorgen_commutator_S_A_degenerate_case(self):
         # Regression test for a bug in error_generator_commutator's 'S'-'A' branch: it referenced
@@ -186,7 +233,201 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print('analytic_composition_mat=')
                 print_mx(analytic_composition_mat)
                 raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')    
-    
+
+    def _label_pairs_2Q_and_3Q(self, num_3Q_labels=50, seed=1234):
+        """The (basis, matrix dict, ordered label pairs) fixtures shared by the anticommutator and
+        conjugation tests: every pair of 2-qubit labels and a random selection of 3-qubit labels
+        (some relations for C and A terms need a third qubit)."""
+        fixtures = []
+        for num_qubits, num_labels in ((2, None), (3, num_3Q_labels)):
+            basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+            matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+            labels = list(basis.labels)
+            if num_labels is not None:
+                labels = random.Random(seed).sample(labels, num_labels)
+            stim_labels = [_LSE.cast(lbl) for lbl in labels]
+            fixtures.append((num_qubits, basis, matrix_dict, list(product(labels, repeat=2)), list(product(stim_labels, repeat=2))))
+        return fixtures
+
+    def test_errorgen_anticommutators(self):
+        #confirm we get the correct analytic anticommutators by comparing to numerics, in the same
+        #way as the commutator and composition tests above.
+        for num_qubits, basis, matrix_dict, label_pairs, stim_label_pairs in self._label_pairs_2Q_and_3Q():
+            for pair1, pair2 in zip(label_pairs, stim_label_pairs):
+                numeric_anticommutator = _eprop.error_generator_anticommutator_numerical(pair1[0], pair1[1], matrix_dict)
+                analytic_anticommutator = _eprop.error_generator_anticommutator(pair2[0], pair2[1])
+                analytic_anticommutator_mat = _eprop.errorgen_layer_to_matrix(analytic_anticommutator, num_qubits, matrix_dict)
+                norm_diff = np.linalg.norm(numeric_anticommutator - analytic_anticommutator_mat)
+                if norm_diff > 1e-10:
+                    print(f'Difference in anticommutators for pair {pair1} is greater than 1e-10.')
+                    print(f'{norm_diff=}')
+                    print('numeric_anticommutator=')
+                    print_mx(numeric_anticommutator)
+                    #Decompose the numerical anticommutator into rates.
+                    for lbl, dual in zip(basis.labels, basis.elemgen_dual_matrices):
+                        rate = np.trace(dual.conj().T@numeric_anticommutator)
+                        if abs(rate) > 1e-3:
+                            print(f'{lbl}: {rate}')
+                    print(f'{analytic_anticommutator=}')
+                    raise ValueError('Numeric and analytic error generator anticommutators were not found to be identical!')
+
+    def test_errorgen_anticommutator_matches_compositions(self):
+        #the anticommutator is the sum of the two compositions, and the composition is the mean of the
+        #commutator and the anticommutator, term by term (same labels, same rates once aggregated); the
+        #anticommutator is also symmetric in its arguments.
+        def aggregate(terms):
+            out = {}
+            for lbl, rate in terms:
+                out[lbl] = out.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in out.items() if abs(rate) > 1e-12}
+
+        def assert_same(d1, d2, msg):
+            self.assertEqual(set(d1), set(d2), msg)
+            for lbl in d1:
+                self.assertAlmostEqual(d1[lbl], d2[lbl], places=12, msg=msg)
+
+        weight = 0.7
+        _, _, _, _, stim_label_pairs = self._label_pairs_2Q_and_3Q()[0]
+        identity = 'II'
+        for lbl1, lbl2 in stim_label_pairs:
+            anticommutator = aggregate(_eprop.error_generator_anticommutator(lbl1, lbl2, weight, identity))
+            comp_12 = _eprop.error_generator_composition(lbl1, lbl2, weight, identity)
+            comp_21 = _eprop.error_generator_composition(lbl2, lbl1, weight, identity)
+            assert_same(anticommutator, aggregate(comp_12 + comp_21), f'{lbl1}, {lbl2}: {{e1, e2}} != e1 o e2 + e2 o e1')
+            assert_same(anticommutator, aggregate(_eprop.error_generator_anticommutator(lbl2, lbl1, weight, identity)),
+                        f'{lbl1}, {lbl2}: anticommutator not symmetric')
+            half_sum = aggregate([(lbl, 0.5 * rate) for lbl, rate in
+                                  _eprop.error_generator_commutator(lbl1, lbl2, weight, identity)
+                                  + _eprop.error_generator_anticommutator(lbl1, lbl2, weight, identity)])
+            assert_same(aggregate(comp_12), half_sum, f'{lbl1}, {lbl2}: e1 o e2 != ([e1, e2] + {{e1, e2}}) / 2')
+
+    def test_pauli_conjugation_composition(self):
+        #confirm the analytic action of the Pauli conjugation superoperator Q rho Q on every type of
+        #elementary error generator against numerics (Q = S_Q + 1 in matrix form), for every
+        #(Pauli, label) pair at 2 qubits and a random selection at 3 qubits.
+        for num_qubits, basis, matrix_dict, label_pairs, stim_label_pairs in self._label_pairs_2Q_and_3Q():
+            labels = sorted({pair[0] for pair in label_pairs}, key=str)
+            stim_labels = [_LSE.cast(lbl) for lbl in labels]
+            paulis = sorted({lbl.basis_element_labels[0] for lbl in basis.labels if lbl.errorgen_type == 'S'})
+            if num_qubits == 3:
+                paulis = random.Random().sample(paulis, 12)
+            for pauli_str in paulis:
+                pauli = stim.PauliString(pauli_str)
+                for lbl, stim_lbl in zip(labels, stim_labels):
+                    numeric = _eprop.pauli_conjugation_composition_numerical(pauli_str, lbl, matrix_dict)
+                    analytic = _eprop.pauli_conjugation_composition(pauli, stim_lbl)
+                    analytic_mat = _eprop.errorgen_layer_to_matrix(analytic, num_qubits, matrix_dict)
+                    norm_diff = np.linalg.norm(numeric - analytic_mat)
+                    if norm_diff > 1e-10:
+                        print(f'Difference in conjugation of {lbl} by {pauli_str} is greater than 1e-10.')
+                        print(f'{norm_diff=}')
+                        print(f'{analytic=}')
+                        raise ValueError('Numeric and analytic Pauli conjugation compositions were not found to be identical!')
+        #the sign of the conjugating Pauli is irrelevant
+        lbl = _LSE('C', [stim.PauliString('XY'), stim.PauliString('ZI')])
+        self.assertEqual(_eprop.pauli_conjugation_composition(stim.PauliString('-XZ'), lbl),
+                         _eprop.pauli_conjugation_composition(stim.PauliString('XZ'), lbl))
+
+    def test_pauli_conjugation_bleed_rule(self):
+        #{S_Q, X} = (1 + (-1)^omega(Q, T_X)) Q[X] - 2X with T_X the total Pauli of X (P for H_P, I for S_P,
+        #PR for C_{P,R} and A_{P,R}): the anticommutator is pure bleed (-2X) exactly when Q anticommutes
+        #with T_X, and otherwise -2X + 2 Q[X].
+        def aggregate(terms):
+            out = {}
+            for lbl, rate in terms:
+                out[lbl] = out.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in out.items() if abs(rate) > 1e-12}
+
+        def total_pauli(lbl):
+            bels = lbl.basis_element_labels
+            if lbl.errorgen_type == 'S':
+                return None
+            return bels[0] if len(bels) == 1 else bels[0] * bels[1]
+
+        _, _, _, _, stim_label_pairs = self._label_pairs_2Q_and_3Q()[0]
+        stim_labels = sorted({pair[0] for pair in stim_label_pairs}, key=str)
+        s_labels = [lbl for lbl in stim_labels if lbl.errorgen_type == 'S']
+        num_pure_bleed = 0
+        for s_lbl in s_labels:
+            Q = s_lbl.basis_element_labels[0]
+            for x_lbl in stim_labels:
+                anticommutator = aggregate(_eprop.error_generator_anticommutator(s_lbl, x_lbl, identity='II'))
+                T = total_pauli(x_lbl)
+                expected = [(x_lbl, -2.0)]
+                if T is None or Q.commutes(T):
+                    expected += _eprop.pauli_conjugation_composition(Q, x_lbl, weight=2.0, identity='II')
+                else:
+                    num_pure_bleed += 1
+                expected = aggregate(expected)
+                self.assertEqual(set(anticommutator), set(expected), f'{s_lbl}, {x_lbl}')
+                for lbl in expected:
+                    self.assertAlmostEqual(anticommutator[lbl], expected[lbl], places=12, msg=f'{s_lbl}, {x_lbl}')
+        self.assertGreater(num_pure_bleed, 0)
+        #conjugation composed with S is the only case producing an S of the conjugating Pauli itself
+        self.assertEqual(aggregate(_eprop.pauli_conjugation_composition(stim.PauliString('XI'), _LSE('S', [stim.PauliString('XI')]))),
+                         {_LSE('S', [stim.PauliString('XI')]): -1.0})
+        self.assertEqual(aggregate(_eprop.pauli_conjugation_composition(stim.PauliString('XI'), _LSE('S', [stim.PauliString('YI')]))),
+                         {_LSE('S', [stim.PauliString('ZI')]): 1.0, _LSE('S', [stim.PauliString('XI')]): -1.0})
+
+    def _random_errorgen_dicts(self, num_qubits, sizes, seed):
+        #random all-sector error generator dictionaries over the complete basis, with the basis' matrix
+        #dictionary for dense checks.
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+        matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+        rng = random.Random(seed)
+        by_type = {t: [lbl for lbl in basis.labels if lbl.errorgen_type == t] for t in 'HSCA'}
+        dicts = []
+        for size in sizes:
+            #`size` labels of each type (or all of them, for the small H/S sectors)
+            labels = [lbl for t in 'HSCA' for lbl in rng.sample(by_type[t], min(size, len(by_type[t])))]
+            dicts.append({_LSE.cast(lbl): rng.uniform(-1e-2, 1e-2) for lbl in labels})
+        return matrix_dict, dicts
+
+    def test_commuting_product(self):
+        #_commuting_product(L, M) must equal the dense product L @ M whenever [L, M] = 0: check the square
+        #L o L (same object passed twice), the cube L o L^2 (different objects) and the reversed L^2 o L,
+        #against the dense matrices, for random all-sector 2- and 3-qubit dictionaries.
+        for num_qubits, sizes, seed in ((2, (6, 15), 101), (3, (8, 18), 102)):
+            matrix_dict, dicts = self._random_errorgen_dicts(num_qubits, sizes, seed)
+            identity = 'I' * num_qubits
+            for errorgen_dict in dicts:
+                self.assertTrue({lbl.errorgen_type for lbl in errorgen_dict} == set('HSCA'))
+                dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, num_qubits, matrix_dict)
+                square = _eprop._commuting_product(errorgen_dict, errorgen_dict, identity)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(square, num_qubits, matrix_dict) - dense @ dense), 1e-12)
+                cube = _eprop._commuting_product(errorgen_dict, square, identity)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(cube, num_qubits, matrix_dict) - dense @ dense @ dense), 1e-12)
+                cube_reversed = _eprop._commuting_product(square, errorgen_dict, identity)
+                self.assertEqual(set(cube), set(cube_reversed))
+                for lbl in cube:
+                    self.assertAlmostEqual(cube[lbl], cube_reversed[lbl], places=14)
+                #every two-index key of the result is in canonical order (the bleed terms are added on the
+                #operands' own labels, which are canonical by the label contract).
+                for lbl in chain(square, cube):
+                    if len(lbl.basis_element_labels) == 2:
+                        self.assertTrue(bel_less_than(*lbl.basis_element_labels), f'{lbl} not canonical')
+
+    def test_error_generator_taylor_expansion_all_sectors(self):
+        #order-k term == L^k / k! from the dense matrix, at threshold 0, on random all-sector dictionaries;
+        #and the default threshold only removes terms below it.
+        for num_qubits, seed in ((2, 104), (3, 105)):
+            matrix_dict, (errorgen_dict,) = self._random_errorgen_dicts(num_qubits, (10,), seed)
+            dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, num_qubits, matrix_dict)
+            terms = _eprop.error_generator_taylor_expansion(errorgen_dict, order=3, truncation_threshold=0.0)
+            self.assertEqual(len(terms), 3)
+            for k, order_dict in enumerate(terms, start=1):
+                expected = np.linalg.matrix_power(dense, k) / factorial(k)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(order_dict, num_qubits, matrix_dict) - expected), 1e-12)
+            truncated = _eprop.error_generator_taylor_expansion(errorgen_dict, order=3, truncation_threshold=1e-9)
+            for full, trunc in zip(terms, truncated):
+                self.assertTrue(set(trunc) <= set(full))
+                for lbl, rate in full.items():
+                    if abs(rate) > 1e-9:
+                        self.assertIn(lbl, trunc)
+                        self.assertEqual(trunc[lbl], rate)
+                    else:
+                        self.assertNotIn(lbl, trunc)
+
     def test_iterative_error_generator_composition(self):
         test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
                        (_LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')])),
@@ -199,14 +440,41 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                            (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
         
+        def aggregate(label_rate_pairs):
+            # the returned order is not guaranteed, and a label may appear more than once.
+            totals = {}
+            for lbl, rate in label_rate_pairs:
+                totals[lbl] = totals.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in totals.items() if abs(rate) > 1e-12}
+
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
-            iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
-            self.assertEqual(iterated_composition, correct_lbls)
+            iterated_composition = aggregate(_eprop.iterative_error_generator_composition(lbls, rates))
+            correct = aggregate(correct_lbls)
+            self.assertEqual(set(iterated_composition), set(correct))
+            for lbl, rate in correct.items():
+                self.assertAlmostEqual(iterated_composition[lbl], rate)
 
         _compare_analytic_numeric_iterative_composition(2)
         
 
+    def test_pairwise_mode_deprecated(self):
+        with self.assertWarns(pyGSTiDeprecationWarning) as cm:
+            pairwise = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='pairwise')
+        self.assertIn("mode='magnus'", str(cm.warning))
+        magnus = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
+        self.assertEqual(set(pairwise), set(magnus))
+        for lbl, rate in magnus.items():
+            self.assertAlmostEqual(pairwise[lbl], rate, places=14)
+        with self.assertRaises(ValueError):
+            self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='not_a_mode')
+
     def test_bch_approximation(self):
+        # exercises the deprecated 'pairwise' mode (bch_approximation itself is not deprecated).
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', pyGSTiDeprecationWarning)
+            self._check_bch_approximation()
+
+    def _check_bch_approximation(self):
         first_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=1)
         propagated_errorgen_layers_bch_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='pairwise')
         first_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_1,mx_basis='pp')
@@ -243,6 +511,27 @@ class ErrgenCompositionCommutationTester(BaseCase):
                         and (exact_vs_third_order_norm > exact_vs_fourth_order_norm) and (exact_vs_fourth_order_norm > exact_vs_fifth_order_norm))
         
 
+    def test_merged_orders_are_truncated(self):
+        # The per-order terms of bch_approximation and magnus_expansion are each truncated, but a
+        # label's contributions from different orders can cancel when they are summed. Arrange an
+        # exact cancellation: the second-order term (1/2)[H_X a, H_Y b] has an H_Z component of rate
+        # r; giving H_Z the first-order rate -r must then remove H_Z from the merged output rather
+        # than leave a zero (or sub-threshold) entry behind.
+        H_X, H_Y, H_Z = (_LSE.cast(LEEL('H', [p])) for p in ('X', 'Y', 'Z'))
+        layer_1 = {H_X: 1e-2}
+        layer_2 = {H_Y: 3e-3}
+        r = _eprop.bch_approximation(layer_1, layer_2, bch_order=2)[H_Z]
+        self.assertGreater(abs(r), 1e-14)
+        combined = _eprop.bch_approximation(layer_1, {H_Y: 3e-3, H_Z: -r}, bch_order=2)
+        self.assertNotIn(H_Z, combined)
+        self.assertTrue(all(abs(rate) > 1e-14 for rate in combined.values()))
+        # magnus: layers ordered so that (1/2)[A(2), A(1)] reproduces the same second-order term.
+        r = _eprop.magnus_expansion([layer_2, layer_1], magnus_order=2)[H_Z]
+        self.assertGreater(abs(r), 1e-14)
+        combined = _eprop.magnus_expansion([{H_Y: 3e-3, H_Z: -r}, layer_1], magnus_order=2)
+        self.assertNotIn(H_Z, combined)
+        self.assertTrue(all(abs(rate) > 1e-14 for rate in combined.values()))
+
     def test_magnus_expansion(self):
         first_order_magnus_numerical = _eprop.magnus_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, magnus_order=1)
         propagated_errorgen_layers_magnus_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
@@ -266,6 +555,92 @@ class ErrgenCompositionCommutationTester(BaseCase):
         
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
 
+    def test_magnus_expansion_all_sectors(self):
+        # The model of setUp has H errors only, so magnus_expansion's commutator terms exercise
+        # a single type-pair branch there and the third-order term is ~1e-12. This model has
+        # seeded random rates ~1e-2 from all four sectors on every gate (a subset of a random
+        # CPTP rate dictionary; not itself CP, which is irrelevant for propagation), giving a
+        # third-order term of norm ~2e-4 that involves every commutator branch and running-sum
+        # bookkeeping path. With truncation disabled the analytic expansion must match the
+        # dense oracle to machine precision at every order; with the default threshold the
+        # error is set by the dropped sub-threshold terms and must stay small relative to the
+        # third-order term.
+        pspec = QubitProcessorSpec(4, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(0, 1), (1, 2), (2, 3), (3, 0)]})
+        rates = {'Gxpi2': _all_sector_rate_subset(1, 2, seed=100), 'Gypi2': _all_sector_rate_subset(1, 2, seed=101),
+                 'Gcphase': _all_sector_rate_subset(2, 2, seed=200)}
+        model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
+        circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4, ], rand_state=12345)
+        propagator = ErrorGeneratorPropagator(model.copy())
+        layers = propagator.propagate_errorgens(circuit)
+        self.assertEqual(len(layers), 6)
+        self.assertEqual({lbl.errorgen_type for layer in layers for lbl in layer}, set('HSCA'))
+
+        numerical = [_eprop.magnus_numerical(layers, propagator, magnus_order=order) for order in (1, 2, 3)]
+        for order, numerical_mat in zip((1, 2, 3), numerical):
+            analytic = _eprop.magnus_expansion(layers, magnus_order=order, truncation_threshold=0)
+            analytic_mat = propagator.errorgen_layer_dict_to_errorgen(analytic, mx_basis='pp')
+            self.assertLess(np.linalg.norm(analytic_mat - numerical_mat), 1e-14)
+        third_order_term_norm = np.linalg.norm(numerical[2] - numerical[1])
+        self.assertGreater(third_order_term_norm, 1e-5)
+        analytic = _eprop.magnus_expansion(layers, magnus_order=3)
+        analytic_mat = propagator.errorgen_layer_dict_to_errorgen(analytic, mx_basis='pp')
+        self.assertLess(np.linalg.norm(analytic_mat - numerical[2]), 1e-6 * third_order_term_norm)
+
+    def test_magnus_expansion_third_order_bookkeeping(self):
+        # Check the third-order Magnus term against its row/column form, evaluated explicitly
+        # for n = 4 layers with the pairwise commutators P_ik = [A(i), A(k)] (i > k):
+        #   T1 = (1/6) sum_i [A(i), sum_{j<i} row_j + row_i/2],   row_i = sum_{k<i} P_ik
+        #   T2 = -(1/6) sum_k [A(k), sum_{j>k} col_j + col_k/2],  col_k = sum_{i>k} P_ik
+        # (the 1/2 is the boundary weight of the discretized time-ordered integral). This is
+        # independent of how magnus_expansion organizes the running sums, and cheap enough to
+        # run at full precision on two qubits with random labels from all sectors.
+        rng = np.random.default_rng(7)
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+        stim_lbls = [_LSE.cast(lbl) for lbl in basis.labels]
+        layers = []
+        for _ in range(4):
+            chosen = rng.choice(len(stim_lbls), size=6, replace=False)
+            layers.append({stim_lbls[i]: 1e-2 * rng.standard_normal() for i in chosen})
+        n, identity = len(layers), 'II'
+
+        def commutator(layer_1, layer_2, weight=1.0):
+            out = {}
+            _eprop._accumulate_layer_pairwise_commutators(out, layer_1, layer_2, identity, addl_weight=weight, truncation_threshold=0)
+            return out
+
+        def add(target, source, scale=1.0):
+            for lbl, rate in source.items():
+                target[lbl] = target.get(lbl, 0) + scale * rate
+
+        P = {(i, k): commutator(layers[i], layers[k]) for i in range(n) for k in range(i)}
+        rows = [{} for _ in range(n)]
+        cols = [{} for _ in range(n)]
+        for (i, k), p in P.items():
+            add(rows[i], p)
+            add(cols[k], p)
+        expected = {}
+        for m in range(n):
+            row_sum, col_sum = {}, {}
+            for j in range(m):
+                add(row_sum, rows[j])
+            add(row_sum, rows[m], 0.5)
+            for j in range(m + 1, n):
+                add(col_sum, cols[j])
+            add(col_sum, cols[m], 0.5)
+            add(expected, commutator(layers[m], row_sum), 1 / 6)
+            add(expected, commutator(layers[m], col_sum), -1 / 6)
+        expected = {lbl: rate.real for lbl, rate in expected.items() if abs(rate) > 1e-20}
+
+        second = _eprop.magnus_expansion(layers, magnus_order=2, truncation_threshold=0)
+        third = _eprop.magnus_expansion(layers, magnus_order=3, truncation_threshold=0)
+        actual = {lbl: third.get(lbl, 0) - second.get(lbl, 0) for lbl in set(third) | set(second)}
+        actual = {lbl: rate for lbl, rate in actual.items() if abs(rate) > 1e-20}
+        self.assertGreater(len(expected), 10)
+        self.assertEqual(set(actual), set(expected))
+        scale = max(abs(rate) for rate in expected.values())
+        for lbl, rate in expected.items():
+            self.assertLess(abs(actual[lbl] - rate), 1e-11 * scale)
+
     def test_error_generator_pauli_action(self):
         egbasis_HS = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('H','S'))
         egbasis_CA = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('C','A'))
@@ -281,6 +656,139 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                             if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
                 pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
                 assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
+    def test_term_emitters(self):
+        """
+        Check the four term emitters `_H`, `_S`, `_C`, `_A` against the "Extended elementary
+        error generator conventions" of the module docstring: for every signed (possibly
+        identity or repeated) index combination the emitted canonical terms must sum to the
+        superoperator obtained by substituting the signed Paulis literally into the defining
+        sandwich expressions, and every emitted label must be canonical.
+        """
+        from pygsti.errorgenpropagation.localstimerrorgen import bel_less_than, bel_str
+
+        def sandwich(M, N):  # rho -> M rho N on row-stacked vec(rho), pyGSTi's convention
+            return np.kron(M, N.T)
+
+        def ext_H(M, I):
+            return -1j * (sandwich(M, I) - sandwich(I, M))
+
+        def ext_S(M, I):
+            return sandwich(M, M.conj().T) - sandwich(I, I)
+
+        def ext_C(M, N, I):
+            anti = M @ N + N @ M
+            return sandwich(M, N) + sandwich(N, M) - 0.5 * (sandwich(anti, I) + sandwich(I, anti))
+
+        def ext_A(M, N, I):
+            comm = M @ N - N @ M
+            return 1j * (sandwich(M, N) - sandwich(N, M) + 0.5 * (sandwich(comm, I) + sandwich(I, comm)))
+
+        def label_matrix(lbl, I):
+            mats = [p.to_unitary_matrix(endian='big') for p in lbl.basis_element_labels]
+            fn = {'H': ext_H, 'S': ext_S, 'C': ext_C, 'A': ext_A}[lbl.errorgen_type]
+            return fn(*mats, I)
+
+        phases = [1, -1, 1j, -1j]
+        for num_qubits in (1, 2):
+            dim = 2**num_qubits
+            I = np.eye(dim)
+            paulis = [stim.PauliString(''.join(p)) for p in product('IXYZ', repeat=num_qubits)]
+            identity = stim.PauliString(num_qubits)
+            identity_str = 'I' * num_qubits
+            # tie the sandwich definitions to pyGSTi's standard elementary error generators
+            # for the ordinary (Hermitian, non-identity) case.
+            P0, Q0 = paulis[1], paulis[-1]
+            m0, m1 = P0.to_unitary_matrix(endian='big'), Q0.to_unitary_matrix(endian='big')
+            for typ, mats in [('H', (m0,)), ('S', (m0,)), ('C', (m0, m1)), ('A', (m0, m1))]:
+                self.assertArraysAlmostEqual(label_matrix(_LSE(typ, (P0, Q0)[:len(mats)]), I),
+                                             create_elementary_errorgen(typ, *mats))
+
+            for P in paulis:
+                MP = P.to_unitary_matrix(endian='big')
+                for w in phases:
+                    for c in (0.7, -0.3j):
+                        for emitter, expected in [(_eprop._H, c * ext_H(w * MP, I)), (_eprop._S, c * ext_S(w * MP, I))]:
+                            terms = []
+                            emitter(terms, (w, P), c, identity_str)
+                            # the pre-rendered-string form must give the identical result.
+                            terms_pre = []
+                            emitter(terms_pre, (w, P, bel_str(P)), c, identity_str)
+                            self.assertEqual(terms_pre, terms)
+                            total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                            self.assertArraysAlmostEqual(total, expected)
+                            for lbl, rate in terms:
+                                self.assertNotEqual(lbl.basis_element_labels[0], identity)
+                                self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertLessEqual(len(terms), 1)
+                        # a None index (vanishing commutator / anticommutator) is a zero term.
+                        terms = []
+                        _eprop._H(terms, None, c, identity_str)
+                        _eprop._S(terms, None, c, identity_str)
+                        _eprop._C(terms, None, (w, P), c, identity_str)
+                        _eprop._A(terms, (w, P), None, c, identity_str)
+                        self.assertEqual(terms, [])
+
+            for P, Q in product(paulis, repeat=2):
+                MP, MQ = P.to_unitary_matrix(endian='big'), Q.to_unitary_matrix(endian='big')
+                for w, v in product(phases, repeat=2):
+                    c = 0.7 - 0.3j
+                    for emitter, expected in [(_eprop._C, c * ext_C(w * MP, v * MQ, I)),
+                                              (_eprop._A, c * ext_A(w * MP, v * MQ, I))]:
+                        terms = []
+                        emitter(terms, (w, P), (v, Q), c, identity_str)
+                        terms_pre = []
+                        emitter(terms_pre, (w, P, bel_str(P)), (v, Q, bel_str(Q)), c, identity_str)
+                        self.assertEqual(terms_pre, terms)
+                        self.assertEqual([r for _, r in terms_pre], [r for _, r in terms])
+                        total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                        self.assertArraysAlmostEqual(total, expected)
+                        self.assertLessEqual(len(terms), 1)
+                        for lbl, rate in terms:
+                            self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertNotIn(identity, lbl.basis_element_labels)
+                            if lbl.errorgen_type in ('C', 'A'):
+                                self.assertTrue(bel_less_than(*lbl.basis_element_labels))
+                            else:  # degenerate outcomes of the two-index emitters
+                                self.assertEqual(len(lbl.basis_element_labels), 1)
+
+    def test_CA_label_ordering_preserved_by_tableau_propagation(self):
+        """
+        Regression test: `propagate_error_gen_tableau` must return C/A labels whose basis
+        element label pair is still in canonical (sorted) order.
+
+        A Clifford need not preserve the relative order of the two transformed Paulis (SWAP
+        maps (IX, XI) -> (XI, IX)). Without a re-sort the propagated label (1) represents the
+        negated generator for 'A', since A_{P,Q} = -A_{Q,P}, and (2) raises a KeyError against
+        any canonically-keyed dict, e.g. in `errorgen_layer_to_matrix`.
+        """
+     
+        # The motivating example: SWAP reverses the order of (IX, XI).
+        swap_tableau = stim.Tableau.from_named_gate('SWAP')
+        P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
+        self.assertTrue(bel_less_than(P, Q))  # (P, Q) starts canonical
+        C_lbl = _LSE('C', [P,Q])
+        SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
+        assert SWAP_C_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_C_lbl[1] == 1, "Incorrect weight following C subscript swap."
+
+        A_lbl = _LSE('A', [P,Q])
+        SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
+        assert SWAP_A_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_A_lbl[1] == -1, "Incorrect weight following A subscript swap."
+
+        # The propagated label is handed its strings pre-rendered (`pauli_str_reps`); they must
+        # be the strings of its (reordered) Paulis, so that hashing and ordering stay consistent.
+        tableau = stim.Tableau.random(6)
+        for typ, bels in [('H', ['XIIIII']), ('S', ['IYIIZI']), ('C', ['IIZIIY', 'XIIIII']), ('A', ['IXIIII', 'ZIIIYI'])]:
+            lbl = _LSE.cast((typ, bels))
+            new_lbl, _ = lbl.propagate_error_gen_tableau(tableau, weight=1)
+            self.assertEqual(new_lbl._hashable_basis_element_labels, tuple(bel_str(p) for p in new_lbl.basis_element_labels))
+            self.assertEqual(new_lbl, _LSE(typ, new_lbl.basis_element_labels))
+            self.assertEqual(hash(new_lbl), hash(_LSE(typ, new_lbl.basis_element_labels)))
+            if len(bels) == 2:
+                self.assertTrue(bel_less_than(*new_lbl.basis_element_labels))
+
 
     def test_zassenhaus_formula(self):
         first_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)
@@ -449,7 +957,7 @@ class ApproxStabilizerMethodTester(BaseCase):
                 raise ValueError('Bulk and individually computed phi values are different.')        
 
     def test_alpha(self):
-        bit_strings_3Q = list(product(['0','1'], repeat=3))
+        bit_strings_3Q =  [''.join(bit_tup) for bit_tup in product(['0','1'], repeat=3)]
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
         rng = np.random.default_rng()
         random_errorgens = rng.choice(np.fromiter(complete_errorgen_basis_3Q.labels, dtype=object), size=100, replace=False)
@@ -653,11 +1161,52 @@ class ApproxStabilizerMethodTester(BaseCase):
 
 
     def test_error_generator_taylor_expansion(self):
-        #this is just an integration test atm.
-        _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2)
+        #the propagated layer's expansion against the dense numerical one (sum of L^k / k!) at order 2; the
+        #order-3, all-sector check on random 2- and 3-qubit dictionaries is in ErrgenCompositionCommutationTester
+        #(the dense 4-qubit conversion of every label of the result is what makes this test expensive).
+        taylor_terms = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, truncation_threshold=0.0)
+        self.assertEqual(len(taylor_terms), 2)
+        total = {}
+        for order_dict in taylor_terms:
+            for lbl, rate in order_dict.items():
+                total[lbl] = total.get(lbl, 0) + rate
+        numerical = _eprop.error_generator_taylor_expansion_numerical(self.propagated_errorgen_layer, self.error_propagator, order=2)
+        analytic = self.error_propagator.errorgen_layer_dict_to_errorgen(total, 'pp')
+        self.assertLess(np.linalg.norm(numerical - analytic), 1e-12)
 
 class ErrorGenPropUtilsTester(BaseCase):
-    pass
+
+    def test_bel_product_str(self):
+        """
+        `bel_product_str` (the string-level Pauli product the emitters use in place of a stim
+        product plus rendering) must agree with stim on every pair of single-qubit Paulis and
+        on random multi-qubit pairs, including the 'I'-padded strings of 100-qubit labels and
+        strings longer than the cython implementation's stack buffer. Both the pure-python
+        implementation and the cython one (when built) are checked.
+        """
+        from pygsti.errorgenpropagation import localstimerrorgen as lse
+        impls = {'default': lse.bel_product_str, 'python': lse._slow_bel_product_str}
+        try:
+            from pygsti.tools.fasterrgencalc import fast_bel_product_str
+            impls['cython'] = fast_bel_product_str
+        except ImportError:
+            pass
+
+        def reference(s1, s2):
+            PQ = stim.PauliString(s1) * stim.PauliString(s2)
+            return lse.bel_str(PQ / PQ.sign)
+
+        rng = np.random.default_rng(2024)
+        cases = [(a, b) for a, b in product('IXYZ', repeat=2)]
+        for num_qubits in (2, 3, 5, 100, 257, 300):
+            for _ in range(100):
+                cases.append(tuple(''.join(rng.choice(list('IXYZ'), size=num_qubits, p=[0.7, 0.1, 0.1, 0.1]))
+                                   for _ in range(2)))
+        cases += [('IXYZ', 'IIII'), ('IXYZ', 'IXYZ')]
+        for name, impl in impls.items():
+            for s1, s2 in cases:
+                self.assertEqual(impl(s1, s2), reference(s1, s2), f'{name}: {s1} * {s2}')
+
 #helper functions
 
 def select_random_items_from_multiple_lists(input_lists, num_items, seed=None):
@@ -689,6 +1238,23 @@ def select_random_items_from_multiple_lists(input_lists, num_items, seed=None):
     indices = random.sample(range(list_length), num_items)
     
     return [[lst[i] for i in indices] for lst in input_lists]
+
+def _all_sector_rate_subset(num_qubits, num_per_sector, seed):
+    """
+    A seeded random subset of a random CPTP error generator rate dictionary on `num_qubits`
+    qubits, keeping `num_per_sector` labels from each of the H, S, C and A sectors. The subset
+    is generally not CP (S terms supporting the kept C/A terms may be dropped), which is
+    irrelevant for error generator propagation.
+    """
+    full = random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
+                                             SCA_params=(0, .01), label_type='local', seed=seed)
+    rng = np.random.default_rng(seed + 1)
+    subset = {}
+    for sector in 'HSCA':
+        lbls = [lbl for lbl in full if lbl.errorgen_type == sector]
+        for i in sorted(rng.choice(len(lbls), min(num_per_sector, len(lbls)), replace=False)):
+            subset[lbls[i]] = float(full[lbls[i]])
+    return subset
 
 def sample_error_rates_dict(pspec, strengths, seed=None):
     """
