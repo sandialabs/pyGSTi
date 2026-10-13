@@ -9,7 +9,7 @@ from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel 
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
-from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
+from pygsti.tools.lindbladtools import create_elementary_errorgen, random_cptp_errorgen_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 from ..util import BaseCase
@@ -1246,8 +1246,8 @@ def _all_sector_rate_subset(num_qubits, num_per_sector, seed):
     is generally not CP (S terms supporting the kept C/A terms may be dropped), which is
     irrelevant for error generator propagation.
     """
-    full = random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
-                                             SCA_params=(0, .01), label_type='local', seed=seed)
+    full = random_cptp_errorgen_rates(QubitSpace(num_qubits), errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
+                                      SCA_params=(0, .01), label_type='local', seed=seed)
     rng = np.random.default_rng(seed + 1)
     subset = {}
     for sector in 'HSCA':

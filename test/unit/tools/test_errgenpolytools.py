@@ -536,7 +536,7 @@ class ErrgenPolyToolsTester(BaseCase):
         # result - including for the (never propagated) last gate layer.
         from pygsti.circuits import Circuit
         pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
-        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        rates = random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S', 'C', 'A'), seed=7)
         model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
         circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
         propagator = ErrorGeneratorPropagator(model)
