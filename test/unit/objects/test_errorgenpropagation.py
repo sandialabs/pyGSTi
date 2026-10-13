@@ -321,9 +321,9 @@ class CanonicalLabelOrderTester(BaseCase):
         return len(strs) == 1 or strs[0] < strs[1]
 
     def setUp(self):
-        from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+        from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
         pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
-        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        rates = random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S', 'C', 'A'), seed=7)
         self.model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
         self.circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
         self.propagator = ErrorGeneratorPropagator(self.model)
