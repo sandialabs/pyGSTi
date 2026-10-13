@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Literal, Sequence
+from typing import Literal, Sequence, get_args
 
 import numpy as np
 
@@ -60,6 +60,7 @@ ModelTerms = Literal['somehs', 'allhs']
 # Prose spells these "in-class" and "out-of-class".
 Scenario = Literal['inclass', 'outclass']
 Topology = Literal['line', 'ring']
+DEFAULT_MODEL_TERMS: ModelTerms = 'somehs'
 
 
 def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
@@ -67,7 +68,7 @@ def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
     # One token per descriptor, so every underscore separates two of them.  The default
     # term set is left out, which makes a canonical profile's name its constant's name.
     name = f'{topology}_{nqubits}q_{scenario}'
-    return name if model_terms == 'somehs' else f'{name}_{model_terms}'
+    return name if model_terms == DEFAULT_MODEL_TERMS else f'{name}_{model_terms}'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,9 +95,18 @@ class ValidationProfile:
     # The two-qubit gate connectivity: `'ring'` adds the wraparound edge to the line.
     topology: Topology = 'line'
 
+    def __post_init__(self):
+        # An unknown scenario would otherwise run as in-class, and an unknown term set would
+        # fail only once a model is built.
+        for field, allowed in (('model_terms', ModelTerms), ('scenario', Scenario),
+                               ('topology', Topology)):
+            if getattr(self, field) not in get_args(allowed):
+                raise ValueError(f'Unknown {field} {getattr(self, field)!r}; '
+                                 f'expected one of {get_args(allowed)}')
+
     @classmethod
     def inclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                seed: int = 20260901, model_terms: ModelTerms = 'somehs',
+                seed: int = 20260901, model_terms: ModelTerms = DEFAULT_MODEL_TERMS,
                 topology: Topology = 'line') -> 'ValidationProfile':
         """Build a profile whose data-generating model is a seeded point in the hypothesis class."""
         return cls(_profile_name(topology, nqubits, model_terms, 'inclass'), nqubits,
@@ -108,7 +118,7 @@ class ValidationProfile:
     # default, H(Z:2) at 0.005, left the training likelihood unchanged.
     @classmethod
     def outclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                 seed: int = 20260901, model_terms: ModelTerms = 'somehs',
+                 seed: int = 20260901, model_terms: ModelTerms = DEFAULT_MODEL_TERMS,
                  topology: Topology = 'line', spectator_error: float = 0.01,
                  spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
         """Build a profile whose data-generating model adds `spectator_term` to `Gcnot(0, 1)`."""

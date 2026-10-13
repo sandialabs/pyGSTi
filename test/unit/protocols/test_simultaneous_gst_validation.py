@@ -13,6 +13,7 @@ from pygsti.data import simulate_data
 from pygsti.tools import tvd
 
 import test.helpers.simultaneous_gst_validation as validation
+import test.integration.test_simultaneous_gst as integration
 from test.integration.test_simultaneous_gst import profile_with_overrides
 from test.helpers.simultaneous_gst_validation import (
     LINE_3Q_OUTCLASS,
@@ -237,12 +238,26 @@ def test_profile_names_omit_only_the_default_term_set():
     assert ValidationProfile.outclass(
         nqubits=4, max_lengths=(1,), topology='ring',
     ).name == 'ring_4q_outclass'
+    assert ValidationProfile.outclass(
+        nqubits=3, max_lengths=(1,), model_terms='allhs', spectator_term=('H', 'ZZ:1,2'),
+    ).name == 'line_3q_outclass_allhs'
 
 
-def test_canonical_profile_names_are_their_constant_names():
-    for name in ('line_3q_inclass', 'line_3q_outclass', 'line_4q_inclass', 'line_4q_outclass',
-                 'ring_3q_inclass', 'ring_3q_outclass', 'ring_4q_inclass', 'ring_4q_outclass'):
-        assert getattr(validation, name.upper()).name == name
+def test_canonical_profile_names_are_their_constant_and_test_names():
+    canonical = {name: value for name, value in vars(validation).items()
+                 if isinstance(value, ValidationProfile)}
+    assert len(canonical) == 8
+    for constant_name, profile in canonical.items():
+        assert profile.name == constant_name.lower()
+        assert hasattr(integration.SimultaneousGSTValidationTester, f'test_{profile.name}')
+
+
+@pytest.mark.parametrize('field, value', [
+    ('model_terms', 'some_hs'), ('scenario', 'out_of_class_spectator'), ('topology', 'grid'),
+])
+def test_profiles_reject_unknown_descriptor_values(field, value):
+    with pytest.raises(ValueError, match=f'Unknown {field}'):
+        dataclasses.replace(validation.LINE_3Q_OUTCLASS, **{field: value})
 
 
 def test_ring_3q_design_colors_and_uses_the_wraparound_edge():
