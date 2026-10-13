@@ -1108,6 +1108,43 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     return evecs, evals, inv_evecs
 
 
+def sqrtm_frechet_derivative(evecs: _np.ndarray, evals: _np.ndarray, directions: _np.ndarray) -> _np.ndarray:
+    """
+    Fréchet derivative of the principal square root at a positive definite matrix.
+
+    Let `A = evecs @ diag(evals) @ evecs^†` be positive definite and `S = A^½`. For each
+    direction `H`, this returns `X = D sqrt(A)[H]`, the unique solution of `S X + X S = H`.
+    In the eigenbasis of `A` the solution is `X_ij = H_ij / (sqrt(evals_i) + sqrt(evals_j))`.
+
+    Only a sum of square roots appears in the denominator, so repeated eigenvalues are no
+    obstacle: any orthonormal eigenbasis gives the same `X`, and no eigenvector is differentiated.
+
+    Parameters
+    ----------
+    evecs : numpy array
+        A unitary matrix whose columns are eigenvectors of `A`.
+
+    evals : numpy array
+        The corresponding eigenvalues, all strictly positive.
+
+    directions : numpy array
+        A matrix `H`, or a stack of them with shape `(..., n, n)`.
+
+    Returns
+    -------
+    numpy array
+        `D sqrt(A)[H]` for each direction, with the shape of `directions`.
+    """
+    evals = _np.asarray(evals)
+    if _np.any(evals <= 0):
+        raise ValueError(f"The square root is only differentiable at positive definite matrices; "
+                         f"the smallest eigenvalue is {evals.min()}.")
+    roots = _np.sqrt(evals)
+    inv_root_sums = 1.0 / (roots[:, None] + roots[None, :])
+    evecs_dag = evecs.conj().T
+    return evecs @ ((evecs_dag @ directions @ evecs) * inv_root_sums) @ evecs_dag
+
+
 def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",
                     tol: float = 1e-8) -> _np.ndarray:
     """

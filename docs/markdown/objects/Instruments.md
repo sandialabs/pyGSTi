@@ -82,14 +82,14 @@ pyGSTi represents each member as a single `ComposedOp([RootConjOperator(E_k), G_
 - **Trace preservation** of the *whole instrument* is exactly the statement that the effects $\{E_k\}$ form one POVM, $\sum_k E_k = I$.  pyGSTi gathers them into a single shared `ComposedPOVM` whose error map is *always* promoted to a CP-constrained parameterization (`convert` uses the least-expressive CP parameterization that subsumes your request: `"GLND"` → `"CPTPLND"`, `"H+s"` → `"H+S"`).  This keeps every $E_k$ positive and their sum equal to the identity.
 - **Complete positivity** of an *individual member* is the statement that its post-measurement gate $\mathcal{G}_k$ is CP (the `RootConjOperator` is always CP).  So you *opt into* per-member CP by choosing a CP-constrained gate parameterization (`"CPTPLND"`, `"H+S"`); a trace-preserving-only choice (`"GLND"`, `"H+s"`, `"full TP"`) keeps the instrument TP but allows non-CP members.
 
-An $n$-outcome instrument therefore needs only **one POVM ($n$ effects) and $n$ gates**, regardless of any member's Kraus rank.  Two constructors build instruments in this form directly: `Instrument.from_effects`, when you have the measurement effects $\{E_k\}$ (and, optionally, explicit post-measurement gates), and `Instrument.from_cptr_superops`, when you have arbitrary dense CPTR member superoperators and want pyGSTi to recover the $(E_k, \mathcal{G}_k)$ decomposition for you:
+An $n$-outcome instrument therefore needs only **one POVM ($n$ effects) and $n$ gates**, regardless of any member's Kraus rank.  For Lindblad gate parameterizations each gate is a static unitary followed by an error map: for all practical purposes the ideal post-measurement gate is unitary, so the ideal instrument is the parameterization's zero-error point and every noise process lives in the error maps' parameters.  Two constructors build instruments in this form directly: `Instrument.from_effects`, when you have the measurement effects $\{E_k\}$ (and, optionally, the post-measurement unitaries), and `Instrument.from_cptr_superops`, when you have dense member superoperators that each have a single Kraus operator, as an ideal instrument's members do, and want pyGSTi to recover the effects and unitaries for you:
 
 ```{code-cell} ipython3
 # From the measurement effects (post-measurement gates default to the identity):
 fe = Instrument.from_effects({'p0': E0, 'p1': E1}, basis)
 print("from_effects      :", type(fe).__name__, "num_params =", fe.num_params)
 
-# From arbitrary dense CPTR superoperators (here the ideal projectors):
+# From dense one-Kraus superoperators (here the ideal projectors):
 cptr = Instrument.from_cptr_superops(
     {'p0': Gmz_plus, 'p1': Gmz_minus},
     basis,
@@ -211,12 +211,13 @@ gst = StandardGST(modes=('full TP', 'CPTPLND'), target_model=mdl_ideal, verbosit
 results = gst.run(ProtocolData(edesign, ds))
 ```
 
-Both fits recover the data-generating model fairly well. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
+We compare each gauge-optimized estimate to the data-generating model in Frobenius distance.
+Both land close to it; the next section shows what distinguishes them.
 
 ```{code-cell} ipython3
 for mode in ('full TP', 'CPTPLND'):
     mdl_go = results.estimates[mode].models['stdgaugeopt']
-    print(f"{mode:8s}: Frobenius distance to target = {mdl_ideal.frobeniusdist(mdl_go):.4f}")
+    print(f"{mode:8s}: Frobenius distance to data-generating model = {mdl_noisy.frobeniusdist(mdl_go):.4f}")
 ```
 
 ## Why a completely-positive parameterization matters
@@ -243,5 +244,75 @@ GST results that include instruments can be rendered into an interactive HTML re
 `pygsti.report.construct_standard_report(results, title='MCM GST').write_html(...)`.
 ```
 
-**That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, and performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret.
+## Diagnosing and repairing instrument seeds
+
+The effect-then-gate construction has one property that matters enormously in practice: for Lindblad gate parameterizations, the effects and unitaries an instrument is built from become a **frozen static base**.  The fit only composes an invertible error map onto each static unitary and a shared error map onto the static effects, so two properties of the base effects are *invariants of the entire parameterized family*:
+
+- the base effects' **span** determines which effect directions can ever move (all effects are images of one shared unital map, which cannot move identity components);
+- the base effects' **spectral intervals** contain every reachable effect's spectrum.
+
+A unitary static gate restricts nothing.  A chart assembled by hand around a non-unitary channel would be different: a singular static gate caps every reachable member's rank, because the error map composed onto it is invertible.
+
+An *ideal projective* instrument -- the natural target seed -- has full spectral intervals, so the ideal measurement and every noisy version of it stay reachable, but its effect eigenvalues sit exactly at 0 and 1, which matters for where a fit starts.  pyGSTi provides data-free diagnostics that decide reachability *in advance*:
+
+```{code-cell} ipython3
+from pygsti.modelmembers.instruments import diagnose_instrument, patch_instrument_seed
+
+report = diagnose_instrument({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp', warn=False)
+print(report)
+```
+
+Each flag names its repair.  `patch_instrument_seed` builds a parameterized instrument from dense members on their effects and post-measurement unitaries (inferring the unitaries with `infer_unitary_factors`, which approximates any member that has more than one Kraus operator), displacing the effects if their span is deficient.  It leaves effect eigenvalues at 0 and 1 where they are, so the ideal measurement stays reachable, and the one remaining flag, `CP-BOUNDARY`, is about where a fit *starts* rather than what it can reach:
+
+```{code-cell} ipython3
+patched = patch_instrument_seed({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp')
+print(diagnose_instrument(patched, 'pp', warn=False).verdict)
+```
+
+At zero noise every CP-constrained Lindblad block has zero dissipative derivatives, and boundary effects make the member maps non-differentiable, so an exact-Jacobian fit cannot start there.  `prepare_lindblad_seed` returns parameters that move every such block into its interior by a chosen diamond-norm distance, leaving the static base alone:
+
+```{code-cell} ipython3
+from pygsti.models import prepare_lindblad_seed
+
+mdl_seed = std.target_model()
+mdl_seed.set_all_parameterizations('CPTPLND')
+mdl_seed[('Iz', 0)] = patched
+seed_vector, seed_report = prepare_lindblad_seed(mdl_seed, diamond_budget=1e-2, seed=0)
+mdl_seed.from_vector(seed_vector)
+print(seed_report.effect_min_eigenvalues)
+```
+
+The prepared model can be passed to `GateSetTomography` as the `initial_model` for a cold CPTPLND fit, with `optimizer={'first_fditer': 0}`: the first-iteration finite differences exist only to leave a zero-derivative seed.  A flag is not always a bug, though, which is why diagnostics warn rather than raise.
+
+### Warm-starting a CPTPLND fit from a TP estimate
+
+A CP-constrained instrument fit can also be warm-started from a `"full TP"` fit: gauge-optimize the TP estimate toward the target, and seed the CPTPLND fit with the target converted to CPTPLND, whose instruments keep the ideal effects and post-measurement unitaries as their static base.  `fit_instrument_parameters` then sets the instruments' Lindblad parameters so that their members come as close to the TP estimate's as the chart allows (a least-squares fit, since TP members need not be CP), and `prepare_lindblad_seed` moves the seed into the interior.  Because the TP fit is carried by parameters rather than frozen into the base, the base's spectral intervals exclude nothing the data might call for.  One call runs the whole recipe against an existing estimate and adds the result as a new estimate (gauge-optimized parameterization-preservingly, which is what error-bar computations on CP-constrained estimates need):
+
+```{code-cell} ipython3
+from pygsti.protocols import refit_instruments_cptplnd
+
+new_label = refit_instruments_cptplnd(results, 'full TP', verbosity=0)
+mdl_warm = results.estimates[new_label].models['final iteration estimate']
+
+for mode in ('full TP', 'CPTPLND', new_label):
+    mdl_go = results.estimates[mode].models['stdgaugeopt']
+    print(f"{mode:8s}: Frobenius distance to data-generating model = {mdl_noisy.frobeniusdist(mdl_go):.4f}")
+
+inst = mdl_warm.instruments[('Iz', 0)]
+for outcome, member in inst.items():
+    viol = max(0.0, pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp'))
+    print(f"member {outcome!s:6s}: CP violation = {viol:.2e}")
+```
+
+**That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret -- and learned how to diagnose, repair, and warm-start the seeds that make CP-constrained instrument fits succeed.
+
+### Bonus
+
+Heres how you can generate a report, with error bars.
+
+```{code-cell} ipython3
+from pygsti.report import construct_standard_report
+results.add_hessians()
+rep = construct_standard_report(results, confidence_level=95)
+rep.write_html('./inst-report', auto_open=True)
 ```

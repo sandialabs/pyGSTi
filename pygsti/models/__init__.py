@@ -20,5 +20,7 @@ from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel
 
 from .modelconstruction import *
+from .lindbladinit import prepare_lindblad_seed, LindbladSeedReport, fit_instrument_parameters, \
+    InstrumentParameterFit
 from .qutrit import create_qutrit_model
 # Unused: from rpemodel import make_rpe_model

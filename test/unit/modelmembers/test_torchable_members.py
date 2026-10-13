@@ -8,8 +8,8 @@ For each member we check that
   (1) ``type(obj).torch_base(obj.stateless_data(float64, 'cpu'), from_numpy(obj.to_vector()))``
       reproduces the numpy ``obj.to_dense('HilbertSchmidt')`` (or, for POVMs/instruments, the stacked
       per-effect / per-member denses); and
-  (2) ``torch.func.jacrev(torch_base)`` reproduces the numpy Jacobian -- ``deriv_wrt_params`` where
-      an analytic one exists, or a finite-difference reference for RootConjOperator.
+  (2) ``torch.func.jacrev(torch_base)`` reproduces the numpy Jacobian, ``deriv_wrt_params`` (for
+      RootConjOperator also under ``torch.func.jacfwd``).
 
 These are skipped if torch is unavailable.
 """
@@ -20,6 +20,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from pygsti.baseobjs import Basis
 from pygsti.baseobjs.statespace import QubitSpace
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelmembers.operations.fullarbitraryop import FullArbitraryOp
@@ -131,8 +132,7 @@ def test_composed_povm_effect_torch_base():
 # --------------------------------------------------------------------------------------------------
 
 def _interior_effect_rootconj(seed=11):
-    """A RootConjOperator whose effect spectrum is interior to (0, 1) and non-degenerate (so the
-    eigh-backward Jacobian is well-conditioned and no NumericalDomainWarning fires)."""
+    """A RootConjOperator whose effect spectrum is interior to (0, 1) and non-degenerate."""
     model = std.target_model()
     E0 = np.diag([0.7, 0.3]).astype(complex)
     E1 = np.diag([0.3, 0.7]).astype(complex)
@@ -149,21 +149,39 @@ def test_rootconj_torch_base_value():
     assert np.allclose(_value(rcop), rcop.to_dense('HilbertSchmidt'), atol=1e-9)
 
 
-def test_rootconj_torch_jacobian():
+@pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
+def test_rootconj_torch_jacobian(jac):
     rcop = _interior_effect_rootconj()
-    ref = rcop.to_dense('HilbertSchmidt')
-    J = torch_base_jacobian(rcop)
+    assert np.allclose(torch_base_jacobian(rcop, jac=jac), rcop.deriv_wrt_params(), atol=1e-12)
 
-    # finite-difference reference (RootConjOperator has no analytic deriv_wrt_params)
-    v0 = rcop.to_vector()
-    eps = 1e-6
-    Jfd = np.zeros((ref.size, len(v0)))
-    for k in range(len(v0)):
-        vp = v0.copy(); vp[k] += eps; rcop.from_vector(vp); fp = rcop.to_dense('HilbertSchmidt').ravel()
-        vm = v0.copy(); vm[k] -= eps; rcop.from_vector(vm); fm = rcop.to_dense('HilbertSchmidt').ravel()
-        Jfd[:, k] = (fp - fm) / (2 * eps)
-    rcop.from_vector(v0)
-    assert np.allclose(J, Jfd, atol=1e-5)
+
+@pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
+def test_rootconj_torch_jacobian_repeated_eigenvalues(jac):
+    # A depolarized two-qubit projector has a threefold eigenvalue; autograd through eigh gave NaN here.
+    E0 = 0.8 * np.diag([1.0, 0, 0, 0]).astype(complex) + 0.05 * np.eye(4)
+    instr = Instrument.from_effects({'p0': E0, 'p1': np.eye(4) - E0}, Basis.cast('pp', 16))
+    for member in instr.values():
+        rcop = member.factorops[0]
+        J = torch_base_jacobian(rcop, jac=jac)
+        assert not np.isnan(J).any()
+        assert np.allclose(J, rcop.deriv_wrt_params(), atol=1e-12)
+
+
+@pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
+def test_rootconj_torch_jacobian_zero_effect(jac):
+    model = std.target_model()
+    instr = Instrument.from_effects({'p0': np.eye(2, dtype=complex), 'p1': np.zeros((2, 2), complex)}, model.basis)
+    rcop = instr['p1'].factorops[0]
+    assert np.array_equal(torch_base_jacobian(rcop, jac=jac), np.zeros((model.basis.dim**2, rcop.num_params)))
+
+
+@pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
+def test_rootconj_torch_jacobian_raises_on_boundary_spectrum(jac):
+    model = std.target_model()
+    E0 = np.diag([1.0, 0.0]).astype(complex)
+    instr = Instrument.from_effects({'p0': E0, 'p1': np.eye(2) - E0}, model.basis)
+    with pytest.raises(ValueError, match='not differentiable'):
+        torch_base_jacobian(instr['p0'].factorops[0], jac=jac)
 
 
 def test_rootconj_torch_base_value_boundary_spectrum():

@@ -1,5 +1,6 @@
 import copy
 import pickle
+import warnings
 
 import numpy as np
 
@@ -138,7 +139,8 @@ class FromCptrSuperopsTester(BaseCase):
         self.E0, self.E1, self.Gmz_plus, self.Gmz_minus = z_measurement_projectors(model)
         self.basis = model.basis
         # The default fixture is an ideal projective Z measurement: each effect is a
-        # rank-1 projector (singular E_k), which exercises the gate kernel completion.
+        # rank-1 projector (singular E_k), so the member leaves part of its unitary
+        # undetermined and the identity completes it.
         self.op_arrays = {'plus': self.Gmz_plus, 'minus': self.Gmz_minus}
         self.instrument = Instrument.from_cptr_superops(self.op_arrays, self.basis)
 
@@ -209,35 +211,45 @@ class FromCptrSuperopsTester(BaseCase):
     # --- numerical correctness: effect-then-CPTP-gate reconstruction ---
 
     def test_ideal_projector_singular_effect(self):
-        # Singular (rank-1) effects: the recovered gate is the canonical CPTP
-        # completion G_k = Q_k + P_k; the members reproduce the ideal projectors and
-        # are completely positive.
+        # Singular (rank-1) effects: each member is exactly Ad_I o RootConj(E_k), so the
+        # static gates are identity unitaries and the members reproduce the projectors.
         members = self._members(self.instrument)
         self.assertArraysAlmostEqual(members['plus'], self.Gmz_plus)
         self.assertArraysAlmostEqual(members['minus'], self.Gmz_minus)
         for mx in members.values():
             self._assert_cp(mx)
+        for member in self.instrument.values():
+            static = member.factorops[1].factorops[0]
+            self.assertIsInstance(static, op.StaticUnitaryOp)
+            self.assertArraysAlmostEqual(static.to_dense('HilbertSchmidt'), np.eye(self.basis.dim))
 
-    def test_rank2_members_stay_single_composed_op(self):
-        # A Kraus-rank-2 member still yields a single ComposedOp (no SummedOperator)
-        # and a single shared effect per outcome, while reproducing the input.
+    def test_multi_kraus_members_raise(self):
+        # A Kraus-rank-2 member has no unitary static base that reproduces it.
+        with self.assertRaisesRegex(ValueError, 'infer_unitary_factors'):
+            Instrument.from_cptr_superops(_noisy_z_op_arrays(), self.basis)
+
+    def test_multi_kraus_members_via_inferred_unitaries(self):
+        # The approximation route keeps every effect, hence every outcome probability, and
+        # still yields one ComposedOp and one shared effect per outcome.
         arrays = _noisy_z_op_arrays()
-        instrument = Instrument.from_cptr_superops(arrays, self.basis)
+        pairs, reports = inst.infer_unitary_factors(arrays, self.basis)
+        instrument = Instrument.from_effects(pairs, self.basis)
         members = self._members(instrument)
+        trace = np.eye(self.basis.dim)[0]  # <<I| / sqrt(2) in the normalized pp basis
         for k, member in instrument.items():
             self.assertIsInstance(member, op.ComposedOp)
             self.assertNotIsInstance(member, SummedOperator)
             self.assertIsInstance(member.factorops[0], RootConjOperator)
-            self.assertArraysAlmostEqual(members[k], arrays[k])
+            self.assertArraysAlmostEqual(trace @ members[k], trace @ arrays[k])
+            self.assertGreater(reports[k].residual, 1e-3)
+            self.assertEqual(reports[k].issues, ())
             self._assert_cp(members[k])
         effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
         self.assertEqual(len(effects), len(instrument))
 
-    def test_perturbed_projector_kernel_threshold(self):
-        # A small effect eigenvalue *above* trunc_tol is kept (exact reconstruction);
-        # one *below* trunc_tol is treated as kernel and completed (reconstruction
-        # then degrades only in that barely-measured direction).  Both stay CP and TP.
-        for off, recon_atol in [(1e-5, 1e-6), (1e-9, 1e-3)]:
+    def test_nearly_projective_effects_reconstruct_exactly(self):
+        # One-Kraus members reconstruct exactly however small an effect eigenvalue is.
+        for off in (1e-5, 1e-9):
             arrays = _weak_z_op_arrays(off)
             instrument = Instrument.from_cptr_superops(arrays, self.basis)
             members = self._members(instrument)
@@ -245,7 +257,7 @@ class FromCptrSuperopsTester(BaseCase):
             np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
             for k, mx in members.items():
                 self._assert_cp(mx)
-                np.testing.assert_allclose(mx, arrays[k], atol=recon_atol)
+                np.testing.assert_allclose(mx, arrays[k], atol=1e-12)
 
     def test_raises_when_members_not_tp(self):
         # Effects E_k = I_k^dagger(I) that do not sum to I -> not a TP channel.
@@ -391,6 +403,98 @@ class FromEffectsTester(BaseCase):
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+
+    def test_raises_on_nonunitary_gate(self):
+        depolarizing = np.diag([1.0, 0.9, 0.9, 0.9])  # TP and CP, but not unitary
+        with self.assertRaisesRegex(ValueError, 'not unitary'):
+            Instrument.from_effects({'p0': (self.E0, depolarizing), 'p1': self.E1}, self.basis)
+        with self.assertRaisesRegex(ValueError, 'not unitary'):
+            Instrument.from_effects({'p0': (self.E0, 0.5 * np.eye(2)), 'p1': self.E1}, self.basis)
+
+    def test_unitary_gate_forms_agree(self):
+        # A unitary, its superoperator, and a LinearOperator holding it build the same chart.
+        from pygsti.tools import optools as ot
+        Z = np.array([[1, 0], [0, -1]], dtype=complex)
+        forms = [Z, ot.unitary_to_superop(Z, self.basis), op.StaticUnitaryOp(Z, self.basis)]
+        built = [Instrument.from_effects({'p0': self.E0, 'p1': (self.E1, g)}, self.basis) for g in forms]
+        for instrument in built:
+            static = instrument['p1'].factorops[1].factorops[0]
+            self.assertIsInstance(static, op.StaticUnitaryOp)
+            self.assertArraysAlmostEqual(self._members(instrument)['p1'], self._members(built[0])['p1'])
+
+    def test_static_gate_parameterization_is_unitary(self):
+        instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis,
+                                             gate_parameterization='static')
+        for member in instrument.values():
+            self.assertIsInstance(member.factorops[1], op.StaticUnitaryOp)
+
+
+def _central_difference_deriv(operator, h=1e-6):
+    """Central-difference derivative of `operator.to_dense()`, in the layout of `deriv_wrt_params`."""
+    p0 = operator.to_vector()
+    work = operator.copy()
+    cols = []
+    for i in range(len(p0)):
+        p = p0.copy()
+        p[i] += h
+        work.from_vector(p)
+        plus = work.to_dense()
+        p[i] -= 2 * h
+        work.from_vector(p)
+        cols.append(((plus - work.to_dense()) / (2 * h)).ravel())
+    return np.array(cols).T
+
+
+class RootConjDerivativeTester(BaseCase):
+    """RootConjOperator.deriv_wrt_params: exact where E^(1/2) is differentiable, finite differences
+    (with a warning) on the spectral boundary where it is not."""
+
+    def setUp(self):
+        self.basis = std.target_model().basis
+
+    def _root_conj(self, effects, basis, perturbation=0.0, seed=0):
+        instrument = Instrument.from_effects(effects, basis)
+        if perturbation:
+            rng = np.random.default_rng(seed)
+            instrument.from_vector(instrument.to_vector() + perturbation * rng.standard_normal(instrument.num_params))
+        return {lbl: member.factorops[0] for lbl, member in instrument.items()}
+
+    def test_matches_central_differences(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05, seed=1)['p0']
+        self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_matches_central_differences_with_repeated_eigenvalues(self):
+        # A depolarized two-qubit projector has a threefold eigenvalue, where differentiating
+        # eigenvectors (as autograd through eigh does) breaks down.
+        P = np.diag([1.0, 0, 0, 0]).astype(complex)
+        E0 = 0.8 * P + 0.2 * np.eye(4) / 4
+        basis = pygsti.baseobjs.Basis.cast('pp', 16)
+        rcops = self._root_conj({'p0': E0, 'p1': np.eye(4) - E0}, basis)
+        for rcop in rcops.values():
+            self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_wrt_filter(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05)['p0']
+        full = rcop.deriv_wrt_params()
+        self.assertEqual(full.shape, (self.basis.dim**2, rcop.num_params))
+        self.assertArraysEqual(rcop.deriv_wrt_params([3, 1]), full[:, [3, 1]])
+
+    def test_zero_effect_has_zero_derivative(self):
+        rcop = self._root_conj({'p0': np.eye(2, dtype=complex), 'p1': np.zeros((2, 2), complex)},
+                               self.basis, perturbation=0.05)['p1']
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            deriv = rcop.deriv_wrt_params()
+        self.assertArraysEqual(deriv, np.zeros((self.basis.dim**2, rcop.num_params)))
+
+    def test_boundary_effect_warns_and_uses_finite_differences(self):
+        E0 = np.diag([1.0, 0.0]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)['p0']
+        with self.assertWarnsRegex(UserWarning, 'not differentiable'):
+            deriv = rcop.deriv_wrt_params()
+        self.assertArraysEqual(deriv, op.linearop.finite_difference_deriv_wrt_params(rcop, None))
 
 
 class SharedErrorMapCopyTester(BaseCase):

@@ -16,7 +16,7 @@ import importlib.util
 import numpy as np
 import warnings
 
-from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
+from typing import Optional, Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
@@ -230,6 +230,171 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
     problem = cp.Problem(objective, constraints)
     viable_solvers = [solver for solver in ['MOSEK', 'CLARABEL', 'CVXOPT'] if solver in cp.installed_solvers()]
     return problem, proj_superop, viable_solvers
+
+
+def cp_superop_variable(purestate_dim: int, basis: BasisLike, name: Optional[str] = None) -> Tuple[cp.Variable, List[cp.Constraint]]:
+    """
+    Return a real CVXPY Variable representing a superoperator (in `basis`),
+    together with the constraint that it is completely positive (CP) --
+    i.e., that its Choi matrix is positive semidefinite.
+
+    This is the CP-only sibling of :func:`cptp_superop_variable`. Unlike that
+    function, no trace-preservation (or trace-nonincreasing) condition is
+    imposed here; callers are expected to add whatever trace conditions their
+    application requires (see, e.g., :func:`instrument_projection_model`,
+    which constrains the *sum* of several such variables to be TP).
+    """
+    cp = _get_cvxpy()
+    d = purestate_dim ** 2
+    basis = Basis.cast(basis, d)
+    X = cp.Variable((d, d), name=name)
+    J = jamiolkowski_iso(X, basis, basis, normalized=True)
+    constraints = [J >> 0]
+    return X, constraints
+
+
+INSTRUMENT_PROJECTION_NORMS = ('diamond', 'frobenius', 'spectral')
+
+
+def instrument_projection_model(member_superops: Sequence[np.ndarray], basis: BasisLike, norm: str = 'frobenius') -> Tuple[cp.Problem, List[cp.Variable]]:
+    """
+    Return a CVXPY model for projecting the members of a quantum instrument
+    onto the set of CPTR (completely positive, trace-nonincreasing) maps
+    whose sum is CPTP.
+
+    Given member superoperators G_0, ..., G_{n-1} (e.g., the dense members of
+    an :class:`~pygsti.modelmembers.instruments.Instrument` or
+    :class:`~pygsti.modelmembers.instruments.TPInstrument`), the model's
+    variables X_0, ..., X_{n-1} are constrained so that each X_i is CP and
+    sum_i X_i is TP. These constraints suffice for the stated projection:
+    the sum of CP maps is CP, and CP members with a TP sum are automatically
+    trace-nonincreasing (each member's trace deficit is the sum of the other
+    members' nonnegative traces), so no explicit TR constraints are needed.
+
+    The objective is a sum of per-member norms of (X_i - G_i), selected by
+    `norm`:
+
+    * 'diamond' : the diamond norm of the superoperator difference, via
+      :func:`diamond_norm_canon`. Note this is the *full* diamond norm per
+      member (no factor of 1/2 as in the diamond *distance* reported by
+      :func:`diamond_distance_projection_model`); the factor would not
+      change the minimizer.
+    * 'frobenius' (the default) : the *squared* Frobenius norm of the
+      superoperator difference, making the objective the true
+      (unique-minimizer) Euclidean projection onto the constraint set. The
+      squared Frobenius norm is the same whether applied to the superoperator
+      or Choi representation.
+    * 'spectral' : the spectral norm of the *Choi matrix* of the difference
+      (computed with `normalized=True`, i.e. trace-1 Choi matrices for TP
+      maps, matching :func:`cptp_superop_variable`; normalization is a
+      uniform scaling and does not change the minimizer).
+
+    Parameters
+    ----------
+    member_superops : sequence of numpy arrays
+        The instrument members' superoperator (process) matrices, each of
+        shape (D, D) with D a perfect square, expressed in `basis`. These
+        must be real (as is the case for, e.g., the Pauli-product basis).
+
+    basis : BasisLike
+        The basis in which `member_superops` are expressed.
+
+    norm : {'diamond', 'frobenius', 'spectral'}
+        The per-member norm summed in the objective, as described above.
+
+    Returns
+    -------
+    problem : cp.Problem
+        The (unsolved) minimization problem.
+    member_vars : list of cp.Variable
+        The variables X_i, named 'X0', 'X1', ..., in the same order as
+        `member_superops`. After solving, their `.value` attributes (or the
+        corresponding entries of :func:`solve_sdp`'s returned dict) hold the
+        projected superoperators.
+    """
+    assert CVXPY_ENABLED
+    cp = _get_cvxpy()
+    if norm not in INSTRUMENT_PROJECTION_NORMS:
+        raise ValueError(f"norm must be one of {INSTRUMENT_PROJECTION_NORMS}, not {norm!r}.")
+    n = len(member_superops)
+    if n == 0:
+        raise ValueError("member_superops must be nonempty.")
+    dim_mixed = member_superops[0].shape[0]
+    dim_pure = int(np.sqrt(dim_mixed))
+    if dim_pure ** 2 != dim_mixed:
+        raise ValueError(f"Member dimension {dim_mixed} is not a perfect square.")
+    reals = []
+    for i, G in enumerate(member_superops):
+        if G.shape != (dim_mixed, dim_mixed):
+            raise ValueError(f"member_superops[{i}] has shape {G.shape}; expected {(dim_mixed, dim_mixed)}.")
+        if np.iscomplexobj(G) and not np.allclose(G.imag, 0.0):
+            raise ValueError(f"member_superops[{i}] is not real; this model's variables are real.")
+        reals.append(np.real(G))
+    basis = Basis.cast(basis, dim_mixed)
+
+    member_vars = []
+    constraints = []
+    objective_terms = []
+    for i, G in enumerate(reals):
+        X, cons = cp_superop_variable(dim_pure, basis, name=f'X{i}')
+        member_vars.append(X)
+        constraints.extend(cons)
+        diff = X - G
+        if norm == 'diamond':
+            epi, cons = diamond_norm_canon(diff, basis)
+            constraints.extend(cons)
+            objective_terms.append(epi)
+        elif norm == 'frobenius':
+            objective_terms.append(cp.sum_squares(diff))
+        else:  # 'spectral'
+            Jdiff = jamiolkowski_iso(diff, basis, basis, normalized=True)
+            H = cp.hermitian_wrap(Jdiff)
+            # The spectral norm of a Hermitian matrix is max(lambda_max(H), lambda_max(-H));
+            # lambda_max(H) alone would miss a dominant negative eigenvalue.
+            objective_terms.append(cp.maximum(cp.lambda_max(H), cp.lambda_max(-H)))
+
+    member_sum = sum(member_vars)
+    if basis.first_element_is_identity:
+        # TP <=> the first row of the process matrix is (1, 0, ..., 0).
+        e1 = np.zeros(dim_mixed)
+        e1[0] = 1
+        constraints.append(member_sum[0, :] == e1)
+    else:
+        # See the comment in cptp_superop_variable for why this encodes TP.
+        matI = np.eye(dim_pure)
+        vecI = stdmx_to_vec(matI, basis)
+        constraints.append(member_sum.T @ vecI == vecI)
+
+    problem = cp.Problem(cp.Minimize(sum(objective_terms)), constraints)
+    return problem, member_vars
+
+
+def project_instrument_members(member_superops: Sequence[np.ndarray], basis: BasisLike, norm: str = 'frobenius', **solve_kwargs) -> Tuple[List[Optional[np.ndarray]], np.floating]:
+    """
+    Project the members of a quantum instrument onto the set of CPTR maps
+    that sum to a CPTP map, by building the model from
+    :func:`instrument_projection_model` and solving it with :func:`solve_sdp`.
+
+    See :func:`instrument_projection_model` for the meanings of
+    `member_superops`, `basis`, and `norm`. Any `solve_kwargs` are forwarded
+    to the CVXPY solver.
+
+    Returns
+    -------
+    projected : list of numpy arrays
+        The projected member superoperators, in the same order (and basis) as
+        `member_superops`. The constraints hold up to solver tolerance
+        (typically ~1e-7), so tiny CP/TP violations may remain. If every
+        available solver fails, a `CVXPYFailure` warning is emitted (by
+        :func:`solve_sdp`) and the entries are None.
+    objective_val : float
+        The achieved objective value (the sum of per-member norms, per
+        `norm`), or NaN on solver failure.
+    """
+    problem, member_vars = instrument_projection_model(member_superops, basis, norm)
+    objective_val, varvals = solve_sdp(problem, **solve_kwargs)
+    projected = [varvals.get(X.name(), None) for X in member_vars]
+    return projected, objective_val
 
 
 def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Expression, List[cp.Constraint]]:
