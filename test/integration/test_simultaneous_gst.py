@@ -33,14 +33,14 @@ from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
 from test.helpers.simultaneous_gst_validation import (
-    LINE_3Q_IN_CLASS,
-    LINE_3Q_OUT_OF_CLASS_SPECTATOR,
-    LINE_4Q_IN_CLASS,
-    LINE_4Q_OUT_OF_CLASS_SPECTATOR,
-    RING_3Q_IN_CLASS,
-    RING_3Q_OUT_OF_CLASS_SPECTATOR,
-    RING_4Q_IN_CLASS,
-    RING_4Q_OUT_OF_CLASS_SPECTATOR,
+    LINE_3Q_INCLASS,
+    LINE_3Q_OUTCLASS,
+    LINE_4Q_INCLASS,
+    LINE_4Q_OUTCLASS,
+    RING_3Q_INCLASS,
+    RING_3Q_OUTCLASS,
+    RING_4Q_INCLASS,
+    RING_4Q_OUTCLASS,
     ValidationArtifacts,
     create_run_root,
     run_validation_profile,
@@ -267,32 +267,32 @@ class SimultaneousGSTValidationTester:
         # held-out error.
         assert result['held_out_mean_tvd'] <= 0.5 * result['target_held_out_mean_tvd']
 
-    def test_line_3q_in_class(self):
-        self.assert_recovers_datagen_model(run_profile(LINE_3Q_IN_CLASS))
+    def test_line_3q_inclass(self):
+        self.assert_recovers_datagen_model(run_profile(LINE_3Q_INCLASS))
 
-    def test_line_3q_out_of_class_spectator(self):
-        self.assert_reveals_and_survives_crosstalk(run_profile(LINE_3Q_OUT_OF_CLASS_SPECTATOR))
+    def test_line_3q_outclass(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(LINE_3Q_OUTCLASS))
 
-    def test_line_4q_in_class(self):
-        self.assert_recovers_datagen_model(run_profile(LINE_4Q_IN_CLASS))
+    def test_line_4q_inclass(self):
+        self.assert_recovers_datagen_model(run_profile(LINE_4Q_INCLASS))
 
-    def test_line_4q_out_of_class_spectator(self):
-        self.assert_reveals_and_survives_crosstalk(run_profile(LINE_4Q_OUT_OF_CLASS_SPECTATOR))
+    def test_line_4q_outclass(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(LINE_4Q_OUTCLASS))
 
     # A ring adds the wraparound edge.  On three qubits that edge needs a third color,
     # and on four it puts every qubit in a two-qubit patch in both colors.
 
-    def test_ring_3q_in_class(self):
-        self.assert_recovers_datagen_model(run_profile(RING_3Q_IN_CLASS))
+    def test_ring_3q_inclass(self):
+        self.assert_recovers_datagen_model(run_profile(RING_3Q_INCLASS))
 
-    def test_ring_3q_out_of_class_spectator(self):
-        self.assert_reveals_and_survives_crosstalk(run_profile(RING_3Q_OUT_OF_CLASS_SPECTATOR))
+    def test_ring_3q_outclass(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(RING_3Q_OUTCLASS))
 
-    def test_ring_4q_in_class(self):
-        self.assert_recovers_datagen_model(run_profile(RING_4Q_IN_CLASS))
+    def test_ring_4q_inclass(self):
+        self.assert_recovers_datagen_model(run_profile(RING_4Q_INCLASS))
 
-    def test_ring_4q_out_of_class_spectator(self):
-        self.assert_reveals_and_survives_crosstalk(run_profile(RING_4Q_OUT_OF_CLASS_SPECTATOR))
+    def test_ring_4q_outclass(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(RING_4Q_OUTCLASS))
 
 if __name__ == '__main__':
     unittest.main()

@@ -56,14 +56,18 @@ ALL_HS_TERMS = {
     for gate_name in SOME_HS_TERMS
 }
 
-ModelTerms = Literal['some_hs', 'all_hs']
-Scenario = Literal['in_class', 'out_of_class_spectator']
+ModelTerms = Literal['somehs', 'allhs']
+# Prose spells these "in-class" and "out-of-class".
+Scenario = Literal['inclass', 'outclass']
 Topology = Literal['line', 'ring']
 
 
 def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
                   scenario: Scenario) -> str:
-    return f'{topology}_{nqubits}q_{model_terms}_{scenario}'
+    # One token per descriptor, so every underscore separates two of them.  The default
+    # term set is left out, which makes a canonical profile's name its constant's name.
+    name = f'{topology}_{nqubits}q_{scenario}'
+    return name if model_terms == 'somehs' else f'{name}_{model_terms}'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -75,12 +79,12 @@ class ValidationProfile:
     max_lengths: tuple[int, ...]
     shots: int
     model_terms: ModelTerms
-    # Whether the data-generating model lies in the fit's hypothesis class, and if not,
-    # the mechanism that takes it outside.
+    # Whether the data-generating model lies in the fit's hypothesis class.  Out of class,
+    # it adds `spectator_term` to `Gcnot(0, 1)`.
     scenario: Scenario
     seed: int
     spectator_error: float = 0.0
-    # The error injected into `Gcnot(0, 1)` for out-of-class spectator scenarios, as a
+    # The error injected into `Gcnot(0, 1)` for out-of-class scenarios, as a
     # `create_cloud_crosstalk_model` coefficient key.  `('S', 'Z:2')` dephases the
     # spectator.  It is weight-1, so the hypothesis class can absorb part of it, but only as
     # error on qubit 2's own gates in every layer, not just the layers containing the CNOT.
@@ -91,26 +95,25 @@ class ValidationProfile:
     topology: Topology = 'line'
 
     @classmethod
-    def in_class(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                 seed: int = 20260901, model_terms: ModelTerms = 'some_hs',
-                 topology: Topology = 'line') -> 'ValidationProfile':
+    def inclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                seed: int = 20260901, model_terms: ModelTerms = 'somehs',
+                topology: Topology = 'line') -> 'ValidationProfile':
         """Build a profile whose data-generating model is a seeded point in the hypothesis class."""
-        return cls(_profile_name(topology, nqubits, model_terms, 'in_class'), nqubits,
-                   tuple(max_lengths), shots, model_terms, 'in_class', seed, topology=topology)
+        return cls(_profile_name(topology, nqubits, model_terms, 'inclass'), nqubits,
+                   tuple(max_lengths), shots, model_terms, 'inclass', seed, topology=topology)
 
     # S(Z:2) at 0.01 is large enough that the training data reveal it -- the
     # crosstalk-free fit's 2*deltaLogL exceeds the data-generating model's by about 1200
     # at 3Q -- while that fit still removes most of the held-out error.  The earlier
     # default, H(Z:2) at 0.005, left the training likelihood unchanged.
     @classmethod
-    def out_of_class_spectator(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                               seed: int = 20260901, model_terms: ModelTerms = 'some_hs',
-                               topology: Topology = 'line', spectator_error: float = 0.01,
-                               spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
+    def outclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
+                 seed: int = 20260901, model_terms: ModelTerms = 'somehs',
+                 topology: Topology = 'line', spectator_error: float = 0.01,
+                 spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
         """Build a profile whose data-generating model adds `spectator_term` to `Gcnot(0, 1)`."""
-        scenario = 'out_of_class_spectator'
-        return cls(_profile_name(topology, nqubits, model_terms, scenario), nqubits,
-                   tuple(max_lengths), shots, model_terms, scenario, seed, spectator_error,
+        return cls(_profile_name(topology, nqubits, model_terms, 'outclass'), nqubits,
+                   tuple(max_lengths), shots, model_terms, 'outclass', seed, spectator_error,
                    tuple(spectator_term), topology)
 
     @functools.cached_property
@@ -130,21 +133,21 @@ class ValidationArtifacts:
     manifest_path: pathlib.Path
 
 
-LINE_3Q_IN_CLASS = ValidationProfile.in_class(
+LINE_3Q_INCLASS = ValidationProfile.inclass(
     nqubits=3, max_lengths=(1, 2, 4))
-LINE_3Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
+LINE_3Q_OUTCLASS = ValidationProfile.outclass(
     nqubits=3, max_lengths=(1, 2, 4))
-LINE_4Q_IN_CLASS = ValidationProfile.in_class(
+LINE_4Q_INCLASS = ValidationProfile.inclass(
     nqubits=4, max_lengths=(1, 2, 4))
-LINE_4Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
+LINE_4Q_OUTCLASS = ValidationProfile.outclass(
     nqubits=4, max_lengths=(1, 2, 4))
-RING_3Q_IN_CLASS = ValidationProfile.in_class(
+RING_3Q_INCLASS = ValidationProfile.inclass(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-RING_3Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
+RING_3Q_OUTCLASS = ValidationProfile.outclass(
     nqubits=3, max_lengths=(1, 2, 4), topology='ring')
-RING_4Q_IN_CLASS = ValidationProfile.in_class(
+RING_4Q_INCLASS = ValidationProfile.inclass(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
-RING_4Q_OUT_OF_CLASS_SPECTATOR = ValidationProfile.out_of_class_spectator(
+RING_4Q_OUTCLASS = ValidationProfile.outclass(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
 
 
@@ -181,11 +184,11 @@ def _processor_spec(nqubits: int, topology: Topology = 'line') -> QubitProcessor
 
 
 def _terms_by_gate(model_terms: ModelTerms) -> dict:
-    if model_terms == 'some_hs':
+    if model_terms == 'somehs':
         return SOME_HS_TERMS
-    if model_terms == 'all_hs':
+    if model_terms == 'allhs':
         return ALL_HS_TERMS
-    raise ValueError(f'Unknown model terms {model_terms!r}; expected some_hs or all_hs')
+    raise ValueError(f'Unknown model terms {model_terms!r}; expected somehs or allhs')
 
 
 def _zero_term_dict(model_terms: ModelTerms, gate_names) -> dict:
@@ -264,7 +267,7 @@ def _set_seeded_error_coefficients(model, seed: int, spectator_gate=None,
 
 def _build_spectator_datagen_model(profile: ValidationProfile):
     if profile.nqubits < 3:
-        raise ValueError('Out-of-class spectator profiles require at least three qubits')
+        raise ValueError('Out-of-class profiles require at least three qubits')
     processor_spec = _processor_spec(profile.nqubits, profile.topology)
     terms_by_gate = _terms_by_gate(profile.model_terms)
     coefficients = {
@@ -309,7 +312,7 @@ def _spectator_parameterization(spectator_term: Sequence[str]) -> str:
 def _assert_spectator_term_survived(model, spectator_gate, profile: ValidationProfile) -> None:
     """Fail loudly if the injected crosstalk is not in the constructed model.
 
-    Without this the `H+S` silent drop produces an out-of-class spectator run containing no
+    Without this the `H+S` silent drop produces an out-of-class run containing no
     crosstalk, which is indistinguishable from an in-class run and looks entirely healthy.
     """
     wanted_type = profile.spectator_term[0]
@@ -342,7 +345,7 @@ def build_fit_and_datagen_models(profile: ValidationProfile):
     """
     fit_model = _build_model(_processor_spec(profile.nqubits, profile.topology),
                              profile.model_terms, independent_gates=True)
-    if profile.scenario == 'out_of_class_spectator':
+    if profile.scenario == 'outclass':
         datagen_model = _build_spectator_datagen_model(profile)
     else:
         datagen_model = fit_model.copy()
@@ -670,7 +673,7 @@ def run_validation_profile(
         'shots': int(profile.shots),
         'mpi_ranks': int(mpi_ranks),
     }
-    if profile.scenario == 'in_class':
+    if profile.scenario == 'inclass':
         metrics['identifiable_params'] = identifiable_parameter_count(datagen_model, dataset)
         mean_threshold, max_threshold = shot_noise_held_out_tvd_quantiles(
             datagen_model, dataset, held_out.circuits)

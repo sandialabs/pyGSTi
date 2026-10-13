@@ -15,7 +15,7 @@ from pygsti.tools import tvd
 import test.helpers.simultaneous_gst_validation as validation
 from test.integration.test_simultaneous_gst import profile_with_overrides
 from test.helpers.simultaneous_gst_validation import (
-    LINE_3Q_OUT_OF_CLASS_SPECTATOR,
+    LINE_3Q_OUTCLASS,
     ValidationArtifacts,
     ValidationProfile,
     build_component_designs,
@@ -36,21 +36,21 @@ def test_long_running_marker_is_registered(pytestconfig):
 
 
 def test_artifact_root_is_unique_and_has_manifest(tmp_path):
-    root = create_run_root(tmp_path, profile_name='line_3q_some_hs_in_class')
+    root = create_run_root(tmp_path, profile_name='line_3q_inclass')
     assert root.is_dir()
     assert (root / 'run-manifest.json').is_file()
 
 
 def test_artifact_roots_are_unique_for_colliding_profile_names(tmp_path):
-    first = create_run_root(tmp_path, profile_name='line_3q_some_hs_in_class')
-    second = create_run_root(tmp_path, profile_name='line_3q_some_hs_in_class')
+    first = create_run_root(tmp_path, profile_name='line_3q_inclass')
+    second = create_run_root(tmp_path, profile_name='line_3q_inclass')
     assert first != second
     assert first.is_dir()
     assert second.is_dir()
 
 
-def test_some_hs_component_models_have_expected_parameter_counts():
-    profile = ValidationProfile.in_class(nqubits=4, max_lengths=(1, 2))
+def test_somehs_component_models_have_expected_parameter_counts():
+    profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2))
     oneq_design, twoq_design = build_component_designs(profile)
     assert profile.oneq_model.num_params == 8
     assert profile.twoq_model.num_params == 17
@@ -58,14 +58,14 @@ def test_some_hs_component_models_have_expected_parameter_counts():
     assert twoq_design.qubit_labels == (0, 1)
 
 
-def test_line_4q_all_hs_fit_model_has_independent_placement_parameters():
-    profile = ValidationProfile.in_class(nqubits=4, max_lengths=(1, 2), model_terms='all_hs')
+def test_line_4q_allhs_fit_model_has_independent_placement_parameters():
+    profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2), model_terms='allhs')
     fit_model, _ = build_fit_and_datagen_models(profile)
     assert fit_model.num_params == 252
 
 
-def test_in_class_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
-    profile = ValidationProfile.in_class(nqubits=3, max_lengths=(1, 2))
+def test_inclass_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
+    profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2))
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
     assert fit_model.num_params == datagen_model.num_params
     assert np.any(datagen_model.to_vector() != 0.0)
@@ -74,15 +74,15 @@ def test_in_class_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
 
 
 def test_spectator_profiles_default_to_calibrated_effect():
-    default_profile = ValidationProfile.out_of_class_spectator(
+    default_profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2))
 
-    for profile in (default_profile, LINE_3Q_OUT_OF_CLASS_SPECTATOR, validation.LINE_4Q_OUT_OF_CLASS_SPECTATOR):
+    for profile in (default_profile, LINE_3Q_OUTCLASS, validation.LINE_4Q_OUTCLASS):
         assert (profile.spectator_term, profile.spectator_error) == (('S', 'Z:2'), 0.01)
 
 
 def test_profile_overrides_are_immutable_and_optional(monkeypatch):
-    profile = ValidationProfile.out_of_class_spectator(nqubits=3, max_lengths=(1, 2), seed=20260901)
+    profile = ValidationProfile.outclass(nqubits=3, max_lengths=(1, 2), seed=20260901)
     for variable in ('PYGSTI_SGST_PROFILE_SEED', 'PYGSTI_SGST_SPECTATOR_ERROR',
                      'PYGSTI_SGST_SPECTATOR_TERM'):
         monkeypatch.delenv(variable, raising=False)
@@ -94,7 +94,7 @@ def test_profile_overrides_are_immutable_and_optional(monkeypatch):
     monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_TERM', 'H|ZZ:1,2')
     overridden = profile_with_overrides(profile)
 
-    assert overridden == ValidationProfile.out_of_class_spectator(
+    assert overridden == ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), seed=606, spectator_error=0.02,
         spectator_term=('H', 'ZZ:1,2'))
     assert overridden is not profile
@@ -104,7 +104,7 @@ def test_profile_overrides_are_immutable_and_optional(monkeypatch):
 
 
 def test_spectator_datagen_model_lies_outside_the_hypothesis_class():
-    profile = ValidationProfile.out_of_class_spectator(
+    profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.001)
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
     assert fit_model.num_params < datagen_model.num_params
@@ -130,7 +130,7 @@ def test_spectator_support_reads_qubits_from_coefficient_keys():
 
 def test_weight_two_spectator_term_survives_the_seeded_local_noise():
     """A weight-2 key has support (1, 2), so the (2,)-only guard would not protect it."""
-    profile = ValidationProfile.out_of_class_spectator(
+    profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.02, spectator_term=('H', 'ZZ:1,2'))
     _, datagen_model = build_fit_and_datagen_models(profile)
 
@@ -147,7 +147,7 @@ def test_weight_two_spectator_term_survives_the_seeded_local_noise():
 
 def test_correlation_spectator_terms_are_built_rather_than_silently_discarded():
     """`H+S` drops `C` coefficients without warning, which would fake a crosstalk run."""
-    profile = ValidationProfile.out_of_class_spectator(
+    profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.01,
         spectator_term=('C', 'Z:2', 'X:2'))
     _, datagen_model = build_fit_and_datagen_models(profile)
@@ -174,7 +174,7 @@ def test_hamiltonian_and_stochastic_terms_keep_the_original_parameterization():
 
 def test_held_out_circuits_are_distinct_so_the_mean_is_not_reweighted():
     """A circuit reached by two germ powers is listed twice; averaging would double it."""
-    profile = ValidationProfile.in_class(nqubits=3, max_lengths=(1, 2, 4), seed=20260902)
+    profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2, 4), seed=20260902)
     _, held_out = build_training_design_and_held_out_circuits(profile)
 
     assert len(set(held_out.circuits)) == len(held_out.circuits)
@@ -183,7 +183,7 @@ def test_held_out_circuits_are_distinct_so_the_mean_is_not_reweighted():
 
 def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
     """A term confined to the gate's own qubits is local error, not crosstalk."""
-    profile = ValidationProfile.out_of_class_spectator(
+    profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_term=('H', 'ZZ:0,1'))
 
     with pytest.raises(ValueError, match='does not reach beyond'):
@@ -191,7 +191,7 @@ def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
 
 
 def test_deepest_held_out_circuits_come_from_the_largest_max_length():
-    profile = ValidationProfile.in_class(nqubits=3, max_lengths=(1, 2, 4), seed=1234)
+    profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2, 4), seed=1234)
     _, held_out = build_training_design_and_held_out_circuits(profile)
 
     assert held_out.deepest
@@ -204,8 +204,8 @@ def test_deepest_held_out_circuits_come_from_the_largest_max_length():
             > min(circuit.depth for circuit in held_out.circuits))
 
 
-def test_line_4q_some_hs_fit_model_has_59_parameters():
-    profile = ValidationProfile.in_class(nqubits=4, max_lengths=(1, 2))
+def test_line_4q_somehs_fit_model_has_59_parameters():
+    profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2))
     fit_model, _ = build_fit_and_datagen_models(profile)
     assert fit_model.num_params == 59
 
@@ -224,23 +224,29 @@ def test_ring_processor_spec_adds_the_wraparound_edge_to_the_line():
 def test_ring_fit_models_add_one_edge_of_parameters():
     # Each edge carries 3 Gcnot and 6 Gii parameters, so the ring adds 9 to the line.
     for nqubits, num_params in ((3, 51), (4, 68)):
-        profile = ValidationProfile.in_class(nqubits=nqubits, max_lengths=(1,), topology='ring')
+        profile = ValidationProfile.inclass(nqubits=nqubits, max_lengths=(1,), topology='ring')
         fit_model, _ = build_fit_and_datagen_models(profile)
         assert fit_model.num_params == num_params
 
 
-def test_profile_names_carry_topology_qubit_count_terms_and_scenario():
-    assert ValidationProfile.in_class(nqubits=3, max_lengths=(1,)).name == 'line_3q_some_hs_in_class'
-    assert ValidationProfile.in_class(
-        nqubits=4, max_lengths=(1,), model_terms='all_hs', topology='ring',
-    ).name == 'ring_4q_all_hs_in_class'
-    assert ValidationProfile.out_of_class_spectator(
+def test_profile_names_omit_only_the_default_term_set():
+    assert ValidationProfile.inclass(nqubits=3, max_lengths=(1,)).name == 'line_3q_inclass'
+    assert ValidationProfile.inclass(
+        nqubits=4, max_lengths=(1,), model_terms='allhs', topology='ring',
+    ).name == 'ring_4q_inclass_allhs'
+    assert ValidationProfile.outclass(
         nqubits=4, max_lengths=(1,), topology='ring',
-    ).name == 'ring_4q_some_hs_out_of_class_spectator'
+    ).name == 'ring_4q_outclass'
+
+
+def test_canonical_profile_names_are_their_constant_names():
+    for name in ('line_3q_inclass', 'line_3q_outclass', 'line_4q_inclass', 'line_4q_outclass',
+                 'ring_3q_inclass', 'ring_3q_outclass', 'ring_4q_inclass', 'ring_4q_outclass'):
+        assert getattr(validation, name.upper()).name == name
 
 
 def test_ring_3q_design_colors_and_uses_the_wraparound_edge():
-    profile = ValidationProfile.in_class(nqubits=3, max_lengths=(1,), seed=1234, topology='ring')
+    profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1,), seed=1234, topology='ring')
     training_design, _ = build_training_design_and_held_out_circuits(profile)
     # An odd cycle has no proper 2-edge-coloring.
     assert training_design.color_patches == {0: [(0, 1)], 1: [(1, 2)], 2: [(0, 2)]}
@@ -256,10 +262,10 @@ def test_ring_3q_design_colors_and_uses_the_wraparound_edge():
 
 def test_canonical_ring_profiles_match_their_line_counterparts():
     pairs = (
-        (validation.LINE_3Q_IN_CLASS, validation.RING_3Q_IN_CLASS),
-        (validation.LINE_3Q_OUT_OF_CLASS_SPECTATOR, validation.RING_3Q_OUT_OF_CLASS_SPECTATOR),
-        (validation.LINE_4Q_IN_CLASS, validation.RING_4Q_IN_CLASS),
-        (validation.LINE_4Q_OUT_OF_CLASS_SPECTATOR, validation.RING_4Q_OUT_OF_CLASS_SPECTATOR),
+        (validation.LINE_3Q_INCLASS, validation.RING_3Q_INCLASS),
+        (validation.LINE_3Q_OUTCLASS, validation.RING_3Q_OUTCLASS),
+        (validation.LINE_4Q_INCLASS, validation.RING_4Q_INCLASS),
+        (validation.LINE_4Q_OUTCLASS, validation.RING_4Q_OUTCLASS),
     )
     for line, ring in pairs:
         assert (line.topology, ring.topology) == ('line', 'ring')
@@ -268,7 +274,7 @@ def test_canonical_ring_profiles_match_their_line_counterparts():
 
 
 def test_ring_spectator_datagen_model_keeps_the_injected_term():
-    _, datagen_model = build_fit_and_datagen_models(validation.RING_4Q_OUT_OF_CLASS_SPECTATOR)
+    _, datagen_model = build_fit_and_datagen_models(validation.RING_4Q_OUTCLASS)
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
     spectator_coefficients = {
         label: value for label, value in cnot_coefficients.items() if label.support == (2,)
@@ -277,17 +283,17 @@ def test_ring_spectator_datagen_model_keeps_the_injected_term():
     assert next(iter(spectator_coefficients.values())) == pytest.approx(0.01)
 
 
-def test_canonical_line_4q_in_class_profile_has_max_length_four():
-    assert validation.LINE_4Q_IN_CLASS.max_lengths == (1, 2, 4)
+def test_canonical_line_4q_inclass_profile_has_max_length_four():
+    assert validation.LINE_4Q_INCLASS.max_lengths == (1, 2, 4)
 
 
-def test_canonical_line_4q_out_of_class_profile_adds_s_z2_to_the_in_class_setup():
-    profile = validation.LINE_4Q_OUT_OF_CLASS_SPECTATOR
+def test_canonical_line_4q_outclass_profile_adds_s_z2_to_the_inclass_setup():
+    profile = validation.LINE_4Q_OUTCLASS
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
 
     assert profile.max_lengths == (1, 2, 4)
-    assert profile.model_terms == 'some_hs'
-    assert profile.scenario == 'out_of_class_spectator'
+    assert profile.model_terms == 'somehs'
+    assert profile.scenario == 'outclass'
     assert profile.spectator_error == pytest.approx(0.01)
     assert fit_model.num_params == 59
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
@@ -302,11 +308,11 @@ def test_canonical_line_4q_out_of_class_profile_adds_s_z2_to_the_in_class_setup(
     assert spectator_value == pytest.approx(0.01)
 
 
-def test_long_running_collection_includes_line_4q_out_of_class_spectator_node():
+def test_long_running_collection_includes_line_4q_outclass_node():
     checkout = pathlib.Path(__file__).resolve().parents[3]
     node_id = (
         'test/integration/test_simultaneous_gst.py::SimultaneousGSTValidationTester::'
-        'test_line_4q_out_of_class_spectator'
+        'test_line_4q_outclass'
     )
     result = subprocess.run(
         [sys.executable, '-m', 'pytest', '--collect-only', '-q', '-m', 'long_running',
@@ -317,14 +323,14 @@ def test_long_running_collection_includes_line_4q_out_of_class_spectator_node():
     assert node_id in result.stdout
 
 
-def test_all_hs_component_models_have_expected_parameter_counts():
-    profile = ValidationProfile.in_class(nqubits=4, max_lengths=(1, 2), model_terms='all_hs')
+def test_allhs_component_models_have_expected_parameter_counts():
+    profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2), model_terms='allhs')
     assert profile.oneq_model.num_params == 18
     assert profile.twoq_model.num_params == 78
 
 
 def test_component_design_selection_is_reproducible():
-    profile = ValidationProfile.in_class(nqubits=4, max_lengths=(1, 2), seed=1234)
+    profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2), seed=1234)
     first_designs = build_component_designs(profile)
     second_designs = build_component_designs(profile)
 
@@ -343,7 +349,7 @@ def test_component_design_selection_is_reproducible():
 
 
 def test_held_out_circuits_are_reproducible_and_disjoint_from_training():
-    profile = ValidationProfile.in_class(nqubits=3, max_lengths=(1, 2), seed=1234)
+    profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2), seed=1234)
     training_design, held_out = build_training_design_and_held_out_circuits(profile)
     _, repeated_held_out = build_training_design_and_held_out_circuits(profile)
     training_circuits = set(training_design.all_circuits_needing_data)
@@ -354,7 +360,7 @@ def test_held_out_circuits_are_reproducible_and_disjoint_from_training():
 
 
 def test_finite_shot_data_are_seeded_multinomial_counts():
-    profile = ValidationProfile.in_class(
+    profile = ValidationProfile.inclass(
         nqubits=3, max_lengths=(1,), shots=37, seed=1234)
     _, datagen_model = build_fit_and_datagen_models(profile)
     circuits = (
@@ -370,8 +376,8 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
 
 
 def _noisy_oneq_model_and_circuits(shots):
-    """A noisy one-qubit `some_hs` model, training data at powers 1 and 2, held-out circuits at 4."""
-    model = ValidationProfile.in_class(nqubits=3, max_lengths=(1,)).oneq_model.copy()
+    """A noisy one-qubit `somehs` model, training data at powers 1 and 2, held-out circuits at 4."""
+    model = ValidationProfile.inclass(nqubits=3, max_lengths=(1,)).oneq_model.copy()
     model.from_vector(np.random.default_rng(7).uniform(0.002, 0.02, model.num_params))
     fiducials = [(), ('Gxpi2',), ('Gypi2',), ('Gxpi2',) * 2, ('Gxpi2',) * 3, ('Gypi2',) * 3]
     germs = [('Gi',), ('Gxpi2',), ('Gypi2',), ('Gxpi2', 'Gypi2')]
