@@ -21,6 +21,7 @@ from .outcomelabeldict import OutcomeLabelDict
 from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
 from .qubitgraph import QubitGraph
-from .errorgenbasis import ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis, CompleteElementaryErrorgenBasis
+from .errorgenbasis import (ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis,
+                           CompleteElementaryErrorgenBasis, canonical_errorgen_basis)
 from .errorgenspace import ErrorgenSpace
 from .unitarygatefunction import UnitaryGateFunction
