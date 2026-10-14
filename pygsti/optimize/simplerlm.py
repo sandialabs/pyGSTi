@@ -675,10 +675,13 @@ def simplish_leastsq(
                     if x_limits is not None:
                         global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
                     shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
+                    resource_alloc.host_comm_barrier()
                     Jac = jac_fn(global_shifted_x)
+                    resource_alloc.host_comm_barrier()
                     ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
                     ari.fill_jtf(Jac, shifted_f, minus_JTf)
                     minus_JTf *= -1
+                    resource_alloc.host_comm_barrier()
                     f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x0
                     force_linesearch = True
                     printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "

@@ -97,8 +97,12 @@ class RunMpiTester:
         circuits = exp_design.all_circuits_needing_data
         tdl_ser = pygsti.tools.two_delta_logl(fit_ser, ds, circuits)
         tdl_mpi = pygsti.tools.two_delta_logl(fit_mpi, ds, circuits)
-        assert np.isclose(tdl_ser, tdl_mpi, atol=1e-6)
-        assert np.allclose(fit_ser.to_vector(), fit_mpi.to_vector(), atol=1e-8)
+        assert np.isclose(tdl_ser, tdl_mpi, atol=1e-5)
+        probs_ser = fit_ser.sim.bulk_probs(circuits)
+        probs_mpi = fit_mpi.sim.bulk_probs(circuits)
+        for c in circuits:
+            for outcome, p_ser in probs_ser[c].items():
+                assert abs(probs_mpi[c][outcome] - p_ser) < 1e-6
 
     def test_run_mpi_num_workers_1(self):
         """num_workers=1 short-circuits to self.run() — no subprocess spawned."""

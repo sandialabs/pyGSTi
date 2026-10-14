@@ -50,7 +50,9 @@ class MPITester:
             raise RuntimeError(msg)
 
         launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-        subprocess_args = [launcher, '-np', '4'] + self._extra_mpi_args() + [sys.executable, '-W', 'ignore', str(to_run)]
+        subprocess_args = (
+            [launcher, '-np', '4'] + self._extra_mpi_args() + [sys.executable, '-W', 'ignore', str(to_run)]
+        )
         env = {
             **os.environ,
             'OMP_NUM_THREADS': '1',
