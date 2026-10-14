@@ -97,6 +97,7 @@ parts:
       - file: markdown/simulation/CircuitSimulation-CHP
     - file: markdown/simulation/DataSimulation
     - file: markdown/simulation/ErrorGeneratorPropagation
+    - file: markdown/simulation/ErrorGeneratorPropagation-Parallelization
     - file: markdown/simulation/ErrorGeneratorPolynomials
     - file: markdown/simulation/ForwardSimulationTypes
 
