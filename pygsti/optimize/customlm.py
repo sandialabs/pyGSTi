@@ -12,6 +12,7 @@ Custom implementation of the Levenberg-Marquardt Algorithm
 
 import os as _os
 import time as _time
+import warnings as _warnings
 
 import numpy as _np
 import scipy as _scipy
@@ -22,6 +23,7 @@ from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
 _install_sigint_handler()
@@ -33,6 +35,9 @@ _MACH_PRECISION = 1e-12
 class CustomLMOptimizer(Optimizer):
     """
     A Levenberg-Marquardt optimizer customized for GST-like problems.
+
+    .. deprecated::
+        Use :class:`~pygsti.optimize.simplerlm.SimplerLMOptimizer`, which GST uses by default.
 
     Parameters
     ----------
@@ -136,6 +141,8 @@ class CustomLMOptimizer(Optimizer):
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
+        _warnings.warn("CustomLMOptimizer is deprecated; use SimplerLMOptimizer, which GST uses by default.",
+                       _pyGSTiDeprecationWarning)
         super().__init__()
         if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         self.maxiter = maxiter
