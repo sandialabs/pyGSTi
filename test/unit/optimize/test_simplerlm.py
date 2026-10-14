@@ -178,3 +178,25 @@ class DegenerateStartTester(BaseCase):
         self.assertTrue(converged)
         np.testing.assert_allclose(xf, [0.2, 1.0, 0.0], atol=1e-3)
         self.assertTrue(all(p[2] == 0.0 for p in self.jac_points))
+
+
+class FirstFditerDeprecationTester(BaseCase):
+
+    def test_first_fditer_warns_and_is_ignored(self):
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            opt = lm.SimplerLMOptimizer(first_fditer=1)
+        self.assertFalse(hasattr(opt, 'first_fditer'))
+        self.assertEqual(opt.fditer, 0)
+
+    def test_old_state_with_first_fditer_loads(self):
+        state = lm.SimplerLMOptimizer(fditer=2)._to_nice_serialization()
+        self.assertNotIn('number_of_first_stage_finite_difference_iterations', state)
+        state['number_of_first_stage_finite_difference_iterations'] = 1  # as saved by older versions
+        opt = lm.SimplerLMOptimizer._from_nice_serialization(state)
+        self.assertEqual(opt.fditer, 2)
+
+    def test_cast_does_not_fall_back_to_customlm(self):
+        with self.assertRaises(TypeError):
+            lm.SimplerLMOptimizer.cast({'damping_mode': 'identity'})
+        self.assertIsInstance(lm.SimplerLMOptimizer.cast({'maxiter': 7}), lm.SimplerLMOptimizer)

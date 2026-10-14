@@ -12,6 +12,7 @@ Custom implementation of the Levenberg-Marquardt Algorithm (but simpler than cus
 
 import os as _os
 import time as _time
+import warnings as _warnings
 
 import numpy as _np
 import scipy as _scipy
@@ -21,6 +22,7 @@ from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.objectivefns.objectivefns import Chi2Function, TimeIndependentMDCObjectiveFunction
 from typing import Callable
 
@@ -141,8 +143,9 @@ class SimplerLMOptimizer(Optimizer):
         is misleading.
 
     first_fditer : int, optional
-        Number of finite-difference iterations applied to the first
-        stage of the optimization (only).  Unused.
+        Deprecated and ignored. A starting point whose Jacobian has zero
+        columns is handled by evaluating the first iteration's Jacobian at a
+        shifted point (see :func:`simplish_leastsq`).
 
     init_munu : tuple, optional
         If not None, a (mu, nu) tuple of 2 floats giving the initial values
@@ -192,18 +195,18 @@ class SimplerLMOptimizer(Optimizer):
         if isinstance(obj, cls):
             return obj
         if obj:
-            try:
-                return cls(**obj)
-            except:
-                from pygsti.optimize.customlm import CustomLMOptimizer
-                return CustomLMOptimizer(**obj)
+            return cls(**obj)
         return cls()
 
-    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, init_munu="auto", oob_check_interval=0,
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=None, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal",
                  linesearch=None):
 
         super().__init__()
+        if first_fditer is not None:
+            _warnings.warn("SimplerLMOptimizer's `first_fditer` argument is deprecated and ignored: when the "
+                           "starting point's Jacobian has zero columns, the first iteration now evaluates the "
+                           "Jacobian at a slightly shifted point instead.", _pyGSTiDeprecationWarning)
         if isinstance(tol, float):
             tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         else:
@@ -218,7 +221,6 @@ class SimplerLMOptimizer(Optimizer):
         self.maxfev = maxfev
         self.tol = tol
         self.fditer = fditer
-        self.first_fditer = first_fditer
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
@@ -236,7 +238,6 @@ class SimplerLMOptimizer(Optimizer):
             'maximum_function_evaluations': self.maxfev,
             'tolerance': self.tol,
             'number_of_finite_difference_iterations': self.fditer,
-            'number_of_first_stage_finite_difference_iterations': self.first_fditer,
             'initial_mu_and_nu': self.init_munu,
             'out_of_bounds_check_interval': self.oob_check_interval,
             'out_of_bounds_action': self.oob_action,
@@ -255,7 +256,6 @@ class SimplerLMOptimizer(Optimizer):
                    maxfev=state['maximum_function_evaluations'],
                    tol=state['tolerance'],
                    fditer=state['number_of_finite_difference_iterations'],
-                   first_fditer=state['number_of_first_stage_finite_difference_iterations'],
                    init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
                    oob_action=state['out_of_bounds_action'],
