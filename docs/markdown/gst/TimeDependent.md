@@ -182,7 +182,7 @@ target_model[idle_gate_label] = MyTimeDependentIdle(0.0)
 target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)
 
 builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)],[])
-custom_opt = {'tol': 1e-4, 'damping_mode': 'JTJ', 'damping_clip': (1.0, 1000.0)} # tweak optimizer parameters for better performance (expert-level)
+custom_opt = pygsti.optimize.CustomLMOptimizer(tol=1e-4, damping_mode='JTJ', damping_clip=(1.0, 1000.0)) # tweak optimizer parameters for better performance (expert-level)
 gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                          objfn_builders=builders, optimizer=custom_opt, verbosity=3)
 data = pygsti.protocols.ProtocolData(edesign, ds)
