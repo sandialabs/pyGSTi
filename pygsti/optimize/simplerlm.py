@@ -30,6 +30,14 @@ _install_sigint_handler()
 #constants
 _MACH_PRECISION = 1e-12
 
+#: Shift applied to the coordinates of a degenerate starting point (see `simplish_leastsq`). A forward
+#: difference with step 1e-7 along e_j is a central difference at x + 5e-8 e_j, so this value recovers
+#: the old behavior of finite differences at the initial (degenerate) point with step size 1e-7.
+JAC_SHIFT = 5e-8
+
+#: A Jacobian column whose norm is at most this fraction of the largest column norm counts as zero.
+ZERO_COLUMN_RTOL = 1e-10
+
 
 class OptimizerResult(object):
     """
@@ -438,9 +446,11 @@ def simplish_leastsq(
 
     num_fd_iters : int optional
         Internally compute the Jacobian using a finite-difference method
-        for the first `num_fd_iters` iterations.  This is useful when `x0`
-        lies at a special or singular point where the analytic Jacobian is
-        misleading.
+        for the first `num_fd_iters` iterations.  Not needed for a degenerate
+        `x0` whose analytic Jacobian has zero columns: when `num_fd_iters` is 0,
+        the first iteration computes its step from the Jacobian and objective at
+        `x0` shifted by `JAC_SHIFT` along those columns' coordinates, and always
+        line-searches that step from `x0` (whatever `linesearch['mode']` says).
 
     max_dx_scale : float, optional
         If not None, impose a limit on the magnitude of the step, so that
@@ -502,8 +512,8 @@ def simplish_leastsq(
         - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
           only searches when a trigger fires (the `max_dx_scale` clip activated, the step
           is large relative to `|x|`, or the trial's objective norm is non-finite).
-          `'always'` searches on every trial step.  `'none'` never searches and is
-          bit-identical to the legacy behavior.  The primary motivation is robustness
+          `'always'` searches on every trial step.  `'none'` never searches (except on a
+          degenerate first iteration; see `num_fd_iters`).  The primary motivation is robustness
           against a full LM step leaving the good basin, not speed.
         - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
           in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
@@ -678,6 +688,33 @@ def simplish_leastsq(
             ari.fill_jtf(Jac, f, minus_JTf)  # 'P'-type
             minus_JTf *= -1
 
+            force_linesearch = False
+            if k == 0 and k >= num_fd_iters:
+                # Zero columns of J at x0 (e.g. Cholesky coordinates of a Lindblad generator at
+                # zero noise) leave those coordinates stuck. Compute the step from J and f at
+                # x0 + JAC_SHIFT on just those coordinates, then line-search it from x0 itself.
+                jtj_diag = JTJ[ari.jtj_diag_indices(JTJ)]
+                zero_cols = jtj_diag <= ZERO_COLUMN_RTOL**2 * ari.max_x(jtj_diag)
+                num_zero_cols = int(round(ari.norm2_x(zero_cols.astype('d'))))
+                if num_zero_cols > 0:
+                    shift = ari.allocate_jtf()
+                    shift[:] = JAC_SHIFT * zero_cols
+                    global_shifted_x = global_x.copy()
+                    ari.allgather_x(shift, global_shifted_x)
+                    global_shifted_x += global_x
+                    if x_limits is not None:
+                        global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
+                    shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
+                    Jac = jac_fn(global_shifted_x)
+                    ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
+                    ari.fill_jtf(Jac, shifted_f, minus_JTf)
+                    minus_JTf *= -1
+                    f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x0
+                    force_linesearch = True
+                    printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "
+                                "Jacobian at a point shifted by %g in those coordinates"
+                                % (num_zero_cols, len(global_x), JAC_SHIFT), 2)
+
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
 
             norm_JTf = ari.infnorm_x(minus_JTf)
@@ -770,7 +807,7 @@ def simplish_leastsq(
 
                 norm_new_f = ari.norm2_f(new_f)
 
-                if ls_mode == 'always':
+                if ls_mode == 'always' or force_linesearch:
                     do_linesearch = True
                 elif ls_mode == 'guarded':
                     do_linesearch = step_clipped or norm_dx > (ls_kappa**2) * norm_x or not _np.isfinite(norm_new_f)
