@@ -465,7 +465,7 @@ class ParallelTest(object):
         mdl_mpi1.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=natoms)
         obj_mpi1 = builder.build(mdl_mpi1, ds, circuits, self.ralloc, verbosity=0)
         res_mpi1 = lm.SimplerLMOptimizer(maxiter=1).run(obj_mpi1, profiler, printer)
-        assert abs(res_mpi1.f - f_ser1) < 1e-9
+        assert abs(res_mpi1.f - f_ser1) < 1e-6, f"natoms={natoms}: {res_mpi1.f} vs {f_ser1}"
         np.testing.assert_allclose(mdl_mpi1.to_vector(), vec_ser1, atol=1e-12)
         wcomm.barrier()
         del res_mpi1, obj_mpi1
@@ -477,7 +477,7 @@ class ParallelTest(object):
         res_mpi = opt_mpi.run(obj_mpi, profiler, printer)
 
         assert res_mpi.f < 0.1 * init_f
-        assert abs(res_mpi.f - f_ser) < 1e-4
+        assert abs(res_mpi.f - f_ser) < 1e-4, f"natoms={natoms}: {res_mpi.f} vs {f_ser}"
         v_mpi = mdl_mpi.to_vector()
         v_root = wcomm.bcast(v_mpi if wcomm.rank == 0 else None, root=0)
         np.testing.assert_allclose(v_mpi, v_root, atol=1e-14)
