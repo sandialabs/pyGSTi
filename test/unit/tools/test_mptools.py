@@ -256,15 +256,26 @@ class MPToolsTester(BaseCase):
         items = ["a", "b", "c", "d", "e", "f"]
         weights = [10.0, 8.0, 7.0, 5.0, 3.0, 1.0]
 
-        # Standard 3-bin partition
+        # Standard 3-bin partition: greedy LPT places items into min-load bin
         bins = mpt.lpt_partition(items, weights, 3)
         self.assertEqual(len(bins), 3)
+        self.assertEqual(bins, [["a", "f"], ["b", "e"], ["c", "d"]])
+
+        # Verify load balance and weights
+        weight_map = dict(zip(items, weights))
+        bin_weights = [sum(weight_map[item] for item in b) for b in bins]
+        self.assertEqual(bin_weights, [11.0, 11.0, 12.0])
+
         all_partitioned = [item for b in bins for item in b]
         self.assertEqual(sorted(all_partitioned), sorted(items))
 
         # Single bin
         single = mpt.lpt_partition(items, weights, 1)
         self.assertEqual(single, [items])
+
+        # More bins than items (empty bins filtered out)
+        more_bins = mpt.lpt_partition(["a", "b"], [2.0, 1.0], 5)
+        self.assertEqual(more_bins, [["a"], ["b"]])
 
         # Empty items
         self.assertEqual(mpt.lpt_partition([], [], 3), [])
