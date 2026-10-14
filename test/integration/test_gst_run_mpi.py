@@ -10,6 +10,8 @@ except (ImportError, RuntimeError):
     MPI = None
 
 import pygsti
+from pygsti.forwardsims import MatrixForwardSimulator
+from pygsti.modelpacks import smq1Q_XY as smq1Q_XY
 from pygsti.modelpacks import smq1Q_XYI as std
 from pygsti.protocols.protocol import SlurmSettings
 
@@ -63,6 +65,40 @@ class RunMpiTester:
         serial_params = results_serial.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
         parallel_params = results_parallel.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
         assert np.allclose(serial_params, parallel_params)
+
+    def test_run_mpi_cptplnd_matrix_matches_serial(self):
+        """run_mpi on a CPTPLND MatrixForwardSimulator model escapes the degenerate target start and matches serial."""
+        exp_design = smq1Q_XY.create_gst_experiment_design(2)
+        mdl_datagen = smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.01).rotate((0.01, 0, 0))
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=2026)
+        data = pygsti.protocols.ProtocolData(exp_design, ds)
+
+        target_ser = smq1Q_XY.target_model("CPTPLND")
+        target_ser.sim = MatrixForwardSimulator()
+        proto_ser = pygsti.protocols.GateSetTomography(
+            pygsti.protocols.GSTInitialModel(model=target_ser, target_model=target_ser),
+            gaugeopt_suite=None, verbosity=0, optimizer={'maxiter': 100},
+        )
+        results_serial = proto_ser.run(data, disable_checkpointing=True)
+
+        target_mpi = smq1Q_XY.target_model("CPTPLND")
+        target_mpi.sim = MatrixForwardSimulator()
+        proto_mpi = pygsti.protocols.GateSetTomography(
+            pygsti.protocols.GSTInitialModel(model=target_mpi, target_model=target_mpi),
+            gaugeopt_suite=None, verbosity=0, optimizer={'maxiter': 100},
+        )
+        results_parallel = proto_mpi.run_mpi(
+            data, num_ranks=4, blas_threads_per_rank=1, mpiexec='auto',
+            extra_mpi_args=self._extra_mpi_args(),
+        )
+
+        fit_ser = results_serial.estimates["GateSetTomography"].models['final iteration estimate']
+        fit_mpi = results_parallel.estimates["GateSetTomography"].models['final iteration estimate']
+        circuits = exp_design.all_circuits_needing_data
+        tdl_ser = pygsti.tools.two_delta_logl(fit_ser, ds, circuits)
+        tdl_mpi = pygsti.tools.two_delta_logl(fit_mpi, ds, circuits)
+        assert np.isclose(tdl_ser, tdl_mpi, atol=1e-6)
+        assert np.allclose(fit_ser.to_vector(), fit_mpi.to_vector(), atol=1e-8)
 
     def test_run_mpi_num_workers_1(self):
         """num_workers=1 short-circuits to self.run() — no subprocess spawned."""

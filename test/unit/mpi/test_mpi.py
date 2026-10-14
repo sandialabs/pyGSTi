@@ -50,13 +50,21 @@ class MPITester:
             raise RuntimeError(msg)
 
         launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-        subprocess_args = [launcher, '-np', '4'] + self._extra_mpi_args() + ['python', '-W', 'ignore', str(to_run)]
+        subprocess_args = [launcher, '-np', '4'] + self._extra_mpi_args() + [sys.executable, '-W', 'ignore', str(to_run)]
+        env = {
+            **os.environ,
+            'OMP_NUM_THREADS': '1',
+            'OPENBLAS_NUM_THREADS': '1',
+            'MKL_NUM_THREADS': '1',
+            'NUMEXPR_NUM_THREADS': '1',
+            'BLIS_NUM_THREADS': '1',
+        }
 
-        result = subprocess.run(subprocess_args, capture_output=False, text=True)
+        result = subprocess.run(subprocess_args, capture_output=False, text=True, env=env)
         out, err = capfd.readouterr()
 
         #strip new lines/carriage returns before checking length.
-        if len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
+        if result.returncode != 0 or len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return

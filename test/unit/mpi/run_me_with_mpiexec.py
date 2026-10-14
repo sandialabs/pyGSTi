@@ -9,7 +9,10 @@ import numpy as np
 from mpi4py import MPI
 
 import pygsti
+from pygsti.modelpacks import smq1Q_XY as smq1Q_XY
 from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.optimize import arraysinterface as _ari
+from pygsti.optimize import simplerlm as lm
 
 wcomm = MPI.COMM_WORLD
 
@@ -268,6 +271,204 @@ class ParallelTest(object):
         pygsti.baseobjs.VerbosityPrinter._comm_file_name = "mpi_test_output"
         printer = pygsti.baseobjs.VerbosityPrinter(verbosity=2, comm=comm)
         printer.log("HELLO!")
+
+    def _create_dist_layout(self, natoms):
+        mdl = smq1Q_XY.target_model('CPTPLND')
+        mdl.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=natoms)
+        circuits = smq1Q_XY.create_gst_experiment_design(1).all_circuits_needing_data
+        layout = mdl.sim.create_layout(
+            circuits, array_types=('e', 'ep', 'jtj', 'jtf'),
+            derivative_dimensions=(mdl.num_params,), resource_alloc=self.ralloc,
+        )
+        return layout
+
+    def run_degenerate_simplish_leastsq(self, natoms, x_limits_clip=False):
+        layout = self._create_dist_layout(natoms)
+        nE = layout.global_num_elements
+        nP = layout.global_num_params  # 24 (6 per rank in fine param distribution on 4 ranks)
+
+        x0 = np.zeros(nP, 'd')
+        x0[7] = 0.5
+        x_limits = None
+        if x_limits_clip:
+            x_limits = np.column_stack((-10.0 * np.ones(nP, 'd'), 10.0 * np.ones(nP, 'd')))
+            x_limits[0, 1] = 0.5 * lm.JAC_SHIFT
+
+        def full_obj(x, oob_check=False):
+            r = np.zeros(nE, 'd')
+            r[0] = x[0] ** 2 - 0.04                   # rank 0: exact zero col at x0[0]=0 -> target 0.2
+            r[1] = (x[7] - 0.5) ** 2 - 0.09           # rank 1: exact zero col at x0[7]=0.5 -> target 0.8
+            r[2] = 1e-12 * x[14] + x[14] ** 2 - 0.01  # rank 2: norm 1e-12 <= ZERO_COLUMN_RTOL * global max -> target 0.1
+            for k, idx in enumerate(range(18, 24)):   # rank 3: all 6 cols have norm 1.0 (no zero cols on rank 3)
+                r[3 + k] = x[idx] - 1.0
+            return r
+
+        def full_jac(x):
+            J = np.zeros((nE, nP), 'd')
+            J[0, 0] = 2.0 * x[0]
+            J[1, 7] = 2.0 * (x[7] - 0.5)
+            J[2, 14] = 1e-12 + 2.0 * x[14]
+            for k, idx in enumerate(range(18, 24)):
+                J[3 + k, idx] = 1.0
+            return J
+
+        ser_jac_points = []
+
+        def ser_jac(x):
+            ser_jac_points.append(x.copy())
+            return full_jac(x)
+
+        ari_ser = _ari.UndistributedArraysInterface(nE, nP)
+        xf_ser, conv_ser, _, *_ = lm.simplish_leastsq(
+            full_obj, ser_jac, x0.copy(), f_norm2_tol=1e-10, max_iter=100, arrays_interface=ari_ser,
+            x_limits=x_limits, linesearch={'mode': 'none'},
+        )
+        assert conv_ser
+
+        ari = _ari.DistributedArraysInterface(layout, 'normal', 0)
+        f_buf = layout.allocate_local_array('e', 'd')
+        jac_buf = ari.allocate_jac()
+        jac_points = []
+
+        def dist_obj(x, oob_check=False):
+            if layout.resource_alloc('atom-processing').is_host_leader:
+                f_buf[:] = full_obj(x)[layout.global_element_slice]
+            layout.resource_alloc('atom-processing').host_comm_barrier()
+            return f_buf
+
+        def dist_jac(x):
+            jac_points.append(x.copy())
+            if layout.resource_alloc('param-processing').is_host_leader:
+                jac_buf[:, :] = full_jac(x)[layout.global_element_slice, layout.global_param_slice]
+            layout.resource_alloc('atom-processing').host_comm_barrier()
+            return jac_buf
+
+        xf_mpi, conv_mpi, _, *_ = lm.simplish_leastsq(
+            dist_obj, dist_jac, x0.copy(), f_norm2_tol=1e-10, max_iter=100, resource_alloc=self.ralloc,
+            arrays_interface=ari, x_limits=x_limits, linesearch={'mode': 'none'},
+        )
+        layout.free_local_array(f_buf)
+        ari.deallocate_jac(jac_buf)
+
+        assert conv_mpi
+        np.testing.assert_array_equal(jac_points[0], ser_jac_points[0])
+        np.testing.assert_array_equal(jac_points[1], ser_jac_points[1])
+        expected_shift_0 = 0.5 * lm.JAC_SHIFT if x_limits_clip else lm.JAC_SHIFT
+        assert jac_points[1][0] == expected_shift_0
+        assert jac_points[1][7] == 0.5 + lm.JAC_SHIFT
+        assert jac_points[1][14] == lm.JAC_SHIFT
+        assert np.all(jac_points[1][18:24] == 0.0)
+        np.testing.assert_allclose(xf_mpi, xf_ser, atol=1e-12, rtol=1e-12)
+        if not x_limits_clip:
+            np.testing.assert_allclose(xf_mpi[0], 0.2, atol=1e-3)
+            np.testing.assert_allclose(xf_mpi[7], 0.8, atol=1e-3)
+            np.testing.assert_allclose(xf_mpi[14], 0.1, atol=1e-3)
+            np.testing.assert_allclose(xf_mpi[18:24], 1.0, atol=1e-6)
+        untouched = [i for i in range(18) if i not in (0, 7, 14)]
+        assert np.all(xf_mpi[untouched] == 0.0)
+
+    def run_nondegenerate_simplish_leastsq(self, natoms):
+        layout = self._create_dist_layout(natoms)
+        nE = layout.global_num_elements
+        nP = layout.global_num_params
+
+        x0 = np.zeros(nP, 'd')
+        x0[0] = 0.5
+
+        def full_obj(x, oob_check=False):
+            r = np.zeros(nE, 'd')
+            r[0] = x[0] ** 2 - 0.04
+            r[1] = x[1] - 1.0
+            for j in range(2, nP):
+                r[j] = x[j]
+            return r
+
+        def full_jac(x):
+            J = np.zeros((nE, nP), 'd')
+            J[0, 0] = 2.0 * x[0]
+            for j in range(1, nP):
+                J[j, j] = 1.0
+            return J
+
+        ari = _ari.DistributedArraysInterface(layout, 'normal', 0)
+        f_buf = layout.allocate_local_array('e', 'd')
+        jac_buf = ari.allocate_jac()
+        jac_points = []
+
+        def dist_obj(x, oob_check=False):
+            if layout.resource_alloc('atom-processing').is_host_leader:
+                f_buf[:] = full_obj(x)[layout.global_element_slice]
+            layout.resource_alloc('atom-processing').host_comm_barrier()
+            return f_buf
+
+        def dist_jac(x):
+            jac_points.append(x.copy())
+            if layout.resource_alloc('param-processing').is_host_leader:
+                jac_buf[:, :] = full_jac(x)[layout.global_element_slice, layout.global_param_slice]
+            layout.resource_alloc('atom-processing').host_comm_barrier()
+            return jac_buf
+
+        xf_mpi, conv_mpi, _, *_ = lm.simplish_leastsq(
+            dist_obj, dist_jac, x0.copy(), max_iter=100, resource_alloc=self.ralloc,
+            arrays_interface=ari, linesearch={'mode': 'none'},
+        )
+        layout.free_local_array(f_buf)
+        ari.deallocate_jac(jac_buf)
+
+        assert conv_mpi
+        np.testing.assert_allclose(xf_mpi[0], 0.2, atol=1e-3)
+        np.testing.assert_allclose(xf_mpi[1], 1.0, atol=1e-6)
+        assert all( np.all(p[2:] == 0.0) for p in jac_points )
+
+    @classmethod
+    def _cptplnd_serial_reference(cls):
+        if not hasattr(cls, '_cached_cptplnd_ref'):
+            truth = smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.01).rotate((0.01, 0, 0))
+            edesign = smq1Q_XY.create_gst_experiment_design(1)
+            circuits = edesign.all_circuits_needing_data
+            ds = pygsti.data.simulate_data(truth, circuits, 1000, seed=2026, comm=wcomm)
+            builder = pygsti.objectivefns.ObjectiveFunctionBuilder.create_from('chi2')
+            builder.additional_args['array_types'] = ('E', 'EP')
+            printer = pygsti.baseobjs.VerbosityPrinter(0)
+            profiler = pygsti.baseobjs.Profiler(wcomm, False)
+
+            mdl_ser = smq1Q_XY.target_model('CPTPLND')
+            mdl_ser.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=1)
+            obj_ser = builder.build(mdl_ser, ds, circuits, None, verbosity=0)
+            init_f = float(np.dot(obj_ser.lsvec(), obj_ser.lsvec()))
+            opt_ser = lm.SimplerLMOptimizer(maxiter=100)
+            res_ser = opt_ser.run(obj_ser, profiler, printer)
+            assert res_ser.f < 0.1 * init_f
+            cls._cached_cptplnd_ref = (
+                circuits, ds, builder, init_f, float(res_ser.f),
+                mdl_ser.to_vector().copy(), mdl_ser.sim.bulk_probs(circuits),
+            )
+            del res_ser, obj_ser
+        return cls._cached_cptplnd_ref
+
+    def run_degenerate_cptplnd_fit(self, natoms):
+        circuits, ds, builder, init_f, f_ser, vec_ser, probs_ser = self._cptplnd_serial_reference()
+        printer = pygsti.baseobjs.VerbosityPrinter(0)
+        profiler = pygsti.baseobjs.Profiler(wcomm, False)
+
+        mdl_mpi = smq1Q_XY.target_model('CPTPLND')
+        mdl_mpi.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=natoms)
+        obj_mpi = builder.build(mdl_mpi, ds, circuits, self.ralloc, verbosity=0)
+        opt_mpi = lm.SimplerLMOptimizer(maxiter=100)
+        res_mpi = opt_mpi.run(obj_mpi, profiler, printer)
+
+        assert res_mpi.f < 0.1 * init_f
+        assert abs(res_mpi.f - f_ser) < 1e-7
+        v_mpi = mdl_mpi.to_vector()
+        v_root = wcomm.bcast(v_mpi if wcomm.rank == 0 else None, root=0)
+        np.testing.assert_allclose(v_mpi, v_root, atol=1e-14)
+        if natoms == 1:
+            np.testing.assert_allclose(v_mpi, vec_ser, atol=1e-9)
+        probs_mpi = mdl_mpi.sim.bulk_probs(circuits)
+        for c in circuits:
+            for outcome, p_ser in probs_ser[c].items():
+                assert abs(probs_mpi[c][outcome] - p_ser) < 1e-7
+        del res_mpi, obj_mpi
     #
     #
     #    #Note: no need to test "wrtFilter" business - that was removed
@@ -316,3 +517,17 @@ if __name__ == '__main__':
     tester.run_fills('map', 1, None)
     tester.run_fills('map', 4, None)
     tester.run_fills('matrix', 4, 15)
+
+    for build_hostcomms, max_host_procs in ((False, None), (True, str(wcomm.size)), (True, "2")):
+        if max_host_procs is None:
+            os.environ.pop('PYGSTI_MAX_HOST_PROCS', None)
+        else:
+            os.environ['PYGSTI_MAX_HOST_PROCS'] = max_host_procs
+        tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
+        if build_hostcomms:
+            tester.ralloc.build_hostcomms()
+        for natoms in (1, 2, 4):
+            tester.run_degenerate_simplish_leastsq(natoms)
+            tester.run_degenerate_cptplnd_fit(natoms)
+        tester.run_degenerate_simplish_leastsq(2, x_limits_clip=True)
+        tester.run_nondegenerate_simplish_leastsq(2)

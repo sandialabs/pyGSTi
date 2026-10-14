@@ -670,6 +670,7 @@ def simplish_leastsq(
                     shift[:] = JAC_SHIFT * zero_cols
                     global_shifted_x = global_x.copy()
                     ari.allgather_x(shift, global_shifted_x)
+                    ari.deallocate_jtf(shift)
                     global_shifted_x += global_x
                     if x_limits is not None:
                         global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
