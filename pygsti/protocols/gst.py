@@ -1409,22 +1409,9 @@ class GateSetTomography(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
-        # compute, and set if needed, a default "first iteration # of fintite-difference iters"
-        from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-        mdl = self.initial_model.model
-        default_first_fditer = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
-
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
-            if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                self.optimizer.first_fditer = default_first_fditer
         else:
-            if optimizer is None:
-                optimizer = {}
-            if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                optimizer['first_fditer'] = default_first_fditer
             self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
@@ -1944,11 +1931,6 @@ class StandardGST(_proto.Protocol):
         self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
-
-        if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
-           and 'first_fditer' not in optimizer:  # then a dict was cast into an Optimizer above.
-            # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
-            self.optimizer.first_fditer = None
 
         self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
@@ -2769,8 +2751,6 @@ def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _Simpl
     -------
     optimizers: list[_Optimizer]
     """
-    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-
     if isinstance(optimizers, (_opt.Optimizer, dict)):    
         optimizers = [optimizers]*size
     if isinstance(optimizers, list):
@@ -2780,21 +2760,15 @@ def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _Simpl
         if not isinstance(optimizers, (list, dict)):
             raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
         temp_optimizers = []
-        default_first_fditer = 1 if model and isinstance(model.sim, _MatrixFSim) else 0
         for optimizer in optimizers:
             if isinstance(optimizer, _SimplerLMOptimizer) or isinstance(optimizer, _CustomLMOptimizer):
                 temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                    # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                    temp_optimizer.first_fditer = default_first_fditer
 
             else:
                 if optimizer is None:
                     temp_optimizer = {}
                 else:
                     temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                    temp_optimizer['first_fditer'] = default_first_fditer
                 temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
         optimizers = temp_optimizers
     return optimizers

@@ -981,9 +981,14 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
-                if i == 0 and j == 0:  # special case: in first optimization run, use "first_fditer"
+                if i == 0 and j == 0 and isinstance(optimizers[i], _CustomLMOptimizer):
+                    # special case: in first optimization run, use "first_fditer". (SimplerLMOptimizer
+                    # instead handles a degenerate starting point itself; see simplish_leastsq.)
                     first_iter_optimizer = _copy.deepcopy(optimizers[i])  # use a separate copy of optimizer, as it
-                    first_iter_optimizer.fditer = optimizers[i].first_fditer  # is a persistent object (so don't modify!)
+                    first_fditer = optimizers[i].first_fditer             # is a persistent object (so don't modify!)
+                    if first_fditer is None:  # `None` means "fill with default"
+                        first_fditer = 1 if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator) else 0
+                    first_iter_optimizer.fditer = first_fditer
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
                 else:
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
