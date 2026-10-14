@@ -180,21 +180,23 @@ class DegenerateStartTester(BaseCase):
         self.assertTrue(all(p[2] == 0.0 for p in self.jac_points))
 
 
-class FirstFditerDeprecationTester(BaseCase):
+class FiniteDifferenceDeprecationTester(BaseCase):
 
-    def test_first_fditer_warns_and_is_ignored(self):
+    def test_fditer_arguments_warn_and_are_ignored(self):
         from pygsti.tools.exceptions import pyGSTiDeprecationWarning
-        with self.assertWarns(pyGSTiDeprecationWarning):
-            opt = lm.SimplerLMOptimizer(first_fditer=1)
-        self.assertFalse(hasattr(opt, 'first_fditer'))
-        self.assertEqual(opt.fditer, 0)
+        for kwargs in ({'fditer': 1}, {'first_fditer': 1}):
+            with self.assertWarns(pyGSTiDeprecationWarning):
+                opt = lm.SimplerLMOptimizer(**kwargs)
+            self.assertFalse(hasattr(opt, 'fditer') or hasattr(opt, 'first_fditer'))
 
-    def test_old_state_with_first_fditer_loads(self):
-        state = lm.SimplerLMOptimizer(fditer=2)._to_nice_serialization()
+    def test_old_state_with_fditer_keys_loads(self):
+        state = lm.SimplerLMOptimizer(maxiter=7)._to_nice_serialization()
+        self.assertNotIn('number_of_finite_difference_iterations', state)
         self.assertNotIn('number_of_first_stage_finite_difference_iterations', state)
-        state['number_of_first_stage_finite_difference_iterations'] = 1  # as saved by older versions
+        state['number_of_finite_difference_iterations'] = 2  # as saved by older versions
+        state['number_of_first_stage_finite_difference_iterations'] = 1
         opt = lm.SimplerLMOptimizer._from_nice_serialization(state)
-        self.assertEqual(opt.fditer, 2)
+        self.assertEqual(opt.maxiter, 7)
 
     def test_cast_does_not_fall_back_to_customlm(self):
         with self.assertRaises(TypeError):

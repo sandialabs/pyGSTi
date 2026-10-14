@@ -25,6 +25,7 @@ from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
 from pygsti.forwardsims import ForwardSimulator
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from typing import Optional, Any
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -401,7 +402,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - cptpPenaltyFactor = float (default = 0)
         - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
         - max_iterations = int
-        - finitediff_iterations = int
+        - finitediff_iterations = int (deprecated and ignored)
         - min_prob_clip = float
         - min_prob_clip_for_weighting = float (default == 1e-4)
         - prob_clip_interval = tuple (default == (-1e6,1e6)
@@ -967,11 +968,12 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, model_being_optimized):
-    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
-    default_fditer = 1 if isinstance(model_being_optimized.sim, _MatrixFSim) else 0
+    if 'finitediff_iterations' in advanced_options:
+        _warnings.warn("The 'finitediff_iterations' advanced option is deprecated and ignored: when the "
+                       "starting point's Jacobian has zero columns, the optimizer's first iteration now "
+                       "evaluates the Jacobian at a slightly shifted point instead.", _pyGSTiDeprecationWarning)
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100),
-                 'tol': advanced_options.get('tolerance', 1e-6),
-                 'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
+                 'tol': advanced_options.get('tolerance', 1e-6)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
     return optimizer

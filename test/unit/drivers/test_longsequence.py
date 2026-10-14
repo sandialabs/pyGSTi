@@ -370,3 +370,14 @@ class RobustDataScalingTester(LongSequenceGSTBase):
                 advanced_options={'bad_fit_threshold': -100,
                                  'on_bad_fit': ["foobar"]}
             )
+
+
+class GetOptimizerTester(BaseCase):
+
+    def test_no_finite_difference_iterations(self):
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        model = create_explicit_model(pkg.pspec)  # Matrix simulator, which used to get fditer=1
+        self.assertNotIn('fditer', ls._get_optimizer({}, model))
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = ls._get_optimizer({'finitediff_iterations': 3}, model)
+        self.assertNotIn('fditer', optimizer)
