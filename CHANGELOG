@@ -49,6 +49,7 @@
 * The `num_fd_iters` argument of `pygsti.optimize.simplerlm.simplish_leastsq`, along with its finite-difference Jacobian; see the `fditer` deprecation above.
  * `pygsti.tools.edesigntools.pad_edesign_with_idle_lines`. This helper function had no consumer code in pyGSTi.
 * The `create_general_report`, `create_standard_report`, `create_nqnoise_report`, and `create_report_notebook` functions in `pygsti.report.factory`, deprecated since 0.9.9. Use the `construct_*` factory functions and the `Report` class's `write_*` methods instead. (#909)
+* `pygsti.run_linear_gst` (`pygsti.drivers.longsequence.run_linear_gst`). It had raised a `TypeError` on every call since 0.9.10. Use the `pygsti.protocols.LGST` protocol instead, e.g. `pygsti.protocols.LGST(target_model).run(data)` (#888).
 
 ## [0.10.2] - 2026-07-30
 

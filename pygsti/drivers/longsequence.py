@@ -14,7 +14,6 @@ import os as _os
 import pickle as _pickle
 import warnings as _warnings
 
-from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
@@ -198,117 +197,6 @@ def run_model_test(model_filename_or_object,
     results = proto.run(data, mem_limit, comm,
                         checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing,
                         simulator=simulator)
-    _output_to_pickle(results, output_pkl, comm)
-    return results
-
-
-def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
-                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                   gauge_opt_params=None, advanced_options=None, comm=None,
-                   mem_limit=None, output_pkl=None, verbosity=2):
-    """
-    Perform Linear Gate Set Tomography (LGST).
-
-    This function differs from the lower level :func:`run_lgst` function
-    in that it may perform a post-LGST gauge optimization and this routine
-    returns a :class:`Results` object containing the LGST estimate.
-
-    Overall, this is a high-level driver routine which can be used similarly
-    to :func:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
-    routine used when building your own algorithms.
-
-    Parameters
-    ----------
-    data_filename_or_set : DataSet or string
-        The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (assumed to be a pickled `DataSet`
-        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
-
-    target_model_filename_or_object : Model or string
-        The target model specifying the gates and SPAM elements that LGST is to be run on,
-        given either directly or by the filename of a model file (text format).
-
-    prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial circuits, specified either directly
-        or by the filename of a circuit list file (text format).
-
-    meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial circuits, specified either directly or by
-        the filename of a circuit list file (text format).  If ``None``,
-        then use the same strings as specified by prep_fiducial_list_or_filename.
-
-    gauge_opt_params : dict, optional
-        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
-        how the final gauge optimization should be performed.  The keys and
-        values of this dictionary may correspond to any of the arguments
-        of :func:`gaugeopt_to_target` *except* for the first `model`
-        argument, which is specified internally.  The `target_model` argument,
-        *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
-        is used.  If `False`, then then *no* gauge optimization is performed.
-
-    advanced_options : dict, optional
-        Specifies advanced options most of which deal with numerical details of
-        the objective function or expert-level functionality.  See
-        :func:`run_long_sequence_gst`.
-
-    comm : mpi4py.MPI.Comm, optional
-        When not ``None``, an MPI communicator for distributing the computation
-        across multiple processors.  In this LGST case, this is just the gauge
-        optimization.
-
-    mem_limit : int or None, optional
-        A rough memory limit in bytes which restricts the amount of memory
-        used (per core when run on multi-CPUs).
-
-    output_pkl : str or file, optional
-        If not None, a file(name) to `pickle.dump` the returned `Results` object
-        to (only the rank 0 process performs the dump when `comm` is not None).
-
-    verbosity : int, optional
-        The 'verbosity' option is an integer specifying the level of
-        detail printed to stdout during the calculation.
-
-    Returns
-    -------
-    Results
-    """
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-    advanced_options = _GSTAdvancedOptions(advanced_options or {})
-    ds = _load_dataset(data_filename_or_set, comm, printer)
-    target_model = _load_model(target_model_filename_or_object)
-
-    if isinstance(target_model, _ProcessorSpec):  # for backward compatibility
-        _warnings.warn(("You passed a processor spec to 'run_linear_gst' when you really should have passed a"
-                        " model.  Trying to create an explicit model from the pspec w/Pauli prod basis and use it."))
-        target_model = _create_explicit_model(target_model, None, ideal_gate_type='full', basis='pp')
-
-    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.primitive_op_labels])  # just the single gates
-    max_lengths = [1]  # we only need maxLength == 1 when doing LGST
-
-    exp_design = _proto.StandardGSTDesign(target_model.create_processor_spec(),
-                                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                                          germs, max_lengths,
-                                          sequenceRules=advanced_options.get('string_manipulation_rules', None),
-                                          op_label_aliases=advanced_options.get('op_label_aliases', None),
-                                          dscheck=ds, actionIfMissing='raise', verbosity=printer)
-
-    data = _proto.ProtocolData(exp_design, ds)
-
-    if gauge_opt_params is None:
-        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-    gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-
-    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
-                                           _get_badfit_options(advanced_options), printer,
-                                           name=advanced_options.get('estimate_label', None))
-    proto.profile = advanced_options.get('profile', 1)
-    proto.record_output = advanced_options.get('record_output', 1)
-    proto.oplabels = advanced_options.get('op_labels', 'default')
-    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
-    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-
-    results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
