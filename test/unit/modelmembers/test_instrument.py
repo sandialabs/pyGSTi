@@ -473,6 +473,21 @@ class RootConjDerivativeTester(BaseCase):
             self.assertGreater(np.abs(deriv[:, :2]).max(axis=0).min(), 0.0)
             self.assertArraysAlmostEqual(deriv, _central_difference_deriv(rcop), places=7)
 
+    def test_shifted_ideal_effect(self):
+        # simplish_leastsq takes its first step from the Jacobian at the ideal point shifted by
+        # JAC_SHIFT in the zero columns. There E has eigenvalues near JAC_SHIFT**2, and the
+        # derivative along the Cholesky coordinates must not be zeroed again.
+        from pygsti.optimize.simplerlm import JAC_SHIFT
+        E0 = np.diag([1.0, 0.0]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)['p0']
+        x = np.zeros(rcop.num_params)
+        x[3:] = JAC_SHIFT
+        rcop.from_vector(x)
+        deriv = rcop.deriv_wrt_params()
+        # (A finite-difference reference is out of reach here: roundoff in sqrt(lambda) is about
+        # 1e-9, comparable to any step small enough to stay clear of the kink at 0.)
+        self.assertGreater(np.abs(deriv[:, 3:]).max(), 0.1)
+
     def test_ideal_two_qubit_effect(self):
         # A rank-one projector: a threefold zero eigenvalue.
         P = np.diag([1.0, 0, 0, 0]).astype(complex)

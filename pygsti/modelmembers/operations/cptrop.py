@@ -144,14 +144,16 @@ class RootConjOperator(LinearOperator, _Torchable):
     DERIV_EIGTOL : float
         Eigenvalues of E at or below this are treated as zero by :meth:`deriv_wrt_params` and
         by the derivative of :meth:`torch_base`, which take the minimum-norm derivative there.
-        `eigh` resolves an eigenvalue of an E with ‖E‖ ≤ 1 to about 1e-16, so the default of
-        1e-10 treats anything zero up to roundoff as zero while keeping the relative error of
-        each computed sqrt(λ) near 1e-6 or below.
+        The default is 0, so only eigenvalues clipped to zero count. A positive value must stay
+        far below the eigenvalues that :data:`~pygsti.optimize.simplerlm.JAC_SHIFT` creates: a
+        coordinate that enters E quadratically, shifted by 5e-8, gives eigenvalues near 2.5e-15,
+        and treating those as zero would hand the shifted Jacobian the same zero columns as the
+        unshifted one.
     """
 
     EIGTOL_WARNING = _ot.EFFECT_EIGVAL_ABSTOL_WARN
     EIGTOL_ERROR   = _ot.EFFECT_EIGVAL_ABSTOL_ERROR
-    DERIV_EIGTOL   = 1e-10
+    DERIV_EIGTOL   = 0.0
 
     def __init__(self, effect: POVMEffect, basis: BasisLike):
         self._basis        = Basis.cast(basis, effect.dim)
