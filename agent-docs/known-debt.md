@@ -20,7 +20,7 @@ If you find one not listed below, please update this file.
 
 ## 1. `tools/` misplacement and namespace pollution
 
-**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools.py` are the main offenders (`leakage.py` was the worst, and has since been moved out — see item 2). Separately, almost no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
+**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools/` are the main offenders (`leakage.py` was the worst, and has since been moved out — see item 2). Separately, almost no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
 
 **Where it bites.** Adding "just one more utility" to `tools/` tends to deepen the coupling; touching a `tools/` file can pull `models` or `protocols` along for the ride at import time. The lack of `__all__` makes it hard to deprecate names — you can't tell what's actually part of the public API.
 

@@ -21,7 +21,7 @@ Read top-down (top = depends on nothing below it):
 - **Error generators / Lindblad**: `lindbladtools.py`, `errgenproptools.py` (~9k lines — huge), `errgenpolytools.py`.
 - **Statistical**: `likelihoodfns.py`, `chi2fns.py` (these wrap or duplicate logic in `objectivefns/` — see misplacement table).
 - **Convex / SDP** (cvxpy-optional): `sdptools.py`, parts of `optools.py` and `jamiolkowski.py`.
-- **Experiment-design helpers**: `edesigntools.py` (misplaced).
+- **Experiment-design helpers**: `edesigntools/` (misplaced).
 - **Randomized benchmarking**: `rbtools.py`, `rbtheory.py` (the latter misplaced — depends on `models`).
 - **Infrastructure**: `mpitools.py`, `mptools.py`, `sharedmemtools.py`, `locking.py`, `profile.py`, `metaprogramming.py`, `pdftools.py`, `legacytools.py`.
 - **Group theory / Clifford**: `symplectic.py` (~2k lines), `group.py`, `compilationtools.py`.
@@ -39,7 +39,7 @@ These files import "upward" from `models`, `protocols`, `report`, etc. — a lay
 | [`chi2fns.py`](../pygsti/tools/chi2fns.py) | `objectivefns/` | Thin wrappers over logic in `objectivefns`. Some functions are `@deprecate`d in favor of the class-based interface. |
 | [`likelihoodfns.py`](../pygsti/tools/likelihoodfns.py) | `objectivefns/` | Same shape as `chi2fns.py`. |
 | [`rbtheory.py`](../pygsti/tools/rbtheory.py) | `algorithms/` or `extras/` | RB-specific theory; depends on `models`. |
-| [`edesigntools.py`](../pygsti/tools/edesigntools.py) | adjacent to `protocols/` | Fisher information for experiment design; imports `protocols`. |
+| [`edesigntools/`](../pygsti/tools/edesigntools/) | adjacent to `protocols/` | Fisher information and reduction for experiment design; imports `protocols`. |
 
 Cross-link to [known-debt.md #1](known-debt.md#1-tools-misplacement-and-namespace-pollution) for the consolidated debt entry and tracker links.
 
@@ -61,7 +61,7 @@ If you're writing new utilities, **add an `__all__`** to your file, even if the 
 | Error generators / Lindblad | [errgenproptools.py](../pygsti/tools/errgenproptools.py) (~9k lines), [lindbladtools.py](../pygsti/tools/lindbladtools.py) | `errgenproptools.py` is the BCH / matrix-exponential / error-generator-propagation backbone. Requires `stim` for some functions. |
 | Statistical fit functions | [likelihoodfns.py](../pygsti/tools/likelihoodfns.py), [chi2fns.py](../pygsti/tools/chi2fns.py) | Misplaced (see above). Prefer the class-based interfaces in `objectivefns/`. |
 | Convex / SDP (cvxpy-optional) | [sdptools.py](../pygsti/tools/sdptools.py), parts of [jamiolkowski.py](../pygsti/tools/jamiolkowski.py), parts of [optools.py](../pygsti/tools/optools.py) | All guarded by `try: import cvxpy`. |
-| Experiment design | [edesigntools.py](../pygsti/tools/edesigntools.py) | Fisher information; misplaced. |
+| Experiment design | [edesigntools/](../pygsti/tools/edesigntools/) | Fisher information and reduction; misplaced. |
 | Randomized benchmarking | [rbtools.py](../pygsti/tools/rbtools.py), [rbtheory.py](../pygsti/tools/rbtheory.py) | `rbtheory.py` misplaced. |
 | SU(2) representation theory | [su2tools.py](../pygsti/tools/su2tools.py) (`SpinJ`), [wignersymbols.py](../pygsti/tools/wignersymbols.py) | Arbitrary-spin SU(2) group/representation utilities and exact (stdlib-only) Clebsch-Gordan/Wigner 6-j symbols, backing `protocols/su2rb.py`'s synthetic-SPAM RB family (see [04-orchestration/non-gst.md](04-orchestration/non-gst.md)). |
 | Group theory / Clifford / stabilizer | [symplectic.py](../pygsti/tools/symplectic.py) (~2k lines), [group.py](../pygsti/tools/group.py), [compilationtools.py](../pygsti/tools/compilationtools.py) | Symplectic-tableau geometry for stabilizer-friendly Clifford code. |
@@ -97,7 +97,7 @@ Misplaced files (which violate the above layering):
 | `tools/chi2fns.py` | `objectivefns` |
 | `tools/likelihoodfns.py` | `objectivefns` |
 | `tools/rbtheory.py` | `models` |
-| `tools/edesigntools.py` | `baseobjs`, `protocols` |
+| `tools/edesigntools/` | `baseobjs`, `protocols` |
 | `tools/optools.py` | `baseobjs`, `modelmembers` *(borderline)* |
 
 All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and nothing else — the way it should be.
@@ -109,7 +109,7 @@ All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and noth
 
 ## Pitfalls and gotchas
 
-- **Don't add code to misplaced files.** If your change lives most naturally in `tools/chi2fns.py`, `tools/likelihoodfns.py`, `tools/rbtheory.py`, or `tools/edesigntools.py` — that's a sign the surrounding migration is what should happen instead. At minimum, surface the question to maintainers.
+- **Don't add code to misplaced files.** If your change lives most naturally in `tools/chi2fns.py`, `tools/likelihoodfns.py`, `tools/rbtheory.py`, or `tools/edesigntools/` — that's a sign the surrounding migration is what should happen instead. At minimum, surface the question to maintainers.
 
 - **`legacytools.py::@deprecate` is the canonical pattern for in-place deprecation.** When you deprecate a function, decorate it with `@_deprecated_fn("use X instead")` from `pygsti.tools.legacytools.deprecate`. The warning class is `pyGSTiDeprecationWarning`.
 
