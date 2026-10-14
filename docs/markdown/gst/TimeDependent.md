@@ -172,24 +172,23 @@ ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, n
 
 We can run GST on this timestamped data similar to any other data, using the `GateSetTomography` protocol.  The key difference is that a `TimeDependentPoissonPicLogLFunction` objective function is used, which evaluates the log-likelihood by accounting separately for each timestamp.  It takes the timestamps in the given `DataSet` seriously, and performs time-dependent circuit simulations rather than aggregating the counts across all times (the behavior when the default objective function is used).
 
-Running time-dependent GST with 10 timesteps requires 10 times the number of circuit simulations (each circuit needs to be simulated 10 times).  This, coupled with the fact that this the time-dependent simulation routines are less optimized in pyGSTi, means this running time-dependent GST is significantly slower than normal GST.  Note also that we set `gauge_opt_suite=None`.  This disables gauge optimization, and this is necessary since it won't work because our `MyTimeDependentIdle` operation doesn't implement `transform` (the action of a gauge transformation).
-
-The cell below will take around 5 minutes to run.
+Running time-dependent GST with 5 timesteps requires 5 times the number of circuit simulations (each circuit needs to be simulated 5 times).  This, coupled with the fact that the time-dependent simulation routines are less optimized in pyGSTi, means that running time-dependent GST is significantly slower than normal GST.  Note also that we set `gaugeopt_suite=None`.  This disables gauge optimization, and this is necessary since it won't work because our `MyTimeDependentIdle` operation doesn't implement `transform` (the action of a gauge transformation).
 
 ```{code-cell} ipython3
-target_model = smq1Q_XYI.target_model("full TP", simulator="map") # TP-constraints on the non-Gi gates
+target_model = smq1Q_XYI.target_model("full TP", simulator="map") # TP-constraints on the non-idle gates
 target_model[idle_gate_label] = MyTimeDependentIdle(0.0)
 target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)
 
 builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)],[])
-custom_opt = pygsti.optimize.CustomLMOptimizer(tol=1e-4, damping_mode='JTJ', damping_clip=(1.0, 1000.0)) # tweak optimizer parameters for better performance (expert-level)
+# CustomLMOptimizer is deprecated, but it supports damping options that SimplerLMOptimizer doesn't (expert-level)
+custom_opt = pygsti.optimize.CustomLMOptimizer(tol=1e-4, damping_mode='JTJ', damping_clip=(1.0, 1000.0))
 gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                          objfn_builders=builders, optimizer=custom_opt, verbosity=3)
 data = pygsti.protocols.ProtocolData(edesign, ds)
 results = gst.run(data)
 ```
 
-We can extract the (non-gauge-optimizeed) best-fit model from `results`, and see what depolarization "acceleration" was found.  We find that the value is reasonably close to the value of 1.0 that we used to generate the data.
+We can extract the (non-gauge-optimized) best-fit model from `results`, and see what depolarization "acceleration" was found.  We find that the value is reasonably close to the value of 1.0 that we used to generate the data.
 
 ```{code-cell} ipython3
 final_mdl = results.estimates['GateSetTomography'].models['final iteration estimate']
