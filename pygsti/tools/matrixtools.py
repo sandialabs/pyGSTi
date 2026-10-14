@@ -1108,16 +1108,25 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     return evecs, evals, inv_evecs
 
 
-def sqrtm_frechet_derivative(evecs: _np.ndarray, evals: _np.ndarray, directions: _np.ndarray) -> _np.ndarray:
+def sqrtm_frechet_derivative(evecs: _np.ndarray, evals: _np.ndarray, directions: _np.ndarray,
+                             tol: float = 0.0) -> _np.ndarray:
     """
-    Fréchet derivative of the principal square root at a positive definite matrix.
+    Fréchet derivative of the principal square root at a positive semidefinite matrix.
 
-    Let `A = evecs @ diag(evals) @ evecs^†` be positive definite and `S = A^½`. For each
-    direction `H`, this returns `X = D sqrt(A)[H]`, the unique solution of `S X + X S = H`.
-    In the eigenbasis of `A` the solution is `X_ij = H_ij / (sqrt(evals_i) + sqrt(evals_j))`.
+    Let `A = evecs @ diag(evals) @ evecs^†` be positive semidefinite and `S = A^½`. For each
+    direction `H`, this returns the minimum-norm solution `X` of `S X + X S = H`. In the
+    eigenbasis of `A` it is `X_ij = H_ij / (sqrt(evals_i) + sqrt(evals_j))`, with `X_ij = 0`
+    wherever both eigenvalues are zero (at or below `tol`).
 
-    Only a sum of square roots appears in the denominator, so repeated eigenvalues are no
-    obstacle: any orthonormal eigenbasis gives the same `X`, and no eigenvector is differentiated.
+    When `A` is positive definite, `X` is the unique solution and equals `D sqrt(A)[H]`. Only a
+    sum of square roots appears in the denominator, so repeated eigenvalues are no obstacle: any
+    orthonormal eigenbasis gives the same `X`, and no eigenvector is differentiated.
+
+    When `A` is singular, with zero-eigenvalue indices K, the K–K block of the equation reads
+    `0 · X_KK = H_KK`, and this function takes `X_KK = 0`. That is the exact derivative of `A(t)^½`
+    whenever `A(t)` keeps its rank to first order (`H_KK = 0`), e.g. along `U(t) A U(t)^†` or
+    along `A + t² D`. If `H_KK ≠ 0`, a zero eigenvalue moves at first order and the true
+    derivative is infinite; `X_KK = 0` is then the least-squares value, by convention.
 
     Parameters
     ----------
@@ -1125,24 +1134,27 @@ def sqrtm_frechet_derivative(evecs: _np.ndarray, evals: _np.ndarray, directions:
         A unitary matrix whose columns are eigenvectors of `A`.
 
     evals : numpy array
-        The corresponding eigenvalues, all strictly positive.
+        The corresponding eigenvalues, all nonnegative up to `tol`.
 
     directions : numpy array
         A matrix `H`, or a stack of them with shape `(..., n, n)`.
 
+    tol : float, optional
+        Eigenvalues at or below this are treated as zero.
+
     Returns
     -------
     numpy array
-        `D sqrt(A)[H]` for each direction, with the shape of `directions`.
+        `X` for each direction, with the shape of `directions`.
     """
     evals = _np.asarray(evals)
-    if _np.any(evals <= 0):
-        raise ValueError(f"The square root is only differentiable at positive definite matrices; "
-                         f"the smallest eigenvalue is {evals.min()}.")
-    roots = _np.sqrt(evals)
-    inv_root_sums = 1.0 / (roots[:, None] + roots[None, :])
+    if _np.any(evals < -max(tol, 0.0)):
+        raise ValueError(f"The matrix must be positive semidefinite; the smallest eigenvalue is {evals.min()}.")
+    roots = _np.sqrt(_np.where(evals > tol, evals, 0.0))
+    root_sums = roots[:, None] + roots[None, :]
+    weights = _np.divide(1.0, root_sums, out=_np.zeros_like(root_sums), where=root_sums > 0)
     evecs_dag = evecs.conj().T
-    return evecs @ ((evecs_dag @ directions @ evecs) * inv_root_sums) @ evecs_dag
+    return evecs @ ((evecs_dag @ directions @ evecs) * weights) @ evecs_dag
 
 
 def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",

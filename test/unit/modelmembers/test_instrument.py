@@ -1,6 +1,7 @@
 import copy
 import pickle
 import warnings
+from unittest import mock
 
 import numpy as np
 
@@ -411,8 +412,8 @@ def _central_difference_deriv(operator, h=1e-6):
 
 
 class RootConjDerivativeTester(BaseCase):
-    """RootConjOperator.deriv_wrt_params: exact where E^(1/2) is differentiable, finite differences
-    (with a warning) on the spectral boundary where it is not."""
+    """RootConjOperator.deriv_wrt_params: exact where E^(1/2) is differentiable, and the
+    minimum-norm derivative at singular E."""
 
     def setUp(self):
         self.basis = std.target_model().basis
@@ -454,12 +455,32 @@ class RootConjDerivativeTester(BaseCase):
             deriv = rcop.deriv_wrt_params()
         self.assertArraysEqual(deriv, np.zeros((self.basis.dim**2, rcop.num_params)))
 
-    def test_boundary_effect_warns_and_uses_finite_differences(self):
+    def test_ideal_effect(self):
+        # At an ideal projective effect with zero error rates, the Hamiltonian coordinates rotate E
+        # (rank-preserving, so E^(1/2) is smooth), and the 9 Cholesky coordinates of the stochastic
+        # block move E only at second order. A central difference is then exact up to roundoff:
+        # the derivative along a rotation, and 0 along the Cholesky coordinates, since +h and -h
+        # give the same rates.
         E0 = np.diag([1.0, 0.0]).astype(complex)
-        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)['p0']
-        with self.assertWarnsRegex(UserWarning, 'not differentiable'):
-            deriv = rcop.deriv_wrt_params()
-        self.assertArraysEqual(deriv, op.linearop.finite_difference_deriv_wrt_params(rcop, None))
+        rcops = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)
+        for rcop in rcops.values():
+            self.assertEqual(rcop.num_params, 12)
+            with warnings.catch_warnings(), mock.patch.object(
+                    op.linearop, 'finite_difference_deriv_wrt_params', side_effect=AssertionError):
+                warnings.simplefilter('error')
+                deriv = rcop.deriv_wrt_params()
+            self.assertArraysEqual(deriv[:, 3:], np.zeros((self.basis.dim**2, 9)))
+            self.assertGreater(np.abs(deriv[:, :2]).max(axis=0).min(), 0.0)
+            self.assertArraysAlmostEqual(deriv, _central_difference_deriv(rcop), places=7)
+
+    def test_ideal_two_qubit_effect(self):
+        # A rank-one projector: a threefold zero eigenvalue.
+        P = np.diag([1.0, 0, 0, 0]).astype(complex)
+        basis = pygsti.baseobjs.Basis.cast('pp', 16)
+        rcops = self._root_conj({'p0': P, 'p1': np.eye(4) - P}, basis)
+        for rcop in rcops.values():
+            # The norm is over 256 x 240 entries, each with about 1e-9 of roundoff from the central difference.
+            self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=6)
 
 
 class SharedErrorMapCopyTester(BaseCase):

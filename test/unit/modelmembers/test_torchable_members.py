@@ -176,12 +176,17 @@ def test_rootconj_torch_jacobian_zero_effect(jac):
 
 
 @pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
-def test_rootconj_torch_jacobian_raises_on_boundary_spectrum(jac):
-    model = std.target_model()
-    E0 = np.diag([1.0, 0.0]).astype(complex)
-    instr = Instrument.from_effects({'p0': E0, 'p1': np.eye(2) - E0}, model.basis)
-    with pytest.raises(ValueError, match='not differentiable'):
-        torch_base_jacobian(instr['p0'].factorops[0], jac=jac)
+@pytest.mark.parametrize('dim', [2, 4])
+def test_rootconj_torch_jacobian_singular_effect(jac, dim):
+    # Ideal projective effects: the Jacobian takes the same minimum-norm convention as deriv_wrt_params.
+    P = np.zeros((dim, dim), complex)
+    P[0, 0] = 1.0
+    instr = Instrument.from_effects({'p0': P, 'p1': np.eye(dim) - P}, Basis.cast('pp', dim**2))
+    for member in instr.values():
+        rcop = member.factorops[0]
+        J = torch_base_jacobian(rcop, jac=jac)
+        assert not np.isnan(J).any()
+        assert np.allclose(J, rcop.deriv_wrt_params(), atol=1e-12)
 
 
 def test_rootconj_torch_base_value_boundary_spectrum():

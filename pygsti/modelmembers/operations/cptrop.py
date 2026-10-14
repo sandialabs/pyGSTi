@@ -44,14 +44,12 @@ try:
 except ImportError:
     _TORCH_AVAILABLE = False
 
-import warnings as _warnings
 
 import numpy as _np
 from pygsti.pgtypes import SpaceT
 from pygsti.baseobjs.basis import Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers.povms.effect import POVMEffect
 from pygsti.modelmembers.operations.linearop import LinearOperator
-from pygsti.modelmembers.operations.linearop import finite_difference_deriv_wrt_params as _fd_deriv_wrt_params
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
@@ -75,9 +73,9 @@ if _TORCH_AVAILABLE:
         so the same formula serves for ``backward`` and ``jvp``, and ``generate_vmap_rule`` makes
         both ``torch.func.jacrev`` and ``torch.func.jacfwd`` work.
 
-        An identically zero E is treated as a constant map with zero derivative. When some but
-        not all eigenvalues are at or below `tol` the derivative does not exist, and
-        differentiating raises a ValueError; the value is still computed.
+        Eigenvalues at or below `tol` are treated as zero, and the derivative's block on them is
+        zero, as in :func:`~pygsti.tools.matrixtools.sqrtm_frechet_derivative`: the minimum-norm
+        solution of the Sylvester equation. That keeps the map self-adjoint.
         """
         generate_vmap_rule = True
 
@@ -99,16 +97,12 @@ if _TORCH_AVAILABLE:
 
         @staticmethod
         def _frechet(V: _torch.Tensor, vals: _torch.Tensor, tol: float, H: _torch.Tensor) -> _torch.Tensor:
-            at_zero = vals <= tol
-            if bool(at_zero.all()):
-                return _torch.zeros_like(H)
-            if bool(at_zero.any()):
-                raise ValueError(
-                    f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {vals.min().item():.3g}), "
-                    "where E^(1/2) is not differentiable. Start the fit from effects interior to (0, 1).")
-            roots = _torch.sqrt(vals)
-            inv_root_sums = (1.0 / (roots.unsqueeze(1) + roots.unsqueeze(0))).to(V.dtype)
-            return V @ ((V.mH @ H @ V) * inv_root_sums) @ V.mH
+            roots = _torch.sqrt(_torch.where(vals > tol, vals, _torch.zeros_like(vals)))
+            root_sums = roots.unsqueeze(1) + roots.unsqueeze(0)
+            positive = root_sums > 0
+            weights = _torch.where(positive, 1.0 / _torch.where(positive, root_sums, _torch.ones_like(root_sums)),
+                                   _torch.zeros_like(root_sums)).to(V.dtype)
+            return V @ ((V.mH @ H @ V) * weights) @ V.mH
 
         @staticmethod
         def backward(ctx, grad_R, grad_V, grad_vals):
@@ -148,9 +142,8 @@ class RootConjOperator(LinearOperator, _Torchable):
         How far an eigenvalue of E may fall outside [0, 1] before an error is raised.
         Defaults to :data:`~pygsti.tools.optools.EFFECT_EIGVAL_ABSTOL_ERROR`.
     DERIV_EIGTOL : float
-        Eigenvalues of E at or below this are treated as zero by :meth:`deriv_wrt_params`.
-        E½ is differentiable only when E is positive definite or identically zero, so an E
-        with some but not all eigenvalues at or below this falls back to finite differences.
+        Eigenvalues of E at or below this are treated as zero by :meth:`deriv_wrt_params` and
+        by the derivative of :meth:`torch_base`, which take the minimum-norm derivative there.
         `eigh` resolves an eigenvalue of an E with ‖E‖ ≤ 1 to about 1e-16, so the default of
         1e-10 treats anything zero up to roundoff as zero while keeping the relative error of
         each computed sqrt(λ) near 1e-6 or below.
@@ -205,13 +198,16 @@ class RootConjOperator(LinearOperator, _Torchable):
         With R = E½ the superoperator is R ⊗ Rᵀ in the standard basis, so its derivative is
         dR ⊗ Rᵀ + R ⊗ dRᵀ, where dR solves R dR + dR R = dE (see
         :func:`~pygsti.tools.matrixtools.sqrtm_frechet_derivative`). This is exact for positive
-        definite E, including E with repeated eigenvalues. An identically zero E (one whose
-        derivative also vanishes, e.g. a zero effect under a shared error map) is a constant
-        map with zero derivative.
+        definite E, including E with repeated eigenvalues.
 
-        When E is singular but nonzero the derivative does not exist: E(a) = P + a²D has
-        dE/da = 0 at a = 0, yet E(a)½ contains a term proportional to |a|. There this method
-        warns and returns the finite-difference estimate pyGSTi has always used.
+        When E is singular, dR is the minimum-norm solution of that equation: in the eigenbasis
+        of E, its block on the eigenvalues at or below :attr:`DERIV_EIGTOL` is zero. That is
+        exact wherever E keeps its rank to first order, e.g. along a rotation of E. Along
+        E(a) = P + a²D it gives 0 at a = 0, where E(a)½ has a term proportional to |a|: 0 is
+        the average of the two one-sided derivatives, and what a central difference gives. So Lindblad coordinates at
+        zero noise get zero columns. A parameter that moves a zero eigenvalue of E at first
+        order has an infinite derivative; there this method returns the least-squares value,
+        by convention and without a warning.
         """
         if self.num_params == 0:
             return LinearOperator.deriv_wrt_params(self, wrt_filter)
@@ -228,20 +224,11 @@ class RootConjOperator(LinearOperator, _Torchable):
         evals = _np.clip(evals, 0.0, 1.0)
         tol = self.DERIV_EIGTOL
         num_cols = effect_deriv.shape[1]
-        if evals.max() <= tol and _np.allclose(effect_deriv, 0.0, rtol=0.0, atol=tol):
-            return _np.zeros((self.dim**2, num_cols))
-        if evals.min() <= tol:
-            _warnings.warn(
-                f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {evals.min():.3g}), "
-                "where E^(1/2) is not differentiable; falling back to a finite-difference derivative. "
-                "Starting a fit with effects interior to (0, 1), e.g. by giving the effects' error map "
-                "small nonzero stochastic rates, avoids this.")
-            return _fd_deriv_wrt_params(self, wrt_filter)
 
         # dE for each parameter, then dR = D sqrt(E)[dE].
         elements = _np.asarray(self._basis.elements)
         dE = _np.einsum('ik,iab->kab', effect_deriv, elements)
-        dR = _mt.sqrtm_frechet_derivative(evecs, evals, dE)
+        dR = _mt.sqrtm_frechet_derivative(evecs, evals, dE, tol)
         R = (evecs * _np.sqrt(evals)[None, :]) @ evecs.conj().T
 
         # d(R ⊗ Rᵀ) = dR ⊗ Rᵀ + R ⊗ dRᵀ, as plain (non-conjugate) transposes to match rootconj_superop.
@@ -279,7 +266,7 @@ class RootConjOperator(LinearOperator, _Torchable):
         return out
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
-        """Bake the constants used by :meth:`torch_base` (see there for the boundary caveat).
+        """Bake the constants used by :meth:`torch_base` (see there for the derivative convention).
 
         All free parameters belong to the wrapped effect; the basis element matrices ``B`` and the
         std<->basis change-of-basis matrices ``toMx`` / ``fromMx`` are constant and are pre-computed
@@ -305,13 +292,13 @@ class RootConjOperator(LinearOperator, _Torchable):
 
         .. warning::
 
-            The derivative is exact for positive definite effects, including those with repeated
-            eigenvalues, and zero for an identically zero effect. When some but not all of the
-            effect's eigenvalues are within :attr:`DERIV_EIGTOL` of 0, as for ideal projective
-            effects, E½ is not differentiable, and differentiating this function in either mode
-            (``torch.func.jacrev`` or ``jacfwd``) raises a ValueError. The value path has no such
-            restriction. (The NumPy :meth:`deriv_wrt_params` falls back to finite differences
-            there instead, for compatibility.)
+            The derivative, in either mode (``torch.func.jacrev`` or ``jacfwd``), is exact for
+            positive definite effects, including those with repeated eigenvalues. When some of
+            the effect's eigenvalues are within :attr:`DERIV_EIGTOL` of 0, as for ideal
+            projective effects, it is the minimum-norm derivative described in
+            :meth:`deriv_wrt_params`, which agrees with that method. A parameter that moves a
+            zero eigenvalue at first order has an infinite true derivative and silently gets
+            the least-squares value.
 
         Unlike the numpy reference :func:`~pygsti.tools.optools.rootconj_superop` -- which warns
         when an eigenvalue of ``E`` strays outside ``[0, 1]`` by more than :attr:`EIGTOL_WARNING`
