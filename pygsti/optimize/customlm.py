@@ -59,9 +59,11 @@ class CustomLMOptimizer(Optimizer):
         point lies at a special or singular point where the analytic Jacobian
         is misleading.
 
-    first_fditer : int, optional
+    first_fditer : int or None, optional
         Number of finite-difference iterations applied to the first
-        stage of the optimization (only).  Unused.
+        stage of the optimization (only).  Read by `run_iterative_gst`, not
+        by this optimizer; there, `None` means 1 for a `MatrixForwardSimulator`
+        model and 0 otherwise.
 
     damping_mode : {'identity', 'JTJ', 'invJTJ', 'adaptive'}
         How damping is applied.  `'identity'` means that the damping parameter mu
