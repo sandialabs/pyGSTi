@@ -601,6 +601,45 @@ class MLSubpackageTester(unittest.TestCase):
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
 
+    def test_qpann_activation(self):
+        # The hidden layers of the rate-prediction network must use the requested activation
+        # (default 'gelu'), and the output layer must stay linear. Regression test for the
+        # hidden-layer activation having been left hard-coded to 'linear', which silently makes
+        # the whole rate network affine in its inputs.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        modelled_error_generators = [('H', ('XI',)), ('H', ('IZ',)), ('H', ('XZ',))]  # no 'S': no squaring
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+
+        # Three single-layer encodings: two different single gates, and both together.
+        x1 = np.array(encoder.layer_encoding([pygsti.baseobjs.Label('Gxpi2', 0)]), np.float32)
+        x2 = np.array(encoder.layer_encoding([pygsti.baseobjs.Label('Gypi2', 1)]), np.float32)
+        x0 = np.zeros_like(x1)
+        layers = tf.constant(np.stack([x0, x1, x2, x1 + x2]))
+
+        def additivity_defect(model):
+            # For an affine rate network f: f(x1 + x2) - f(x1) - f(x2) + f(0) = 0.
+            model.build()  # creates model.dense_layer
+            _ = model.dense_layer(layers)  # builds its weights
+            for w in model.dense_layer.trainable_variables:  # O(1) weights, so nonlinearity is visible
+                w.assign(tf.random.stateless_normal(w.shape, seed=[1, 2]))
+            f0, f1, f2, f12 = model.dense_layer(layers).numpy().reshape(4, -1)
+            return np.max(np.abs(f12 - f1 - f2 + f0)) / np.max(np.abs(np.stack([f0, f1, f2, f12])))
+
+        default_model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper)
+        self.assertEqual(default_model.activation, 'gelu')
+        self.assertEqual(default_model.get_config()['activation'], 'gelu')
+        self.assertGreater(additivity_defect(default_model), 1e-3)
+        dense_layers = default_model.dense_layer.dense.sequential.layers
+        self.assertTrue(all(layer.activation is keras.activations.gelu for layer in dense_layers[:-1]))
+        self.assertIs(dense_layers[-1].activation, keras.activations.linear)
+
+        linear_model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper, activation='linear')
+        self.assertLess(additivity_defect(linear_model), 1e-5)
+
     def test_qpann_forward_and_fit_with_ca_generators(self):
         # Full end-to-end test that the entire pipeline (encoding -> tensors -> QPANN -> forward
         # pass + training) works correctly with 'C' (Pauli-correlation) and 'A' (active) type
