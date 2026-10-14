@@ -1154,7 +1154,7 @@ def _selection_scores(criterion, M_inv, arrays, sign):
 
 
 def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shots=1, criterion='A',
-                    method='forward', ridge=1e-6, include=None):
+                    method='forward', ridge=1e-6, include=None, show_progress_bar=False):
     """
     Choose a subset of circuits whose design matrix is (nearly) as informative as that of all of them.
 
@@ -1197,6 +1197,10 @@ def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shot
     include : iterable of int, optional
         Indices of candidates that are always part of the design: `'forward'` starts from them (they count
         towards `num_circuits`), `'backward'` never removes them.
+    show_progress_bar : bool, optional
+        Show a `tqdm` progress bar over the greedy steps (one step per circuit added or removed).  The bar's
+        total is the number of steps needed to reach `num_circuits`; when `max_error_bar` stops the search
+        earlier the bar simply ends early.
 
     Returns
     -------
@@ -1250,15 +1254,26 @@ def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shot
             all_scores[idx] = _selection_scores(criterion, M_inv, stacked, sign)
         return all_scores[candidates]
 
+    def progress_bar(total, desc):
+        if not show_progress_bar:
+            return None
+        from tqdm import tqdm
+        return tqdm(total=total, ascii=True, desc=desc, unit="circuit")
+
     M = ridge * _np.eye(P)
     if method == 'forward':
         chosen, remaining = list(include), [i for i in range(n) if i not in include]
         M = M + sum((gram[i] for i in include), _np.zeros((P, P)))
+        pbar = progress_bar(num_circuits - len(chosen), "Selecting circuits (%s-optimal, forward)" % criterion)
         while len(chosen) < num_circuits and remaining and not meets_target(chosen):
             j = remaining[int(_np.argmax(scores(M, remaining, +1)))]
             chosen.append(j)
             remaining.remove(j)
             M = M + gram[j]
+            if pbar is not None:
+                pbar.update(1)
+        if pbar is not None:
+            pbar.close()
         if max_error_bar is not None and not meets_target(chosen):
             if len(chosen) == n:
                 raise ValueError("The target error bar %g cannot be reached even with all %d candidates x %g shots"
@@ -1273,6 +1288,7 @@ def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shot
         raise ValueError("The target error bar %g cannot be reached even with all %d candidates x %g shots"
                          % (max_error_bar, n, shots))
     removable = [i for i in chosen if i not in include]
+    pbar = progress_bar(len(chosen) - num_circuits, "Selecting circuits (%s-optimal, backward)" % criterion)
     while len(chosen) > num_circuits and removable:
         j = removable[int(_np.argmax(scores(M, removable, -1)))]
         if max_error_bar is not None and not meets_target([i for i in chosen if i != j]):
@@ -1280,6 +1296,10 @@ def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shot
         chosen.remove(j)
         removable.remove(j)
         M = M - gram[j]
+        if pbar is not None:
+            pbar.update(1)
+    if pbar is not None:
+        pbar.close()
     return chosen
 
 
