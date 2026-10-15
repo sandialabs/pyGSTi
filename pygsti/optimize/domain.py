@@ -42,6 +42,8 @@ class EvaluationDomain:
     simulation version; supply an MPI-serializable identifier for MPI dispatch.
     Construct a fresh domain after changing the approximation and invalidate the
     previous domain, so cached derivative closures cannot use obsolete paths.
+    When guarded oracles contain collectives, the predicate must return the
+    same validity decision on every participating rank before they are entered.
     """
 
     def __init__(self, check, description='Evaluation outside approximation domain', generation=None):

@@ -96,16 +96,23 @@ class Optimizer(_NicelySerializable):
             return LMOptimizer(**(obj or {}))
         raise TypeError("Expected an Optimizer instance, a dictionary, or None")
 
-    def __init__(self, required_operations=None, array_types=None, problem_factory=None):
+    def __init__(self, required_operations=None, array_types=None, problem_factory=None,
+                 objective_methods=None):
         super().__init__()
-        from .gstproblem import objective_methods, replicated_array_types
+        from .gstproblem import objective_methods as _objective_methods, replicated_array_types
         if required_operations is not None:
             self.required_operations = tuple(required_operations)
         if array_types is not None:
             self.array_types = tuple(array_types)
         if problem_factory is not None:
             self.problem_factory = problem_factory
-        self.called_objective_methods = objective_methods(self.required_operations)
+        planned_methods = _objective_methods(self.required_operations)
+        if objective_methods is not None:
+            if self.problem_factory is None:
+                raise ValueError('Custom objective-method planning requires a custom problem factory')
+            self.called_objective_methods = tuple(dict.fromkeys(('fn',) + tuple(objective_methods)))
+        else:
+            self.called_objective_methods = planned_methods
         if self.problem_factory is None:
             self.array_types = tuple(self.array_types) + replicated_array_types(self.required_operations)
 

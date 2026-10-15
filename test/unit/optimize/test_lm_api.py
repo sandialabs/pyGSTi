@@ -1,6 +1,7 @@
 """The canonical LM entry preserves tuned GST options and solves numeric problems."""
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 from pygsti.optimize import Optimizer, LMOptimizer, SimplerLMOptimizer, OptimizationProblem, OptimizationStatus
 
@@ -41,3 +42,20 @@ def test_gst_only_controls_are_not_silently_used_for_numeric_problem():
                                   residual_jacobian=lambda x: np.ones((1, 1)))
     with pytest.raises(ValueError, match='apply to GST'):
         LMOptimizer(lsvec_mode='percircuit').solve(problem)
+
+
+def test_gst_lm_commits_exact_point_and_reports_interruption(monkeypatch):
+    optimizer = LMOptimizer()
+    accepted = np.array([1.])
+    class Model:
+        def from_vector(self, x):
+            self.x = np.array(x, copy=True)
+    objective = SimpleNamespace(model=Model())
+    objective.model.from_vector(np.nextafter(accepted, np.inf))
+    result = SimpleNamespace(x=accepted, f=2., optimizer_specific_qtys={
+        'msg': 'Keyboard interrupt!', 'mu': .1, 'nu': 2.})
+    monkeypatch.setattr(optimizer.legacy, 'run', lambda *args: result)
+    returned = optimizer.run(objective, None, None)
+    np.testing.assert_array_equal(objective.model.x, accepted)
+    assert returned.outcome.status == OptimizationStatus.INTERRUPTED
+    assert returned.outcome.restart_state == {'mu': .1, 'nu': 2.}

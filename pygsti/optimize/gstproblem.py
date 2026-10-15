@@ -134,14 +134,16 @@ def run_problem_optimizer(optimizer, objective, profiler, printer, *, domain=Non
     """Own the GST solve lifecycle, including failures and final model state."""
     from .outcome import OptimizerOutcome
     from .optimizer import OptimizerResult
-    from .collective import solve_on_root
+    from .collective import solve_on_root, collective_phase
 
     initial = np.array(objective.model.to_vector(), copy=True)
-    if domain is not None and not optimizer.supports_evaluation_domain:
-        raise NotImplementedError('This optimizer does not declare evaluation-domain support')
     context = GSTOptimizationContext(objective, profiler, printer, domain)
     factory = optimizer.problem_factory or default_problem_factory
-    try:
+    comm = objective.resource_alloc.comm
+
+    def prepare_problem():
+        if domain is not None and not optimizer.supports_evaluation_domain:
+            raise NotImplementedError('This optimizer does not declare evaluation-domain support')
         problem = factory(context, optimizer.required_operations)
         if not isinstance(problem, OptimizationProblem):
             raise TypeError("A problem factory must return an OptimizationProblem")
@@ -154,22 +156,34 @@ def run_problem_optimizer(optimizer, objective, profiler, printer, *, domain=Non
         if domain is not None:
             from .domain import guard_problem
             problem = guard_problem(problem, domain)
-        comm = objective.resource_alloc.comm
+        return problem
+
+    try:
+        problem = collective_phase(comm, prepare_problem, 'Optimization problem construction')
         outcome = (solve_on_root(optimizer.solve, problem, comm)
                    if comm is not None and comm.size > 1 else optimizer.solve(problem))
-        if not isinstance(outcome, OptimizerOutcome):
-            raise TypeError("solve(problem) must return an OptimizerOutcome")
-        if outcome.x.shape != initial.shape:
-            raise ValueError("The returned point has the wrong parameter dimension")
-        if problem.bounds is not None:
-            lower, upper = problem.bounds
-            if np.any(outcome.x < lower) or np.any(outcome.x > upper):
-                raise ValueError("The returned point violates the parameter bounds")
+
+        def validate_outcome():
+            if not isinstance(outcome, OptimizerOutcome):
+                raise TypeError("solve(problem) must return an OptimizerOutcome")
+            normalized = OptimizerOutcome(outcome.x, outcome.status, outcome.message,
+                                          outcome.diagnostics, outcome.restart_state)
+            if normalized.x.shape != initial.shape:
+                raise ValueError("The returned point has the wrong parameter dimension")
+            if problem.bounds is not None:
+                lower, upper = problem.bounds
+                if np.any(normalized.x < lower) or np.any(normalized.x > upper):
+                    raise ValueError("The returned point violates the parameter bounds")
+            return normalized
+        outcome = collective_phase(comm, validate_outcome, 'Optimizer result validation')
+        if domain is not None:
+            collective_phase(comm, lambda: domain.require(outcome.x), 'Final evaluation-domain validation')
 
         # Commit exactly, even when the last oracle call was a rejected trial.
         # Statistics need scalar terms only; never demand a final Jacobian.
-        objective.model.from_vector(outcome.x)
-        terms = np.array(objective.terms(outcome.x), copy=True)
+        collective_phase(comm, lambda: objective.model.from_vector(outcome.x), 'Final model commit')
+        terms = collective_phase(comm, lambda: np.array(objective.terms(outcome.x), copy=True),
+                                 'Final objective evaluation')
         value = float(objective.layout.allsum_local_quantity('e', float(terms.sum()), use_shared_mem=False))
         local_extra = getattr(objective, 'local_ex', objective.ex)
         unpenalized = terms[:-local_extra] if local_extra else terms

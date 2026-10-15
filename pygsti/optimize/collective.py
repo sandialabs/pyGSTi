@@ -14,6 +14,26 @@ class CollectiveEvaluationError(RuntimeError):
     """At least one rank failed while evaluating a collective problem oracle."""
 
 
+def collective_phase(comm, function, description):
+    """Synchronize rank-local construction/validation failures at a phase boundary.
+
+    The function may return different local Python objects. Its own internal
+    collectives must still be entered consistently on all participating ranks.
+    """
+    if comm is None or comm.size <= 1:
+        return function()
+    value = None
+    error = None
+    try:
+        value = function()
+    except Exception as exc:
+        error = '%s: %s' % (type(exc).__name__, exc)
+    errors = comm.allgather(error)
+    if any(error is not None for error in errors):
+        raise CollectiveEvaluationError('%s failed: %s' % (description, errors))
+    return value
+
+
 def solve_on_root(solver, problem, comm):
     """Run ``solver(problem)`` on root and return its outcome on every rank.
 
@@ -21,8 +41,12 @@ def solve_on_root(solver, problem, comm):
     need their own explicit distributed execution model. This service operates
     on the standard real NumPy scalar/residual oracles only.
     """
-    if problem.structure is not None:
+    signatures = comm.allgather((tuple(sorted(problem.capabilities)), problem.num_parameters,
+                                 problem.structure is not None))
+    if any(signature[2] for signature in signatures):
         raise NotImplementedError("MPI dispatch of backend-native problem structure is not supported")
+    if any(signature[:2] != signatures[0][:2] for signature in signatures):
+        raise CollectiveEvaluationError('MPI problem dimensions and capabilities must agree on all ranks')
 
     def evaluate(name, args):
         result = None
@@ -44,6 +68,10 @@ def solve_on_root(solver, problem, comm):
             if all(e[0] == 'stale' for e in failures):
                 raise StaleEvaluationDomainError(failures[0][1])
             raise CollectiveEvaluationError("Collective %s failed: %s" % (name, errors))
+        if name == 'check_domain':
+            # Domain predicates may be rank-local; validity requires agreement
+            # from every participant, rather than only the solver rank.
+            return all(comm.allgather(bool(result)))
         return result
 
     if comm.rank != 0:
@@ -78,6 +106,14 @@ def solve_on_root(solver, problem, comm):
                                         problem.domain.generation)
     try:
         outcome = solver(proxy)
+        from .outcome import OptimizerOutcome
+        if not isinstance(outcome, OptimizerOutcome):
+            raise TypeError('solve(problem) must return an OptimizerOutcome')
+        # Normalize owned arrays before serializing the outcome to workers.
+        outcome = OptimizerOutcome(outcome.x, outcome.status, outcome.message,
+                                   outcome.diagnostics, outcome.restart_state)
+        import pickle
+        pickle.dumps(outcome, protocol=pickle.HIGHEST_PROTOCOL)
     except BaseException as exc:
         comm.bcast(('abort', "%s: %s" % (type(exc).__name__, exc)), root=0)
         raise

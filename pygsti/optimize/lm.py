@@ -27,7 +27,23 @@ class LMOptimizer(Optimizer):
         self.called_objective_methods = self.legacy.called_objective_methods
 
     def run(self, objective, profiler, printer):
-        return self.legacy.run(objective, profiler, printer)
+        result = self.legacy.run(objective, profiler, printer)
+        # The historical adapter uses allclose here. The public result owns an
+        # exact accepted point, even after a nearby rejected trial evaluation.
+        objective.model.from_vector(result.x)
+        diagnostics = result.optimizer_specific_qtys
+        message = diagnostics['msg']
+        if message.startswith('Maximum iterations'):
+            status = OptimizationStatus.ITERATION_LIMIT
+        elif message == 'Objective function out-of-bounds! STOP':
+            status = OptimizationStatus.DOMAIN_LIMIT
+        elif message == 'Keyboard interrupt!':
+            status = OptimizationStatus.INTERRUPTED
+        else:
+            status = OptimizationStatus.CONVERGED
+        result.outcome = OptimizerOutcome(result.x, status, message, {'value': result.f},
+                                          {'mu': diagnostics['mu'], 'nu': diagnostics['nu']})
+        return result
 
     def solve(self, problem):
         options = self.legacy
@@ -49,6 +65,8 @@ class LMOptimizer(Optimizer):
             x_limits=limits)
         if message.startswith('Maximum iterations'):
             status = OptimizationStatus.ITERATION_LIMIT
+        elif message == 'Keyboard interrupt!':
+            status = OptimizationStatus.INTERRUPTED
         else:
             status = OptimizationStatus.CONVERGED if converged else OptimizationStatus.FAILED
         return OptimizerOutcome(x, status, message, {'value': value}, {'mu': mu, 'nu': nu})

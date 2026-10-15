@@ -96,10 +96,13 @@ class _NumPyProbabilityFunction:
 class _TorchProbabilityFunction:
     backend = 'torch'
     derivative_storage = 'autograd'
+    derivative_order = 1
 
     def __init__(self, model, layout, dtype, device):
         import torch
         from .torchfwdsim import StatelessModelCircuitStore
+        if getattr(model, '_param_interposer', None) is not None:
+            raise NotImplementedError('Torch probability functions do not yet support parameter interposers')
         self._torch = torch
         self._dtype = torch.float64 if dtype is None else dtype
         if self._dtype not in (torch.float32, torch.float64):
@@ -149,6 +152,14 @@ class _TorchProbabilityFunction:
         if len(indices) != len(self._store.param_metadata):
             raise ValueError('Model member metadata changed while creating probability function')
         self._indices = tuple(indices)
+        # The current Torch evaluation plan uses real state buffers. Reject
+        # complex dense representations before they can be cast or truncated.
+        initial = torch.as_tensor(np.array(model.to_vector(), copy=True),
+                                  dtype=self._dtype, device=self._device)
+        parameters = tuple(initial.index_select(0, indices) for indices in self._indices)
+        bases = self._store.get_torch_bases(parameters)
+        if any(value.is_complex() for value in bases.values()):
+            raise NotImplementedError('Torch probability functions currently require a real dense model representation')
 
     def _point(self, x):
         torch = self._torch
@@ -190,6 +201,8 @@ def probability_function(model, layout, backend='numpy', dtype=None, device=None
     NumPy derivatives gather a dense global Jacobian and require derivative
     storage in the supplied layout. Torch evaluation retains the input tensor's
     computation graph and gathers actual modelmember global parameter indices.
+    Its contract covers first derivatives only: higher derivatives through model
+    members such as RootConjOperator are not implied by a retained graph.
     No probability clipping, omitted-outcome completion, or loss is applied.
     """
     if backend == 'numpy':

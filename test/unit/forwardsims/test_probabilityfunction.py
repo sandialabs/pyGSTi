@@ -116,6 +116,24 @@ def test_backend_validation():
         probability_function(model, layout, dtype=complex)
 
 
+def test_torch_accumulates_parameters_shared_by_two_operation_labels():
+    torch = pytest.importorskip('torch')
+    model = smq1Q_XYI.target_model('full TP', simulator='matrix').depolarize(
+        op_noise=.02, spam_noise=.03)
+    model.operations[('Gypi2', 0)] = model.operations[('Gxpi2', 0)]
+    circuits = [Circuit([('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0)], line_labels=(0,))]
+    layout = model.sim.create_layout(circuits, array_types=('e', 'ep'))
+    first = model.operations[('Gxpi2', 0)].gpindices_as_array()
+    second = model.operations[('Gypi2', 0)].gpindices_as_array()
+    np.testing.assert_array_equal(first, second)
+    native = probability_function(model, layout, backend='torch')
+    reference = probability_function(model, layout)
+    x = torch.tensor(model.to_vector(), dtype=torch.float64)
+    np.testing.assert_allclose(native(x).detach().numpy(), reference(x.numpy()), atol=1e-12)
+    np.testing.assert_allclose(native.jacobian(x).detach().numpy(), reference.jacobian(x.numpy()),
+                               atol=1e-10)
+
+
 def test_torch_accepts_non_torchable_static_reference_frame():
     torch = pytest.importorskip('torch')
     from pygsti.modelmembers.torchable import Torchable
