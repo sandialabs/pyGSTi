@@ -150,6 +150,20 @@ def test_rootconj_torch_base_value():
 
 
 @pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
+def test_rootconj_torch_tensor_product_basis(jac):
+    from pygsti.modelpacks import smq2Q_XYICNOT
+    basis = smq2Q_XYICNOT.target_model('static').basis
+    E0 = np.diag([0.8, 0.2, 0.2, 0.8]).astype(complex)
+    instr = Instrument.from_effects({'p0': E0, 'p1': np.eye(4) - E0}, basis)
+    rng = np.random.default_rng(75)
+    instr.from_vector(instr.to_vector() + 0.02 * rng.standard_normal(instr.num_params))
+    for member in instr.values():
+        root = member.factorops[0]
+        assert np.allclose(_value(root), root.to_dense('HilbertSchmidt'), atol=1e-12)
+        assert np.allclose(torch_base_jacobian(root, jac=jac), root.deriv_wrt_params(), atol=1e-12)
+
+
+@pytest.mark.parametrize('jac', [torch.func.jacrev, torch.func.jacfwd], ids=['jacrev', 'jacfwd'])
 def test_rootconj_torch_jacobian(jac):
     rcop = _interior_effect_rootconj()
     assert np.allclose(torch_base_jacobian(rcop, jac=jac), rcop.deriv_wrt_params(), atol=1e-12)
