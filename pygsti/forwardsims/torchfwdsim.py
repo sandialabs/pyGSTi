@@ -43,6 +43,31 @@ except ImportError:
     pass
 
 
+class _ConstantTensorMember:
+    """Store-level adapter for a dense, zero-parameter model member."""
+
+    @staticmethod
+    def torch_base(stateless_data, parameters):
+        return stateless_data[0]
+
+
+def _constant_member_data(member, dtype, device):
+    """Snapshot constants without requiring static classes to inherit Torchable."""
+    import numpy as np
+    from pygsti.modelmembers.povms.povm import POVM
+    from pygsti.modelmembers.instruments.instrument import Instrument
+    from pygsti.modelmembers.instruments.tpinstrument import TPInstrument
+    if isinstance(member, (POVM, Instrument, TPInstrument)):
+        # POVM rows and instrument members must follow their public key order.
+        dense = np.stack([value.to_dense('HilbertSchmidt') for value in member.values()])
+    else:
+        dense = member.to_dense('HilbertSchmidt')
+    dense = np.array(dense, copy=True)
+    if np.iscomplexobj(dense):
+        dtype = torch.complex64 if dtype == torch.float32 else torch.complex128
+    return (torch.as_tensor(dense, dtype=dtype, device=device),)
+
+
 class StatelessCircuit:
     """
     Helper data structure for specifying a quantum circuit (consisting of prep,
@@ -150,11 +175,18 @@ class StatelessModelCircuitStore:
         #   is the same convention model.py itself uses to build these labels (e.g. when expanding
         #   instrument layers in a circuit), so this can't drift out of sync with it.
         for lbl, obj in model._iter_parameterized_objs():
-            assert isinstance(obj, Torchable), \
-                f"TorchForwardSimulator requires every parameterized model member to be Torchable; " \
-                f"{lbl} is a {type(obj)}, which isn't."
-            sld = obj.stateless_data(dtype, device)
-            param_data = (lbl, type(obj), sld)
+            if isinstance(obj, Torchable):
+                sld = obj.stateless_data(dtype, device)
+                member_type = type(obj)
+            elif obj.num_params == 0:
+                sld = _constant_member_data(obj, dtype, device)
+                member_type = _ConstantTensorMember
+            else:
+                raise ValueError(
+                    f"TorchForwardSimulator requires nonconstant model members to be Torchable; "
+                    f"{lbl} is a {type(obj)} with {obj.num_params} parameters."
+                )
+            param_data = (lbl, member_type, sld)
             self.param_metadata.append(param_data)
             if isinstance(obj, (_Instrument, _TPInstrument)):
                 self.instrument_expansions[lbl] = tuple(obj.simplify_operations(lbl).keys())

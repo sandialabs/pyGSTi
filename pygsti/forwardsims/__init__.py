@@ -16,3 +16,4 @@ from .torchfwdsim import TorchForwardSimulator
 from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .termforwardsim import TermForwardSimulator
 from .weakforwardsim import WeakForwardSimulator
+from .probabilityfunction import probability_function, CircuitOutcomes

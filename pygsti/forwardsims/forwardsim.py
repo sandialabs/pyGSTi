@@ -138,6 +138,20 @@ class ForwardSimulator(_NicelySerializable):
             f.model = None  # type: ignore
         return f
 
+    def probability_function(self, layout, backend='numpy', dtype=None, device=None):
+        """Create a parameter-to-probability function with explicit outcome order.
+
+        The NumPy backend wraps this simulator and returns owned arrays; its
+        derivative products use a dense Jacobian. The Torch backend builds a
+        stateless differentiable tensor function from the attached model.
+        Neither backend applies a statistical loss or clips probabilities.
+        Reconstruct the function after changing model or layout structure.
+        """
+        from .probabilityfunction import probability_function
+        if self.model is None:
+            raise ValueError("A probability function requires an attached model")
+        return probability_function(self.model, layout, backend, dtype, device)
+
     @property
     def model(self) -> Union[Model, None]:
         return self._model
