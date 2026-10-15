@@ -23,10 +23,19 @@ class LMOptimizer(Optimizer):
     def __init__(self, **options):
         super().__init__()
         self.legacy = SimplerLMOptimizer(**options)
-        self.array_types = self.legacy.array_types
+        # Replicated entry snapshot and owned outcome, beyond legacy workspace.
+        self.array_types = self.legacy.array_types + ('P', 'P')
         self.called_objective_methods = self.legacy.called_objective_methods
 
     def run(self, objective, profiler, printer):
+        initial = np.array(objective.model.to_vector(), copy=True)
+        try:
+            return self._run_gst(objective, profiler, printer)
+        except BaseException:
+            objective.model.from_vector(initial)
+            raise
+
+    def _run_gst(self, objective, profiler, printer):
         result = self.legacy.run(objective, profiler, printer)
         # The historical adapter uses allclose here. The public result owns an
         # exact accepted point, even after a nearby rejected trial evaluation.
@@ -107,6 +116,6 @@ class LMOptimizer(Optimizer):
     def _from_nice_serialization(cls, state):
         result = cls()
         result.legacy = SimplerLMOptimizer.from_nice_serialization(state['legacy_options'])
-        result.array_types = result.legacy.array_types
+        result.array_types = result.legacy.array_types + ('P', 'P')
         result.called_objective_methods = result.legacy.called_objective_methods
         return result

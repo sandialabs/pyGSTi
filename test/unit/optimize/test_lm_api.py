@@ -17,7 +17,7 @@ def test_default_cast_and_legacy_option_roundtrip():
     assert restored.legacy.tol == optimizer.legacy.tol
     assert restored.legacy.linesearch == optimizer.legacy.linesearch
     assert restored.legacy.lsvec_mode == 'percircuit'
-    assert restored.array_types == optimizer.legacy.array_types
+    assert restored.array_types == optimizer.array_types
     assert restored.called_objective_methods == optimizer.legacy.called_objective_methods
     legacy = SimplerLMOptimizer()
     assert Optimizer.cast(legacy) is legacy
@@ -48,6 +48,8 @@ def test_gst_lm_commits_exact_point_and_reports_interruption(monkeypatch):
     optimizer = LMOptimizer()
     accepted = np.array([1.])
     class Model:
+        def to_vector(self):
+            return self.x.copy()
         def from_vector(self, x):
             self.x = np.array(x, copy=True)
     objective = SimpleNamespace(model=Model())
@@ -59,3 +61,17 @@ def test_gst_lm_commits_exact_point_and_reports_interruption(monkeypatch):
     np.testing.assert_array_equal(objective.model.x, accepted)
     assert returned.outcome.status == OptimizationStatus.INTERRUPTED
     assert returned.outcome.restart_state == {'mu': .1, 'nu': 2.}
+
+
+def test_gst_lm_restores_invocation_entry_after_legacy_failure(monkeypatch):
+    from .test_optimizer_api import _ScalarObjective
+    objective = _ScalarObjective()
+    initial = objective.model.to_vector()
+    optimizer = LMOptimizer()
+    def fail(*args):
+        objective.model.from_vector([9.])
+        raise ArithmeticError('Legacy numerical solve failed')
+    monkeypatch.setattr(optimizer.legacy, 'run', fail)
+    with pytest.raises(ArithmeticError, match='Legacy numerical solve failed'):
+        optimizer.run(objective, None, None)
+    np.testing.assert_array_equal(objective.model.to_vector(), initial)
