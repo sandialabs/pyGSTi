@@ -41,6 +41,8 @@ def solve_on_root(solver, problem, comm):
     need their own explicit distributed execution model. This service operates
     on the standard real NumPy scalar/residual oracles only.
     """
+    from mpi4py import MPI
+
     signatures = comm.allgather((tuple(sorted(problem.capabilities)), problem.num_parameters,
                                  problem.structure is not None))
     if any(signature[2] for signature in signatures):
@@ -60,6 +62,13 @@ def solve_on_root(solver, problem, comm):
             error = ('stale', str(exc))
         except Exception as exc:
             error = ('error', "%s: %s" % (type(exc).__name__, exc))
+        try:
+            MPI.pickle.dumps(error)
+        except Exception as exc:
+            # Serialization must fail locally before the collective starts.
+            # In particular, external domain errors can carry opaque metadata.
+            error = ('error', 'Unserializable evaluation error metadata: %s: %s'
+                     % (type(exc).__name__, exc))
         errors = comm.allgather(error)
         failures = [e for e in errors if e is not None]
         if failures:
@@ -112,8 +121,7 @@ def solve_on_root(solver, problem, comm):
         # Normalize owned arrays before serializing the outcome to workers.
         outcome = OptimizerOutcome(outcome.x, outcome.status, outcome.message,
                                    outcome.diagnostics, outcome.restart_state)
-        import pickle
-        pickle.dumps(outcome, protocol=pickle.HIGHEST_PROTOCOL)
+        MPI.pickle.dumps(outcome)
     except BaseException as exc:
         comm.bcast(('abort', "%s: %s" % (type(exc).__name__, exc)), root=0)
         raise

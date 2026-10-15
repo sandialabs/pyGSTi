@@ -17,8 +17,55 @@ from pygsti.optimize import simplerlm as lm
 wcomm = MPI.COMM_WORLD
 
 
+class _Protocol4OnlyRestart:
+    def __reduce_ex__(self, protocol):
+        if protocol != 4:
+            raise ValueError('This restart state requires pickle protocol 4')
+        return (_Protocol4OnlyRestart, ())
+
+
 class ParallelTest(object):
     # No setup here, must be defined in the derived classes
+
+    def run_optimizer_error_payloads(self):
+        from pygsti.optimize import OptimizationProblem, OptimizerOutcome, OptimizationStatus
+        from pygsti.optimize.collective import solve_on_root, CollectiveEvaluationError
+        from pygsti.optimize.domain import EvaluationDomain, EvaluationDomainError, guard_problem
+        comm = self.ralloc.comm
+        for domain_metadata in (True, False):
+            def value(x):
+                if not domain_metadata and comm.rank == 1 and x[0] == 1.:
+                    raise EvaluationDomainError(x, generation=lambda: None)
+                return float(x @ x)
+            problem = OptimizationProblem([0.], value)
+            if domain_metadata:
+                generation = (lambda: None) if comm.rank == 1 else 0
+                problem = guard_problem(problem, EvaluationDomain(
+                    lambda x: not (comm.rank == 1 and x[0] == 1.), generation=generation))
+            def solve(proxy):
+                try:
+                    proxy.value([1.])
+                except CollectiveEvaluationError as error:
+                    assert 'Unserializable evaluation error metadata' in str(error)
+                else:
+                    raise AssertionError('Unpicklable domain error was not rejected')
+                assert proxy.value([0.]) == 0.
+                return OptimizerOutcome([0.], OptimizationStatus.CONVERGED)
+            outcome = solve_on_root(solve, problem, comm)
+            assert outcome.status == OptimizationStatus.CONVERGED
+            np.testing.assert_array_equal(outcome.x, [0.])
+
+        previous_protocol = MPI.pickle.PROTOCOL
+        try:
+            MPI.pickle.PROTOCOL = 4
+            problem = OptimizationProblem([0.], lambda x: float(x @ x))
+            def solve(proxy):
+                return OptimizerOutcome([0.], OptimizationStatus.CONVERGED,
+                                        restart_state=_Protocol4OnlyRestart())
+            outcome = solve_on_root(solve, problem, comm)
+            assert isinstance(outcome.restart_state, _Protocol4OnlyRestart)
+        finally:
+            MPI.pickle.PROTOCOL = previous_protocol
 
     def test_simulate_data(self):
         comm = self.ralloc.comm
@@ -531,6 +578,7 @@ if __name__ == '__main__':
     tester = PureMPIParallel_Test()
     tester.setup_class()
     tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
+    tester.run_optimizer_error_payloads()
     tester.run_objfn_values('matrix','logl',4)
     tester.run_fills('map', 1, None)
     tester.run_fills('map', 4, None)
