@@ -188,6 +188,28 @@ class RealGSTOptimizerTester(unittest.TestCase):
         self.assertEqual(gst._validate_and_extend_optimizers(
             [optimizer, second], 2, self.model), [optimizer, second])
 
+    def test_protocol_run_uses_external_override_and_stores_fitted_model(self):
+        from pygsti.protocols.protocol import ProtocolData
+        design = gst.GateSetTomographyDesign(
+            smq1Q_XY.processor_spec(), [self.circuits], qubit_labels=(0,))
+        data = ProtocolData(design, self.dataset)
+        default = CallbackOptimizer(lambda problem: self.fail('Default solver was not overridden'))
+        seen = []
+        def solve(problem):
+            seen.append(problem.value(problem.initial_point))
+            return OptimizerOutcome(problem.initial_point, OptimizationStatus.ITERATION_LIMIT,
+                                    'Explicit zero-step demonstration')
+        override = CallbackOptimizer(solve)
+        protocol = gst.GateSetTomography(
+            initial_model=self.model, optimizer=default, gaugeopt_suite={},
+            verbosity=0, name='external')
+        results = protocol.run(data, optimizers=override, disable_checkpointing=True)
+        fitted = results.estimates['external'].models['final iteration estimate']
+        assert seen and all(np.isfinite(seen))
+        assert default.calls == 0
+        assert override.calls == len(seen)
+        np.testing.assert_array_equal(fitted.to_vector(), self.model.to_vector())
+
     def test_later_gradient_optimizer_has_storage_in_iterative_gst(self):
         # The first stage is scalar-only. Planning from only that stage leaves
         # the later objective without derivative storage and makes this fail.
