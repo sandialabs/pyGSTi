@@ -60,6 +60,54 @@ BasisLike = Union[Basis, str]
 
 
 if _TORCH_AVAILABLE:
+    class _HermitianSylvesterSolve(_torch.autograd.Function):
+        """Solve R X + X R = Herm(H), differentiating the equation implicitly.
+
+        The spectral forward never differentiates eigenvectors. Saving R and the
+        output X retains their graphs for higher derivatives. Optional cached
+        eigenvectors/root eigenvalues preserve the square root's minimum-norm
+        first-derivative convention, including a positive eigenvalue cutoff.
+        Higher derivatives are exact only when R is positive definite and no
+        eigenvalues have been removed by that cutoff.
+        """
+        generate_vmap_rule = True
+
+        @staticmethod
+        def forward(root, direction, vectors, roots):
+            if vectors is None:
+                roots, vectors = _torch.linalg.eigh((root + root.mH) / 2)
+            sums = roots.unsqueeze(-1) + roots.unsqueeze(-2)
+            positive = sums > 0
+            weights = _torch.where(positive,
+                                   1 / _torch.where(positive, sums, _torch.ones_like(sums)),
+                                   _torch.zeros_like(sums))
+            direction = (direction + direction.mH) / 2
+            result = vectors @ ((vectors.mH @ direction @ vectors) * weights) @ vectors.mH
+            return (result + result.mH) / 2
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            root, _, vectors, roots = inputs
+            ctx.save_for_backward(root, output, vectors, roots)
+            ctx.save_for_forward(root, output, vectors, roots)
+
+        @staticmethod
+        def backward(ctx, cotangent):
+            root, solution, vectors, roots = ctx.saved_tensors
+            adjoint = _HermitianSylvesterSolve.apply(root, cotangent, vectors, roots)
+            root_gradient = -(adjoint @ solution + solution @ adjoint)
+            return (root_gradient + root_gradient.mH) / 2, adjoint, None, None
+
+        @staticmethod
+        def jvp(ctx, root_direction, rhs_direction, vectors_direction, roots_direction):
+            root, solution, vectors, roots = ctx.saved_tensors
+            root_direction = (root_direction + root_direction.mH) / 2
+            rhs_direction = (rhs_direction + rhs_direction.mH) / 2
+            return _HermitianSylvesterSolve.apply(
+                root, rhs_direction - root_direction @ solution - solution @ root_direction,
+                vectors, roots)
+
+
     class _EffectSqrt(_torch.autograd.Function):
         """
         E ↦ E½ for a Hermitian E whose eigenvalues are clamped to [0, 1], as in
@@ -76,23 +124,29 @@ if _TORCH_AVAILABLE:
         Eigenvalues at or below `tol` are treated as zero, and the derivative's block on them is
         zero, as in :func:`~pygsti.tools.matrixtools.sqrtm_frechet_derivative`: the minimum-norm
         solution of the Sylvester equation. That keeps the map self-adjoint.
+
+        Saving the root output, rather than only detached eigenpairs, also gives exact higher
+        derivatives when every effect eigenvalue is strictly between max(tol, 0) and 1.
+        Higher derivatives at either clipping boundary, or under an active eigenvalue cutoff,
+        are not defined by this convention.
         """
         generate_vmap_rule = True
 
         @staticmethod
         def forward(E: _torch.Tensor, tol: float):
-            vals, V = _torch.linalg.eigh(E)
+            vals, V = _torch.linalg.eigh((E + E.mH) / 2)
             vals = _torch.clamp(vals, 0.0, 1.0)
-            R = (V * _torch.sqrt(vals).to(V.dtype).unsqueeze(0)) @ V.mH
+            R = (V * _torch.sqrt(vals).to(V.dtype).unsqueeze(-2)) @ V.mH
             return R, V, vals
 
         @staticmethod
         def setup_context(ctx, inputs, output):
             _, tol = inputs
-            _, V, vals = output
+            R, V, vals = output
+            roots = _torch.sqrt(_torch.where(vals > tol, vals, _torch.zeros_like(vals)))
             ctx.mark_non_differentiable(V, vals)
-            ctx.save_for_backward(V, vals)
-            ctx.save_for_forward(V, vals)
+            ctx.save_for_backward(R, V, roots)
+            ctx.save_for_forward(R, V, roots)
             ctx.tol = tol
 
         @staticmethod
@@ -106,13 +160,13 @@ if _TORCH_AVAILABLE:
 
         @staticmethod
         def backward(ctx, grad_R, grad_V, grad_vals):
-            V, vals = ctx.saved_tensors
-            return _EffectSqrt._frechet(V, vals, ctx.tol, grad_R), None
+            R, V, roots = ctx.saved_tensors
+            return _HermitianSylvesterSolve.apply(R, grad_R, V, roots), None
 
         @staticmethod
         def jvp(ctx, tangent_E, tangent_tol):
-            V, vals = ctx.saved_tensors
-            return _EffectSqrt._frechet(V, vals, ctx.tol, tangent_E), None, None
+            R, V, roots = ctx.saved_tensors
+            return _HermitianSylvesterSolve.apply(R, tangent_E, V, roots), None, None
 
 
 class RootConjOperator(LinearOperator, _Torchable):
