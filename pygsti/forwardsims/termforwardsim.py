@@ -11,6 +11,7 @@ Defines the TermForwardSimulator calculator class
 #***************************************************************************************************
 
 import importlib as _importlib
+import numbers as _numbers
 import warnings as _warnings
 
 import numpy as _np
@@ -260,7 +261,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return out
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0, layout_creation_circuit_cache=None):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None,
+                      *, derivative_dimension=None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -281,10 +283,16 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         array_types : tuple, optional
             A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
+        derivative_dimensions : int or tuple[int], optional
+            Parameter-space dimension(s) used for probability derivatives. An
+            integer and a one-element tuple select the same dimension. Two
+            equal dimensions are accepted for Hessian axes; unequal axes are
+            unsupported. None or an empty tuple uses the model's parameter
+            dimension for polynomial encoding (including value-only layouts).
+
         derivative_dimension : int, optional
-            Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the circuit outcome probabilities.  This must be
-            non-None when `array_types` contains `'ep'` or `'epp'` types.
+            Historical singular keyword, equivalent to an integer supplied as
+            derivative_dimensions. Do not supply both spellings.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -300,6 +308,27 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         -------
         TermCOPALayout
         """
+        if derivative_dimension is not None:
+            if derivative_dimensions is not None:
+                raise ValueError('Supply only one of derivative_dimensions and derivative_dimension')
+            derivative_dimensions = derivative_dimension
+        if derivative_dimensions is None or (isinstance(derivative_dimensions, tuple)
+                                              and len(derivative_dimensions) == 0):
+            num_params = self.model.num_params
+        elif isinstance(derivative_dimensions, _numbers.Integral):
+            num_params = int(derivative_dimensions)
+        elif isinstance(derivative_dimensions, tuple):
+            if len(derivative_dimensions) not in (1, 2):
+                raise ValueError('Term layouts require one derivative dimension or two equal dimensions')
+            if not all(isinstance(d, _numbers.Integral) for d in derivative_dimensions):
+                raise TypeError('Derivative dimensions must be integers')
+            if len(derivative_dimensions) == 2 and derivative_dimensions[0] != derivative_dimensions[1]:
+                raise ValueError('Term layouts do not support unequal Hessian derivative dimensions')
+            num_params = int(derivative_dimensions[0])
+        else:
+            raise TypeError('Derivative dimensions must be an integer or tuple of integers')
+        if num_params < 0:
+            raise ValueError('Derivative dimensions must be nonnegative')
         #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the
         # memory consumption by using more atoms - every processor still needs to hold the entire
         # output array (until we get gather=False mode) - so for now, just create a layout with
@@ -312,7 +341,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         nprocs = resource_alloc.comm_size
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
 

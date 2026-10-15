@@ -1199,6 +1199,11 @@ def _do_term_runopt(objective, optimizer, printer):
             break  # subiterations have "converged", i.e. there are no failures in prepping => enough paths kept
 
         else:
+            if bFinalIter:
+                # A rebuilt approximation would invalidate the just-packaged
+                # final statistics, and there is no further solve to use it.
+                printer.log('Term-stage path limit reached; retaining the final evaluated path set.')
+                break
             # Try to get more paths if we can and use those regardless of whether there are failures
             #MEM debug_prof.print_memory("do_term_runopt3", True)
             pathSet = mdl.sim.find_minimal_paths_set(layout)  # `mdl.sim` instead of `fwdsim` to

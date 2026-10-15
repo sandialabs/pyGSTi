@@ -1,5 +1,6 @@
 """Term-path restarts use explicit domain failures and solver-owned incumbents."""
 from types import SimpleNamespace
+from unittest import mock
 import numpy as np
 import pytest
 
@@ -7,7 +8,7 @@ from pygsti.algorithms.core import _do_term_runopt
 from pygsti.baseobjs import VerbosityPrinter
 from pygsti.baseobjs.profiler import DummyProfiler
 from pygsti.optimize import (Optimizer, OptimizerOutcome, OptimizationStatus,
-                             EvaluationDomainError, StaleEvaluationDomainError)
+                             OptimizerResult, EvaluationDomainError, StaleEvaluationDomainError)
 
 
 class Model:
@@ -118,3 +119,39 @@ def test_exact_term_simulation_does_not_require_an_approximation_domain():
             return OptimizerOutcome([1.5], OptimizationStatus.CONVERGED)
     result = _do_term_runopt(objective, External(), VerbosityPrinter(0))
     assert result.f == 0
+
+
+@pytest.mark.parametrize('legacy', [False, True])
+@pytest.mark.parametrize('finality', ['stage_budget', 'path_fraction'])
+def test_final_domain_stop_preserves_evaluated_pathset_and_statistics(legacy, finality):
+    objective = Objective()
+    if finality == 'stage_budget':
+        objective.model.sim.max_term_stages = 1
+    else:
+        objective.layout.pathset.allowed_path_fraction = .8
+    final_paths = objective.layout.pathset
+    class External(Optimizer):
+        supports_evaluation_domain = True
+
+        def solve(self, problem):
+            problem.value([1.75])  # valid but not accepted
+            return OptimizerOutcome([1.5], OptimizationStatus.DOMAIN_LIMIT)
+    class LegacyStop(Optimizer):
+        uses_problem_api = False
+
+        def run(self, objective, profiler, printer):
+            x = np.array([1.5])
+            return OptimizerResult(
+                objective, x, objective.fn(x),
+                optimizer_specific_qtys={'msg': 'Objective function out-of-bounds! STOP',
+                                         'mu': 1., 'nu': 2.})
+    simulator = objective.model.sim
+    with mock.patch.object(simulator, 'find_minimal_paths_set',
+                           wraps=simulator.find_minimal_paths_set) as rebuild:
+        result = _do_term_runopt(objective, LegacyStop() if legacy else External(), VerbosityPrinter(0))
+    rebuild.assert_not_called()
+    assert objective.layout.pathset is final_paths
+    assert result.f == objective.fn(result.x)
+    np.testing.assert_array_equal(objective.model.to_vector(), [1.5])
+    if not legacy:
+        assert result.outcome.status == OptimizationStatus.DOMAIN_LIMIT
