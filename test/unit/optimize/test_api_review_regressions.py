@@ -38,6 +38,35 @@ def test_final_outcome_is_revalidated_after_solver_mutation():
     np.testing.assert_array_equal(objective.model.to_vector(), initial)
 
 
+@pytest.mark.parametrize('invalid_value', [np.nan, np.inf, 1.j])
+def test_invalid_final_statistics_restore_entry_model(invalid_value):
+    objective = _ScalarObjective()
+    initial = objective.model.to_vector()
+    def terms(x):
+        objective.model.from_vector(x)
+        return np.array([invalid_value])
+    objective.terms = terms
+    optimizer = CallbackOptimizer(
+        lambda problem: OptimizerOutcome([4.], OptimizationStatus.CONVERGED))
+    with pytest.raises(ValueError, match='finite and real'):
+        optimizer.run(objective, None, None)
+    np.testing.assert_array_equal(objective.model.to_vector(), initial)
+
+
+def test_finite_terms_with_overflowing_sum_restore_entry_model():
+    objective = _ScalarObjective()
+    initial = objective.model.to_vector()
+    def terms(x):
+        objective.model.from_vector(x)
+        return np.array([1e308, 1e308])
+    objective.terms = terms
+    optimizer = CallbackOptimizer(
+        lambda problem: OptimizerOutcome([4.], OptimizationStatus.CONVERGED))
+    with pytest.raises(ValueError, match='statistics overflowed'):
+        optimizer.run(objective, None, None)
+    np.testing.assert_array_equal(objective.model.to_vector(), initial)
+
+
 def test_torch_rejects_unimplemented_model_parameter_interposer():
     pytest.importorskip('torch')
     model = smq1Q_XYI.target_model('full TP', simulator='matrix')

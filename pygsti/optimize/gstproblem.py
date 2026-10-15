@@ -182,15 +182,24 @@ def run_problem_optimizer(optimizer, objective, profiler, printer, *, domain=Non
         # Commit exactly, even when the last oracle call was a rejected trial.
         # Statistics need scalar terms only; never demand a final Jacobian.
         collective_phase(comm, lambda: objective.model.from_vector(outcome.x), 'Final model commit')
-        terms = collective_phase(comm, lambda: np.array(objective.terms(outcome.x), copy=True),
-                                 'Final objective evaluation')
-        value = float(objective.layout.allsum_local_quantity('e', float(terms.sum()), use_shared_mem=False))
-        local_extra = getattr(objective, 'local_ex', objective.ex)
-        unpenalized = terms[:-local_extra] if local_extra else terms
+        def local_statistics():
+            terms = np.array(objective.terms(outcome.x), copy=True)
+            if np.iscomplexobj(terms) or not np.all(np.isfinite(terms)):
+                raise ValueError('Final objective terms must be finite and real')
+            local_extra = getattr(objective, 'local_ex', objective.ex)
+            unpenalized = terms[:-local_extra] if local_extra else terms
+            with np.errstate(over='ignore', invalid='ignore'):
+                statistics = float(terms.sum()), float(unpenalized.sum())
+            if not np.all(np.isfinite(statistics)):
+                raise ValueError('Final local objective statistics overflowed')
+            return statistics
+        local_value, local_unpenalized = collective_phase(
+            comm, local_statistics, 'Final objective evaluation')
+        value = float(objective.layout.allsum_local_quantity('e', local_value, use_shared_mem=False))
         unpenalized_value = float(objective.layout.allsum_local_quantity(
-            'e', float(unpenalized.sum()), use_shared_mem=False))
-        if not np.isfinite(value):
-            raise ValueError("The returned point has a nonfinite objective value")
+            'e', local_unpenalized, use_shared_mem=False))
+        if not np.all(np.isfinite((value, unpenalized_value))):
+            raise ValueError("The returned point has nonfinite objective statistics")
         result = OptimizerResult(
             objective, outcome.x.copy(), value, None, unpenalized_value,
             objective.chi2k_distributed_qty(value),
