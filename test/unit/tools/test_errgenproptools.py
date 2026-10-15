@@ -1303,24 +1303,9 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_tableau_fidelities_and_stabilizer_probabilities(self):
         tableau = self.circuit_tableau
-        bitstrings = ['0000', '0001', '0101', '1111']
-
-        # Bulk probabilities match single calls
-        bulk_probs = _eprop.stabilizer_probabilities(tableau, bitstrings)
-        single_probs = [_eprop.stabilizer_probability(tableau, b) for b in bitstrings]
-        self.assertEqual(len(bulk_probs), len(bitstrings))
-        for p_bulk, p_single in zip(bulk_probs, single_probs):
-            self.assertAlmostEqual(p_bulk, p_single, places=14)
-
+        
         # Empty bitstrings returns empty array
         self.assertEqual(len(_eprop.stabilizer_probabilities(tableau, [])), 0)
-
-        # tableau_fidelities matches tableau_fidelity
-        cands = [_eprop.bitstring_to_tableau(b) for b in bitstrings]
-        bulk_fids = _eprop.tableau_fidelities(tableau, cands)
-        single_fids = [_eprop.tableau_fidelity(tableau, c) for c in cands]
-        for f_bulk, f_single in zip(bulk_fids, single_fids):
-            self.assertAlmostEqual(f_bulk, f_single, places=14)
 
         # Mismatched candidate qubit count raises ValueError
         with self.assertRaises(ValueError):

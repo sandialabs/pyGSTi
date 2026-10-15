@@ -34,7 +34,6 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from pygsti.tools.mptools import (
     determine_num_workers as _determine_num_workers,
     measure_multiprocessing_ipc_latency as _measure_ipc_latency,
-    compute_2d_worker_grid as _compute_2d_worker_grid,
     SharedWorkerPool as _SharedWorkerPool,
     parallel_2d_grid_map as _parallel_2d_grid_map,
     lpt_partition as _lpt_partition,
@@ -42,14 +41,18 @@ from pygsti.tools.mptools import (
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
 )
-import multiprocessing.pool as _mppool
+
 from functools import wraps as _wraps
 from itertools import chain, product
 import math as _math
 from math import factorial
 import sys as _sys
 import time as _time
-from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, cast as _cast
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, cast as _cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import multiprocessing.pool as _mppool
+
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
                                           num_qubits: int) -> tuple[stim.PauliString, ...]:
@@ -600,7 +603,7 @@ def estimate_magnus_peak_memory(
     p1_worker_buffer = min(pairs_per_worker * max_terms_per_pair, max_distinct_terms) * bytes_per_term
 
     if magnus_order == 2:
-        total_bytes = master_base + (w * worker_base) + (p1_worker_buffer if w == 1 else w * p1_worker_buffer)
+        total_bytes = master_base + (w * worker_base) + (w * p1_worker_buffer)
         return int(total_bytes)
 
     # magnus_order == 3: Two-phase parallel evaluation with held columns and outer commutators
@@ -612,7 +615,7 @@ def estimate_magnus_peak_memory(
     p2_worker_buffer = min(outer_per_worker * outer_terms_per_task, max_distinct_terms) * bytes_per_term
 
     worker_buffer = max(p1_worker_buffer, p2_worker_buffer)
-    total_bytes = master_base + held_columns_bytes + (w * worker_base) + (worker_buffer if w == 1 else w * worker_buffer)
+    total_bytes = master_base + held_columns_bytes + (w * worker_base) + (w * worker_buffer)
     return int(total_bytes)
 
 
@@ -674,7 +677,7 @@ def estimate_taylor_peak_memory(
             max_worker_buffer_bytes = max(max_worker_buffer_bytes, current_k_terms * entry_bytes)
 
     retained_bytes = total_retained_terms * entry_bytes
-    total_bytes = master_base + retained_bytes + (w * worker_base) + (max_worker_buffer_bytes if w == 1 else w * max_worker_buffer_bytes)
+    total_bytes = master_base + retained_bytes + (w * worker_base) + (w * max_worker_buffer_bytes)
     return int(total_bytes)
 
 
@@ -1272,7 +1275,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
             for s_lbl, rate in r.items():
                 second_order_str[s_lbl] = second_order_str.get(s_lbl, 0.0) + 0.5 * rate
 
-        # Intermediate prefix row sums and suffix column sums (< 10 ms on master)
+        # Intermediate prefix row sums and suffix column sums
         R = []
         running_row = {}
         for i in range(num_layers):
@@ -3931,39 +3934,39 @@ def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_s
 
 # Courtesy of Gidney 
 # https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
-def tableau_fidelities(target_tableau: stim.Tableau, candidate_tableaus: Sequence[stim.Tableau]) -> _np.ndarray:
+def tableau_fidelities(target_tableau: stim.Tableau, compared_tableaus: Sequence[stim.Tableau]) -> _np.ndarray:
     """
     Calculate the fidelities between a single target stabilizer state and a collection
-    of candidate stabilizer states.
+    of tableaus for stabilizer states to compare with
 
     This function amortizes the overhead of target tableau inversion and TableauSimulator
-    instantiation across all candidate tableaus.
+    instantiation across all compared tableaus.
 
     Parameters
     ----------
     target_tableau : stim.Tableau
         Stim tableau corresponding to the reference/target stabilizer state.
-    candidate_tableaus : sequence of stim.Tableau
-        Collection of stim tableaus corresponding to candidate stabilizer states.
+    compared_tableaus : sequence of stim.Tableau
+        Collection of stim tableaus corresponding to stabilizer states to compare against.
 
     Returns
     -------
     numpy.ndarray
-        1D array of floats representing the fidelity (in probability units) for each candidate tableau.
+        1D array of floats representing the fidelity (in probability units) for each compared tableau.
     """
-    n_candidates = len(candidate_tableaus)
-    if n_candidates == 0:
+    n_compared = len(compared_tableaus)
+    if n_compared == 0:
         return _np.empty(0, dtype=_np.float64)
 
     n_qubits = len(target_tableau)
     inv_target = target_tableau.inverse()
     sim = stim.TableauSimulator()
-    out = _np.empty(n_candidates, dtype=_np.float64)
+    out = _np.empty(n_compared, dtype=_np.float64)
 
-    for i, cand in enumerate(candidate_tableaus):
-        if len(cand) != n_qubits:
-            raise ValueError(f"Candidate tableau qubit count ({len(cand)}) must match target tableau ({n_qubits}).")
-        t3 = inv_target * cand
+    for i, comp in enumerate(compared_tableaus):
+        if len(comp) != n_qubits:
+            raise ValueError(f"Compared tableau qubit count ({len(comp)}) must match target tableau ({n_qubits}).")
+        t3 = inv_target * comp
         sim.set_inverse_tableau(t3)
         p = 1.0
         for q in range(n_qubits):
@@ -5203,8 +5206,8 @@ def stabilizer_probabilities(tableau: stim.Tableau, bitstrings: Sequence[str]) -
     """
     if len(bitstrings) == 0:
         return _np.empty(0, dtype=_np.float64)
-    candidate_tableaus = [bitstring_to_tableau(b) for b in bitstrings]
-    return tableau_fidelities(tableau, candidate_tableaus)
+    bitstring_tableaus = [bitstring_to_tableau(b) for b in bitstrings]
+    return tableau_fidelities(tableau, bitstring_tableaus)
 
 
 def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> float:
@@ -6001,7 +6004,7 @@ def estimate_bulk_alpha_peak_memory(
     worker_base_rss = 45 * 1024 * 1024 if w > 1 else 0
     tableau_bytes = (n_qubits ** 2 // 8 + 64) * 8
     sub_matrix_bytes = (n_outcomes * n_errorgens * 8) // max(1, w)
-    total_bytes = master_base + output_matrix_bytes + (w * worker_base_rss) + (sub_matrix_bytes if w == 1 else w * sub_matrix_bytes) + w * tableau_bytes
+    total_bytes = master_base + output_matrix_bytes + (w * worker_base_rss) + (w * sub_matrix_bytes) + w * tableau_bytes
     return int(total_bytes)
 
 
