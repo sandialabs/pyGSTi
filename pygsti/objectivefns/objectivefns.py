@@ -4712,17 +4712,21 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #
             terms_jac[off:off+1, :] = 0.0
             if self.callable_penalty_factor:
-                vec0 = self.model.to_vector()
+                vec0 = self.model.to_vector().copy()
                 val0 = self.callable_penalty(self.model)
                 eps = 1e-7
-                for i in range(vec0.size):
-                    vec0[i] += eps
-                    self.model.from_vector(vec0)
-                    val = self.callable_penalty(self.model)
-                    dval = (val - val0) / eps
-                    terms_jac[off, i] = dval
-                    vec0[i] -= eps
-                self.model.from_vector(vec0)
+                entry = vec0.copy()
+                try:
+                    # Columns are local to this layout's parameter slice.
+                    for local_i, i in enumerate(_np.arange(vec0.size)[wrtslice]):
+                        vec0[i] = entry[i] + eps
+                        self.model.from_vector(vec0)
+                        val = self.callable_penalty(self.model)
+                        dval = self.callable_penalty_factor * (val - val0) / eps
+                        terms_jac[off, local_i] = dval
+                        vec0[i] = entry[i]
+                finally:
+                    self.model.from_vector(entry)
             off += 1
             pass
 
