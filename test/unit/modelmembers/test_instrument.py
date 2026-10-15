@@ -440,6 +440,17 @@ class RootConjDerivativeTester(BaseCase):
         for rcop in rcops.values():
             self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
 
+    def test_matches_central_differences_in_tensor_product_basis(self):
+        from pygsti.modelpacks import smq2Q_XYICNOT
+        basis = smq2Q_XYICNOT.target_model('static').basis
+        # A modelpack's TensorProdBasis has a different equivalent std ordering
+        # from BuiltinBasis('std', 16). Both transforms must use the latter.
+        E0 = np.diag([0.8, 0.2, 0.2, 0.8]).astype(complex)
+        roots = self._root_conj({'p0': E0, 'p1': np.eye(4) - E0}, basis,
+                                perturbation=0.02, seed=75)
+        for root in roots.values():
+            self.assertArraysAlmostEqual(root.deriv_wrt_params(), _central_difference_deriv(root), places=7)
+
     def test_wrt_filter(self):
         E0 = np.diag([0.7, 0.3]).astype(complex)
         rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05)['p0']

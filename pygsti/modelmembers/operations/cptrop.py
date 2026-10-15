@@ -237,8 +237,11 @@ class RootConjOperator(LinearOperator, _Torchable):
         n = R.shape[0]
         dsuperop_std = (_np.einsum('pik,jl->pijkl', dR, R.T)
                         + _np.einsum('ik,plj->pijkl', R, dR)).reshape(num_cols, n * n, n * n)
-        to_basis = _BuiltinBasis('std', self.dim).create_transform_matrix(self._basis)
-        from_basis = self._basis.create_transform_matrix('std')
+        std_basis = _BuiltinBasis('std', self.dim)
+        to_basis = std_basis.create_transform_matrix(self._basis)
+        # Pass the same explicit basis in both directions: a string would
+        # preserve tensor-product structure and use a different std ordering.
+        from_basis = self._basis.create_transform_matrix(std_basis)
         dsuperop = (to_basis @ dsuperop_std @ from_basis).real
         return dsuperop.reshape(num_cols, self.dim**2).T
 
@@ -283,7 +286,7 @@ class RootConjOperator(LinearOperator, _Torchable):
         std_basis = _BuiltinBasis('std', dim)
         to_np = _np.ascontiguousarray(std_basis.create_transform_matrix(self._basis))
         toMx  = _torch.from_numpy(to_np).to(dtype=cdtype, device=device)
-        from_np = _np.ascontiguousarray(self._basis.create_transform_matrix('std'))
+        from_np = _np.ascontiguousarray(self._basis.create_transform_matrix(std_basis))
         fromMx  = _torch.from_numpy(from_np).to(dtype=cdtype, device=device)
         return (type(self._effect), self._effect.stateless_data(real_dtype, device), B, toMx, fromMx,
                 self.DERIV_EIGTOL)
