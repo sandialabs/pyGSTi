@@ -15,15 +15,7 @@ kernelspec:
 
 In this tutorial we provide a comprehensive guide to multicore parallelization and performance optimization options across pyGSTi's error generator propagation module.
 
-As circuit depth, qubit count, or noise model density grows—particularly when evaluating higher-order BCH/Magnus expansions, computing operator Taylor expansions, or evaluating probabilities across many observables—the computational workload of error generator propagation increases significantly. pyGSTi includes multicore multiprocessing parallelization across all core propagation and sensitivity routines to accelerate these workflows.
-
-Key parallelization capabilities include:
-- **Zero-overhead sequential fallback**: Parallelization is opt-in; sequential paths remain lightweight and completely free of multiprocessing overhead.
-- **Automated hardware detection**: Automatically infers available physical CPU cores while honoring container cgroup quotas on Linux, Windows, and macOS (`num_workers="auto"`).
-- **Worker pool reuse**: Pre-warmed `SharedWorkerPool` instances can be shared across sequential pipeline stages, eliminating repetitive process spawn and teardown costs.
-- **Dynamic load-balanced scheduling**: Heavy tasks like pairwise commutators in Magnus expansion are decomposed using budget capacity slicing and Longest Processing Time (LPT) bin-packing.
-- **Bulk evaluation vectorization**: Taylor series expansions are computed once and reused across batches of computational basis bitstrings or Pauli observables.
-- **Machine-specific calibration**: Hardware-specific profiling (`optimize_errorgen_propagation_parallelization`) calibrates exact crossover thresholds for your system's CPU speed and IPC latency.
+As circuit depth, qubit count, or the number of terms in a noise model grows—particularly when evaluating higher-order BCH/Magnus expansions, computing operator Taylor expansions, or evaluating many probabilities or pauli observables—the computational workload of error generator propagation increases significantly. pyGSTi includes multicore multiprocessing parallelization across all core propagation and sensitivity routines to accelerate these workflows.
 
 ```{code-cell} ipython3
 import pygsti
@@ -38,7 +30,7 @@ from pygsti.tools.mptools import SharedWorkerPool, warn_if_insufficient_memory
 
 ## Model and Circuit Setup
 
-To demonstrate parallel execution, we first construct a 4-qubit crosstalk-free processor and a random weight-2 H+S (coherent + Pauli stochastic) error model.
+To demonstrate parallel execution, we first construct a 4-qubit crosstalk-free model with random weight-2 H+S (coherent + Pauli stochastic) errors.
 
 ```{code-cell} ipython3
 num_qubits = 4
@@ -69,34 +61,34 @@ print(c)
 All primary propagation and sensitivity functions accept two optional arguments to control parallel execution:
 
 - `num_workers`: 
-  - `None` (default): Runs strictly sequentially on the main thread, incurring zero IPC or serialization overhead.
+  - `None` (default): Runs strictly sequentially on the main thread.
   - `int`: An explicit number of worker processes to spawn (e.g., `num_workers=4`).
   - `"auto"`: Automatically queries physical hardware cores, reserving one core on $\ge 4$-core systems for the operating system and master thread while strictly respecting container cgroup quotas.
 - `pool`: An optional existing multiprocessing pool (`SharedWorkerPool` or `multiprocessing.Pool`) to reuse across calls. When `pool` is provided, `num_workers` is inferred directly from the pool.
 
 Functions supporting parallel execution include:
 - `ErrorGeneratorPropagator.propagate_errorgens` and `propagate_errorgens_bch`: Parallelizes circuit layer propagation across workers.
-- `errgenproptools.magnus_expansion` and `zassenhaus_formula`: Parallelizes pairwise layer commutators and outer accumulated commutators using capacity-sliced LPT bin-packing.
-- `errgenproptools.error_generator_taylor_expansion` and `_commuting_product`: Parallelizes operator powers and compositions via bilinear term slicing.
-- `errgenproptools.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations`: Parallelizes 2D sensitivity grids across outcomes/observables while reusing intermediate Taylor expansions.
-- `errgenproptools.bulk_alpha` and `bulk_alpha_pauli`: 2D process grid partitioning across outcomes and error generators.
+- `errgenproptools.magnus_expansion` and `zassenhaus_formula`: Parallelizes pairwise layer commutators and outer accumulated commutators.
+- `errgenproptools.error_generator_taylor_expansion` and `_commuting_product`: Parallelizes operator powers and compositions.
+- `errgenproptools.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations`: Parallelizes computations across outcomes/observables while reusing intermediate results.
+- `errgenproptools.bulk_alpha` and `bulk_alpha_pauli`: Parallelizes across outcomes/observables and error generators.
 
 ## Pipeline Pool Reuse with `SharedWorkerPool`
 
-In multi-stage workflows (such as propagating layers, computing a second- or third-order Magnus expansion, and calculating multiple outcome probabilities), spinning up and tearing down a multiprocessing pool for each function call introduces substantial process-creation latency.
+In multi-stage workflows (such as propagating layers, computing a second- or third-order Magnus expansion, and calculating multiple outcome probabilities), spinning up and tearing down a multiprocessing pool for each function call introduces substantial process-creation overhead.
 
-To eliminate this overhead, pyGSTi provides `SharedWorkerPool`. When initialized as a context manager, workers are spawned once and pre-warmed with essential modules (`stim`, `numpy`, and pyGSTi Cython extensions):
+To eliminate this overhead, pyGSTi provides `SharedWorkerPool`. When initialized as a context manager, workers are spawned once and optionally pre-warmed with essential modules. These modules can be manually specified, but those relevant for error generator propagation are given by `eprop._EGPROP_PREWARM_PACKAGES` (`stim`, `numpy`, and pyGSTi Cython extensions):
 
 ```{code-cell} ipython3
 # Reusing a single pre-warmed worker pool across sequential pipeline stages:
-with SharedWorkerPool(num_workers="auto") as pool:
+with SharedWorkerPool(num_workers="auto", prewarm_packages=_EGPROP_PREWARM_PACKAGES) as pool:
     # 1. Parallel circuit layer propagation
     propagated_layers = errorgen_propagator.propagate_errorgens(c, pool=pool)
 
-    # 2. Parallel second-order Magnus expansion with load-balanced task slicing
+    # 2. Parallel second-order Magnus expansion
     effective_generator = eprop.magnus_expansion(propagated_layers, magnus_order=2, pool=pool)
 
-    # 3. Parallel third-order Magnus expansion (Phase 1 pairwise reduction + Phase 2 outer commutators)
+    # 3. Parallel third-order Magnus expansion
     effective_generator_order3 = eprop.magnus_expansion(propagated_layers, magnus_order=3, pool=pool)
 
     # 4. Parallel probability calculation for specific bitstrings of interest
@@ -111,23 +103,6 @@ with SharedWorkerPool(num_workers="auto") as pool:
         effective_generator, c, paulis=paulis, order=2, pool=pool
     )
     print("Pauli expectations:", expectations)
-```
-
-## Bulk Evaluations and Observable Batching
-
-When evaluating outcome probabilities or Pauli expectation values across multiple targets, passing observables in bulk allows pyGSTi to compute the error generator Taylor series expansion once and evaluate the sensitivity grid across all requested targets:
-
-- `approximate_stabilizer_probabilities(..., bitstrings=...)`: Rather than calling `approximate_stabilizer_probability` in a Python loop, pass a sequence of bitstrings to evaluate. If `bitstrings` is omitted, the exhaustive distribution over all $2^n$ computational basis states is computed (a warning is issued if $n > 10$ due to exponential scaling).
-- `approximate_stabilizer_pauli_expectations(..., paulis=...)`: Accepts a sequence of Pauli observables (as strings or `stim.PauliString` objects) and computes all expectation values in a single vectorized pass.
-
-```{code-cell} ipython3
-# Vectorized evaluation of multiple Pauli expectations
-pauli_list = ["XXXX", "YYYY", "ZZZZ", "ZIII"]
-bulk_expectations = eprop.approximate_stabilizer_pauli_expectations(
-    effective_generator, c, paulis=pauli_list, order=2, num_workers=2
-)
-for p, val in zip(pauli_list, bulk_expectations):
-    print(f"< {p} > = {val:.6f}")
 ```
 
 ## Automated Threshold Cutoffs & Manual Configuration
@@ -149,12 +124,13 @@ eprop.configure_errorgen_propagation_parallelization(force_parallel=True)
 eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 ```
 
-## Dynamic Hardware Calibration with `optimize_errorgen_propagation_parallelization`
+## Dynamic Hardware Calibration with `optimize_errorgen_propagation_parallelization` (EXPERIMENTAL)
 
 While the built-in multi-scale threshold table provides sensible defaults across small, medium, and large qubit systems, optimal crossover thresholds depend on machine-specific hardware characteristics:
 - Single-threaded CPU throughput ($\tau_\alpha$) for stabilizer tableau operations
 - Inter-process communication (IPC) dispatch latency ($T_{\text{IPC}}$), which varies significantly across operating systems and start methods (`fork` on Linux vs. `spawn` on macOS/Windows)
 - Memory bus bandwidth and core counts
+- Etc.
 
 To calibrate thresholds empirically for your specific host machine, you can run `optimize_errorgen_propagation_parallelization`:
 
@@ -166,7 +142,9 @@ print(f"Measured round-trip IPC latency:      {calib_results['t_ipc_s']*1000:.3f
 print(f"Calibrated crossover threshold (KM):  {calib_results['threshold_KM']:,} operations")
 ```
 
-When `set_as_default=True` (the default), the calibrated crossover thresholds are cached in the active session and supersede the built-in reference defaults for subsequent `bulk_alpha`, `bulk_alpha_pauli`, and probability calculations. You can pass `num_qubits`, a `Circuit`, or a `Model` to tailor the profiling to your specific circuit geometry.
+`optimize_errorgen_propagation_parallelization` runs a set of lightweight microbenchmarks that can be tailored to your problem size in order to measure empirical system performance characteristics that can be used to compute when parallelization is expected to be a net win. When `set_as_default=True` (the default), the calibrated crossover thresholds are cached for the active session and supersede the built-in reference defaults. You can pass `num_qubits`, a `Circuit`, or a `Model` to tailor the profiling to your specific circuit geometry.
+
+Note: Your configuration can be reset to the default settings at any time using `configure_errorgen_propagation_parallelization`. The empirical profiling performed by `optimize_errorgen_propagation_parallelization` is still experimental, so your mileage may vary.
 
 ```{code-cell} ipython3
 # Reset back to built-in reference defaults when finished:
@@ -175,14 +153,16 @@ eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
 ## Peak Memory Estimation and Headroom Warnings
 
-High-order Magnus expansions and Taylor series compositions on dense multiqubit circuits can generate large dictionaries of elementary error generators. To protect against out-of-memory (OOM) termination on shared compute nodes or memory-constrained CI environments, pyGSTi provides analytical peak memory estimators:
+High-order Magnus expansions and Taylor series compositions on dense multiqubit circuits can generate large dictionaries of elementary error generators. To protect against out-of-memory (OOM) errors pyGSTi provides analytical peak memory estimators:
 
-- `estimate_magnus_peak_memory(n_qubits, num_layers, avg_terms_per_layer, num_workers, magnus_order)`
-- `estimate_taylor_peak_memory(n_qubits, num_terms, order, num_workers)`
+- `eprop.estimate_magnus_peak_memory(n_qubits, num_layers, avg_terms_per_layer, num_workers, magnus_order)`
+- `eprop.estimate_taylor_peak_memory(n_qubits, num_terms, order, num_workers)`
+- `eprop.estimate_bulk_alpha_peak_memory(n_qubits, n_errorgens, n_outcomes, num_workers)`
+- `pygsti.errorgenpropagation.errorpropagator.estimate_propagation_peak_memory(n_qubits, n_layers, avg_errorgens_per_layer, num_workers)`
 
-These models account for dictionary bucket allocations, `LocalStimErrorgenLabel` footprint, process worker concurrency, and the theoretical upper bounds on terms emitted by commutators ($\le 4$ terms) and anticommutators ($\le 7$ terms).
+These models account for dictionary overhead, `LocalStimErrorgenLabel` memory footprint, overhead/duplication among workers. Note that as these functions don't know a priori the precise outputs, the computed values should be intepretted as upper bounds. Foe example by assuming the maximal number of terms of possible terms for each individual commutator ($\le 4$ terms) and anticommutator ($\le 7$ terms) between elementary error generators.
 
-If an estimated workload exceeds available system memory, pyGSTi automatically emits a descriptive `ResourceWarning`:
+If an estimated workload exceeds available system memory, pyGSTi automatically raises a `ResourceWarning`:
 
 ```{code-cell} ipython3
 # Estimate memory footprint for a 50-layer, 4-qubit Magnus expansion:
