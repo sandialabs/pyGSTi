@@ -34,7 +34,8 @@ from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti.optimize.optimizer import Optimizer as _Optimizer
+from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
 from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti import forwardsims as _fwdsims
 
@@ -613,7 +614,7 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
     model : Model
         the best-fit model.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
+    optimizer = _Optimizer.cast(optimizer)
     objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
     array_types = optimizer.array_types + \
         objective_function_builder.compute_array_types(optimizer.called_objective_methods, start_model.sim)
@@ -660,7 +661,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     objfn_store : MDCObjectiveFunction
         the objective function and store containing the best-fit model evaluated at the best-fit point.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
+    optimizer = _Optimizer.cast(optimizer)
     comm = mdc_store.resource_alloc.comm
     profiler = mdc_store.resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -888,7 +889,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     temp_optimizers = []
     for  opt in optimizers:
-        temp_optimizers.append(opt if isinstance(opt, _Optimizer) else _SimplerLMOptimizer.cast(opt))
+        temp_optimizers.append(_Optimizer.cast(opt))
     optimizers = temp_optimizers
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
@@ -914,10 +915,10 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
    
     #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
     #in precomputing layouts:
-    method_names = optimizers[0].called_objective_methods
-    array_types = optimizers[0].array_types + \
-                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
-                                  for builder in iteration_objfn_builders + final_objfn_builders])
+    array_types = _max_array_types([
+        opt.array_types + builder.compute_array_types(opt.called_objective_methods, mdl.sim)
+        for opt in optimizers
+        for builder in iteration_objfn_builders + final_objfn_builders])
     
     #precompute the COPA layouts. During the layout construction there are memory availability checks,
     #So by doing it this way we should be able to reduce the number of instances of running out of memory before the end.
@@ -1027,7 +1028,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     profiler.add_time('run_iterative_gst: total time', tStart)
 
 
-def _do_runopt(objective, optimizer, printer):
+def _do_runopt(objective, optimizer, printer, domain=None):
     """
     Runs the core model-optimization step within a GST routine by optimizing
     `objective` using `optimizer`.
@@ -1058,7 +1059,10 @@ def _do_runopt(objective, optimizer, printer):
 
     #Perform actual optimization
     tm = _time.time()
-    opt_result = optimizer.run(objective, profiler, printer)
+    if domain is None:
+        opt_result = optimizer.run(objective, profiler, printer)
+    else:
+        opt_result = optimizer.run(objective, profiler, printer, domain=domain)
     profiler.add_time("run_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:
@@ -1108,6 +1112,11 @@ def _do_term_runopt(objective, optimizer, printer):
 
     mdl = objective.model
     fwdsim = mdl.sim
+    problem_api = optimizer.uses_problem_api
+    if problem_api and objective.layout.pathset and not optimizer.supports_evaluation_domain:
+        raise NotImplementedError(
+            'Term simulation requires an optimizer declaring evaluation-domain support; '
+            'LMOptimizer preserves the existing term-simulation implementation')
 
     #MEM from ..baseobjs.profiler import Profiler
     #MEM debug_prof = Profiler(objective.resource_alloc.comm)
@@ -1155,12 +1164,31 @@ def _do_term_runopt(objective, optimizer, printer):
     for sub_iter in range(maxTermStages):
 
         bFinalIter = (sub_iter == maxTermStages - 1) or (pathFraction > pathFractionThreshold)
-        optimizer.oob_check_interval = oob_check_interval
-        # don't stop early on last iter - do as much as possible.
-        optimizer.oob_action = "reject" if bFinalIter else "stop"
-        opt_result = _do_runopt(objective, optimizer, printer)
+        if problem_api and pathSet:
+            from pygsti.optimize.domain import EvaluationDomain
+            from pygsti.optimize.outcome import OptimizationStatus
+            def paths_valid(point):
+                objective.lsvec(point)
+                return bool(fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, verbosity=0))
+            domain = EvaluationDomain(paths_valid, 'The selected simulator paths are insufficient',
+                                      generation=sub_iter)
+            try:
+                opt_result = _do_runopt(objective, optimizer, printer, domain)
+            finally:
+                domain.invalidate()
+            stopped_for_paths = opt_result.outcome.status == OptimizationStatus.DOMAIN_LIMIT
+        elif problem_api:
+            opt_result = _do_runopt(objective, optimizer, printer)
+            stopped_for_paths = False
+        else:
+            optimizer.oob_check_interval = oob_check_interval
+            # don't stop early on last iter - do as much as possible.
+            optimizer.oob_action = "reject" if bFinalIter else "stop"
+            opt_result = _do_runopt(objective, optimizer, printer)
+            stopped_for_paths = (opt_result.optimizer_specific_qtys['msg']
+                                 == "Objective function out-of-bounds! STOP")
 
-        if not opt_result.optimizer_specific_qtys['msg'] == "Objective function out-of-bounds! STOP":
+        if not stopped_for_paths:
             if not bFinalIter:
                 printer.log("Term-states Converged!")  # we're done! the path integrals used were sufficient.
             elif pathFraction > pathFractionThreshold:
@@ -1178,7 +1206,8 @@ def _do_term_runopt(objective, optimizer, printer):
             mdl.sim.select_paths_set(layout, pathSet)  # ensure paramvec is updated
             #MEM debug_prof.print_memory("do_term_runopt5", True)
             pathFraction = pathSet.allowed_path_fraction
-            optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
+            if not problem_api:
+                optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']
             printer.log("After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
                         (pathSet.num_failures, 100 * pathFraction))
 

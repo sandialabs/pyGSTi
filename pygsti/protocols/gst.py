@@ -1409,10 +1409,7 @@ class GateSetTomography(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
-        if isinstance(optimizer, _opt.Optimizer):
-            self.optimizer = optimizer
-        else:
-            self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
+        self.optimizer = _opt.Optimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
 
@@ -1518,7 +1515,7 @@ class GateSetTomography(_proto.Protocol):
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
         else:
-            optimizers = _validate_and_extend_optimizers(self.optimizer, len(circuit_lists), mdl_start)
+            optimizers = _validate_and_extend_optimizers(optimizers, len(circuit_lists), mdl_start)
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -1928,7 +1925,7 @@ class StandardGST(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
-        self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
+        self.optimizer = _opt.Optimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
@@ -2751,27 +2748,8 @@ def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _Simpl
     -------
     optimizers: list[_Optimizer]
     """
-    if isinstance(optimizers, (_opt.Optimizer, dict)):    
-        optimizers = [optimizers]*size
-    if isinstance(optimizers, list):
-        if len(optimizers) == 1:
-            optimizers = optimizers*size
-    else:
-        if not isinstance(optimizers, (list, dict)):
-            raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
-        temp_optimizers = []
-        for optimizer in optimizers:
-            if isinstance(optimizer, _SimplerLMOptimizer) or isinstance(optimizer, _CustomLMOptimizer):
-                temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-
-            else:
-                if optimizer is None:
-                    temp_optimizer = {}
-                else:
-                    temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
-        optimizers = temp_optimizers
-    return optimizers
+    normalized = _alg.validate_and_extend_optimizer(optimizers, size)
+    return [_opt.Optimizer.cast(opt) for opt in normalized]
     
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """

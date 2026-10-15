@@ -11,8 +11,14 @@ pyGSTi Optimization Python Package
 #***************************************************************************************************
 
 from .arraysinterface import *
+from .optimizer import Optimizer, OptimizerResult
 from .customlm import *
 from .simplerlm import *
+from .problem import OptimizationProblem, ResidualLinearization
+from .outcome import OptimizerOutcome, OptimizationStatus
+from .gstproblem import GSTOptimizationContext, default_problem_factory
+from .lm import LMOptimizer
+from .domain import EvaluationDomain, EvaluationDomainError, StaleEvaluationDomainError
 from .customsolve import *
 # Import the most important/useful routines of each module into
 # the package namespace

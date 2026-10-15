@@ -19,7 +19,7 @@ import scipy as _scipy
 
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
-from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
+from pygsti.optimize.optimizer import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -189,6 +189,8 @@ class CustomLMOptimizer(Optimizer):
             'lsvec_mode': self.lsvec_mode
         })
         return state
+
+    uses_problem_api = False
 
     @classmethod
     def _from_nice_serialization(cls, state):
