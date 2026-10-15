@@ -1,7 +1,9 @@
 import math
 import multiprocessing as mp
+import multiprocessing.pool as _mppool
 import os
 import sys
+import time
 import unittest
 import unittest.mock as mock
 import warnings
@@ -41,6 +43,11 @@ def _reduce_dicts(d1, d2):
 
 
 def _get_pid(_=None):
+    return os.getpid()
+
+
+def _slow_get_pid(_=None):
+    time.sleep(0.01)
     return os.getpid()
 
 
@@ -290,10 +297,14 @@ class MPToolsTester(BaseCase):
 
     def test_shared_worker_pool_process_id_reuse(self):
         with mpt.SharedWorkerPool(num_workers=4) as pool:
-            pids_1 = set(pool.map(_get_pid, list(range(16))))
-            pids_2 = set(pool.map(_get_pid, list(range(16))))
+            # Map across workers; 10ms sleep prevents fast workers from draining all tasks under CPU contention
+            pids_1 = set(pool.map(_slow_get_pid, list(range(16)), chunksize=1))
+            pids_2 = set(pool.map(_slow_get_pid, list(range(16)), chunksize=1))
             self.assertEqual(pids_1, pids_2)
             self.assertEqual(len(pids_1), 4)
+            if isinstance(pool._pool, _mppool.Pool):
+                pool_pids = {w.pid for w in pool._pool._pool}
+                self.assertEqual(pids_1, pool_pids)
 
     def test_get_available_system_memory(self):
         avail = mpt.get_available_system_memory()
