@@ -1618,7 +1618,14 @@ class GateSetTomography(_proto.Protocol):
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
-        #TODO: add qtys about fit from optima_list
+        # Keep small, serializable termination summaries. Historical optimizers
+        # and iterations restored from old checkpoints may have no outcome.
+        # Arbitrary solver diagnostics/restart objects remain on low-level results.
+        optimization_status = [None] * starting_idx + [
+            {'status': optimum.outcome.status.value, 'message': optimum.outcome.message,
+             'objective': float(optimum.f)}
+            if getattr(optimum, 'outcome', None) is not None else None
+            for optimum in optima_list]
 
         ret = ModelEstimateResults(data, self)
 
@@ -1641,6 +1648,7 @@ class GateSetTomography(_proto.Protocol):
             target_model.sim = simulator
 
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
+        estimate.extra_parameters['optimization_status'] = optimization_status
         ret.add_estimate(estimate, estimate_key=self.name)
 
         #Add some better handling for when gauge optimization is turned off (current code path isn't working.)

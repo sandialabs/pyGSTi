@@ -1064,6 +1064,9 @@ def _do_runopt(objective, optimizer, printer, domain=None):
     else:
         opt_result = optimizer.run(objective, profiler, printer, domain=domain)
     profiler.add_time("run_gst_fit: optimize", tm)
+    outcome = getattr(opt_result, 'outcome', None)
+    if outcome is not None:
+        printer.log('Optimizer status = %s: %s' % (outcome.status.value, outcome.message), 1)
 
     if printer.verbosity > 0:
         nModelParams = mdl.num_params  # *don't* use num_modeltest_params here because it could be very slow

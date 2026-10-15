@@ -133,6 +133,8 @@ print(result.outcome.status, result.outcome.message)
 
 The solver returns an `OptimizerOutcome`, containing a point, explicit termination status, message, diagnostics, and optional solver-specific restart state. The GST kernel returns the existing `OptimizerResult`, augmented with `outcome`. It recomputes configured scalar statistics at the exact returned point, including penalty-free statistics; it does not require a final residual or Jacobian from a scalar-only solver. If construction, solving, or final validation raises, the entry model parameters are restored.
 
+GST run logs show the termination status and reason. Protocol estimates retain one concise summary per circuit iteration in `estimate.parameters['optimization_status']`, containing status, message, and final objective. A summary describes the last optimizer/objective run for that iteration; `None` denotes a historical optimizer or checkpoint without this information. Arbitrary runtime diagnostics and restart objects remain on low-level results rather than being implicitly serialized into estimates.
+
 ## Supply a different numerical representation
 
 `Optimizer(problem_factory=factory, ...)` calls `factory(context, required_operations)` after the legacy objective has been configured. The context provides `objective`, `model`, `dataset`, `circuits`, `resource_alloc`, `profiler`, `printer`, and an optional approximation `domain`.

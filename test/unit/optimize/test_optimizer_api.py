@@ -209,6 +209,11 @@ class RealGSTOptimizerTester(unittest.TestCase):
         assert default.calls == 0
         assert override.calls == len(seen)
         np.testing.assert_array_equal(fitted.to_vector(), self.model.to_vector())
+        statuses = results.estimates['external'].parameters['optimization_status']
+        assert len(statuses) == 1
+        assert statuses[0]['status'] == 'iteration_limit'
+        assert statuses[0]['message'] == 'Explicit zero-step demonstration'
+        assert np.isfinite(statuses[0]['objective'])
 
     def test_later_gradient_optimizer_has_storage_in_iterative_gst(self):
         # The first stage is scalar-only. Planning from only that stage leaves
