@@ -151,3 +151,11 @@ def test_invalid_runner_settings_create_no_artifacts(tmp_path, monkeypatch, vari
     with pytest.raises(ValueError):
         runner.run_profile(ValidationProfile.inclass(3, (1,)))
     assert not root.exists()
+
+
+def test_local_spectator_override_is_rejected_before_creating_artifacts(tmp_path, monkeypatch):
+    monkeypatch.setenv('PYGSTI_SGST_ARTIFACT_DIR', str(tmp_path / 'runs'))
+    monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_TERM', 'H|ZZ:0,1')
+    with pytest.raises(ValueError, match='does not reach beyond'):
+        runner.run_profile(ValidationProfile.outclass(3, (1,)))
+    assert not (tmp_path / 'runs').exists()

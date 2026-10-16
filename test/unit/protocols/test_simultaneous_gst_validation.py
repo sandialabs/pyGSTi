@@ -134,11 +134,8 @@ def test_held_out_circuits_are_distinct_so_the_mean_is_not_reweighted():
 
 def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
     """A term confined to the gate's own qubits is local error, not crosstalk."""
-    profile = ValidationProfile.outclass(
-        nqubits=3, max_lengths=(1, 2), spectator_term=('H', 'ZZ:0,1'))
-
     with pytest.raises(ValueError, match='does not reach beyond'):
-        build_fit_and_datagen_models(profile)
+        ValidationProfile.outclass(nqubits=3, max_lengths=(1, 2), spectator_term=('H', 'ZZ:0,1'))
 
 
 def test_deepest_held_out_circuits_come_from_the_largest_max_length():
@@ -279,6 +276,7 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
 
 
 @pytest.mark.parametrize('scenario, changes', [
+    ('outclass', {'nqubits': 2}),
     ('inclass', {'spectator_error': 0.01}),
     ('inclass', {'spectator_term': ('H', 'Z:2')}),
     *[('outclass', {'spectator_error': value}) for value in (0.0, np.nan, np.inf, -np.inf)],

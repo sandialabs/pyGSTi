@@ -57,6 +57,25 @@ def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
     return name if model_terms == DEFAULT_MODEL_TERMS else f'{name}_{model_terms}'
 
 
+def spectator_support(spectator_term: Sequence[str]) -> tuple:
+    """Return the qubits a `create_cloud_crosstalk_model` coefficient key acts on.
+
+    Keys carry their support in the basis-element labels, as `<paulis>:<qubits>` with
+    the qubits comma-separated -- `'Z:2'` is weight-1 on qubit 2, `'ZZ:1,2'` is weight-2
+    on qubits 1 and 2.
+    """
+    qubits = set()
+    for basis_element in spectator_term[1:]:
+        if ':' not in basis_element:
+            continue
+        for label in basis_element.split(':', maxsplit=1)[1].split(','):
+            try:
+                qubits.add(int(label))
+            except ValueError:
+                qubits.add(label)
+    return tuple(sorted(qubits, key=str))
+
+
 @dataclasses.dataclass(frozen=True)
 class ValidationProfile:
     """Configuration for one reproducible validation experiment; models are built separately."""
@@ -94,6 +113,10 @@ class ValidationProfile:
                 raise ValueError('In-class profiles cannot specify a spectator injection')
         elif not np.isfinite(self.spectator_error) or self.spectator_error == 0.0:
             raise ValueError('Out-of-class spectator_error must be finite and nonzero')
+        elif self.nqubits < 3:
+            raise ValueError('Out-of-class spectator errors require at least three qubits')
+        elif not any(qubit not in (0, 1) for qubit in spectator_support(self.spectator_term)):
+            raise ValueError(f'Spectator term {self.spectator_term!r} does not reach beyond Gcnot(0, 1)')
 
     @classmethod
     def inclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -207,25 +230,6 @@ def build_component_model(profile: ValidationProfile, nqubits: Literal[1, 2]):
     return _build_model(spec, profile.model_terms, independent_gates=False)
 
 
-def spectator_support(spectator_term: Sequence[str]) -> tuple:
-    """Return the qubits a `create_cloud_crosstalk_model` coefficient key acts on.
-
-    Keys carry their support in the basis-element labels, as `<paulis>:<qubits>` with
-    the qubits comma-separated -- `'Z:2'` is weight-1 on qubit 2, `'ZZ:1,2'` is weight-2
-    on qubits 1 and 2.
-    """
-    qubits = set()
-    for basis_element in spectator_term[1:]:
-        if ':' not in basis_element:
-            continue
-        for label in basis_element.split(':', maxsplit=1)[1].split(','):
-            try:
-                qubits.add(int(label))
-            except ValueError:
-                qubits.add(label)
-    return tuple(sorted(qubits, key=str))
-
-
 def spectator_term_text(spectator_term: Sequence[str]) -> str:
     """Render a coefficient key for manifests and reports, e.g. `H(ZZ:1,2)`."""
     return f"{spectator_term[0]}({','.join(spectator_term[1:])})"
@@ -264,8 +268,6 @@ def _set_seeded_error_coefficients(model, seed: int, spectator_gate=None,
 
 
 def _build_spectator_datagen_model(profile: ValidationProfile):
-    if profile.nqubits < 3:
-        raise ValueError('Out-of-class profiles require at least three qubits')
     processor_spec = _processor_spec(profile.nqubits, profile.topology)
     terms_by_gate = _terms_by_gate(profile.model_terms)
     coefficients = {
@@ -277,11 +279,6 @@ def _build_spectator_datagen_model(profile: ValidationProfile):
     }
     spectator_gate = ('Gcnot', 0, 1)
     support = spectator_support(profile.spectator_term)
-    if not support or all(qubit in spectator_gate[1:] for qubit in support):
-        raise ValueError(
-            f'Spectator term {profile.spectator_term!r} has support {support}, which does not '
-            f'reach beyond the qubits {spectator_gate[1:]} that {spectator_gate[0]} acts on; '
-            'it would be an ordinary local error on the gate rather than crosstalk')
     coefficients[spectator_gate][tuple(profile.spectator_term)] = profile.spectator_error
     model = create_cloud_crosstalk_model(
         processor_spec,
