@@ -8,7 +8,7 @@ from pygsti.tools import tvd
 from test.helpers.simultaneous_gst_validation import ValidationProfile, build_component_model
 from test.helpers.simultaneous_gst_statistics import (
     expected_fisher_information, identifiable_parameter_count,
-    shot_noise_held_out_tvd_quantiles,
+    _identifiable_eigenpairs, _shot_noise_quantiles,
 )
 
 
@@ -79,7 +79,8 @@ def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
     # linearization to hold to within the Monte Carlo error.
     model, dataset, held_out = _noisy_oneq_model_and_circuits(shots=100000)
     theta = model.to_vector()
-    covariance = np.linalg.inv(expected_fisher_information(model, dataset))
+    fisher = expected_fisher_information(model, dataset)
+    covariance = np.linalg.inv(fisher)
     truth = model.sim.bulk_probs(held_out)
     trial = model.copy()
     rng = np.random.default_rng(1)
@@ -91,8 +92,8 @@ def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
         means.append(np.mean(tvds))
         maxima.append(np.max(tvds))
 
-    mean_quantile, max_quantile = shot_noise_held_out_tvd_quantiles(
-        model, dataset, held_out, quantile=0.9, samples=20000)
+    mean_quantile, max_quantile = _shot_noise_quantiles(
+        model, held_out, _identifiable_eigenpairs(fisher), quantile=0.9, samples=20000)
     assert mean_quantile == pytest.approx(np.quantile(means, 0.9), rel=0.1)
     assert max_quantile == pytest.approx(np.quantile(maxima, 0.9), rel=0.1)
 

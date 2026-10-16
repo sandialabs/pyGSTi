@@ -44,23 +44,6 @@ def identifiable_parameter_count(model, dataset) -> int:
     return len(eigenvalues)
 
 
-def shot_noise_held_out_tvd_quantiles(model, dataset, held_out_circuits, quantile: float = 0.999,
-                                      samples: int = 20000, seed: int = 0) -> tuple[float, float]:
-    """Return quantiles of the held-out mean and maximum TVD that shot noise alone produces.
-
-    To first order a maximum-likelihood estimate is distributed as
-    ``theta_hat ~ N(theta, F^+)``, where ``F`` is the expected Fisher information of the
-    training data at the true parameters, so its held-out prediction errors are
-    ``J_h (theta_hat - theta)``.  This samples that distribution and returns the `quantile`
-    of the mean and of the maximum per-circuit TVD over `held_out_circuits`.
-
-    `model` is the data-generating model, and it must have the fit's parameterization, so
-    this applies only to in-class scenarios.
-    """
-    eigenpairs = _identifiable_eigenpairs(expected_fisher_information(model, dataset))
-    return _shot_noise_quantiles(model, held_out_circuits, eigenpairs, quantile, samples, seed)
-
-
 def _shot_noise_quantiles(model, held_out_circuits, eigenpairs, quantile=0.999,
                           samples=20000, seed=0):
     """Propagate a precomputed identifiable eigensystem to held-out predictions."""
