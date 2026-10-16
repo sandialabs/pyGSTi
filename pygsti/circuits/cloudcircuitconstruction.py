@@ -151,7 +151,7 @@ class _FirstOrderProbabilityJacobian(object):
         self.line_labels = linear_model.state_space.sole_tensor_product_block_labels
 
         def errorgens(mdl):
-            found = _collections.OrderedDict()
+            found = dict()
 
             def walk(member):
                 if isinstance(member, _LindbladErrorgen):
@@ -1690,15 +1690,6 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     """
     from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
-    #from pygsti.modelpacks import smq1Q_XYI  # the base model for 1Q gates
-    #from pygsti.modelpacks import smq2Q_XYICNOT  # the base model for 2Q (CNOT) gate
-    #tgt1Q = smq1Q_XYI.target_model("static unitary")
-    #tgt2Q = smq2Q_XYICNOT.target_model("static unitary")
-    #Gx = tgt1Q.operations[('Gxpi2', 0)]
-    #Gy = tgt1Q.operations[('Gypi2', 0)]
-    #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
-    #Gii = tgt2Q.operations[()]
-    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
     gatenames = ['Gx', 'Gy', '{idle}']
     if num_qubits > 1:

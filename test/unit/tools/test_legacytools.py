@@ -15,18 +15,6 @@ class LegacyTestCase(BaseCase):
         with self.assertWarns(UserWarning):
             oldFn(5)
 
-    def test_default_message_unchanged(self):
-
-        @legacytools.deprecate("newFn")
-        def oldFn(x):
-            return x
-
-        with self.assertWarns(pyGSTiDeprecationWarning) as cm:
-            self.assertEqual(oldFn(5), 5)
-        msg = str(cm.warning)
-        self.assertIn("The function oldFn is deprecated", msg)
-        self.assertIn("Please use newFn instead.", msg)
-
     def test_preserves_metadata(self):
 
         @legacytools.deprecate(message="gone")

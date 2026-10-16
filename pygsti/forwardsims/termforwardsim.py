@@ -53,15 +53,6 @@ def _ignore_term_deprecation_warnings(fn):
     return _inner
 
 
-# from . import replib
-# For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
-# import faulthandler
-# faulthandler.enable()
-
-
-# MEM from .profiler import Profiler
-
-
 class TermForwardSimulator(_DistributableForwardSimulator):
     """
     A forward-simulation calculator that uses term-path-integration to compute probabilities.
@@ -72,7 +63,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         `taylor_order_terms` family of :class:`ModelMember` methods, :mod:`pygsti.modelmembers.term`,
         :mod:`pygsti.layouts.termlayout`, and the term representations in the `statevec` and
         `stabilizer` evotypes).  Use :class:`MapForwardSimulator` or :class:`MatrixForwardSimulator`
-        instead; for first-order simulation of near-Clifford circuits see also the error generator
+        instead; for simulation of near-Clifford circuits see also the error generator
         propagation tools in :mod:`pygsti.errorgenpropagation`.  Constructing (or deserializing) a
         `TermForwardSimulator` issues a `pyGSTiDeprecationWarning`.
         See https://github.com/sandialabs/pyGSTi/issues/916.
