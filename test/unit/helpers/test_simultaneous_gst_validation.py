@@ -5,8 +5,6 @@ import itertools
 
 import numpy as np
 import pytest
-from pygsti.circuits import Circuit
-from pygsti.data import simulate_data
 
 import test.helpers.simultaneous_gst_validation as validation
 from test.helpers.simultaneous_gst_validation import (
@@ -258,25 +256,6 @@ def test_held_out_circuits_are_reproducible_and_disjoint_from_training():
     assert held_out.circuits == repeated_held_out.circuits
     assert held_out.deepest == repeated_held_out.deepest
 
-
-def test_finite_shot_data_are_seeded_multinomial_counts():
-    profile = ValidationProfile.inclass(
-        nqubits=3, max_lengths=(1,), shots=37, seed=1234)
-    _, datagen_model = build_ideal_and_datagen_models(profile)
-    circuits = (
-        Circuit([('Gxpi2', 0)], line_labels=(0, 1, 2)),
-        Circuit([('Gcnot', 0, 1)], line_labels=(0, 1, 2)),
-    )
-    first_dataset = simulate_data(
-        datagen_model, circuits, num_samples=profile.shots,
-        sample_error='multinomial', seed=profile.seed)
-    second_dataset = simulate_data(
-        datagen_model, circuits, num_samples=profile.shots,
-        sample_error='multinomial', seed=profile.seed)
-    for circuit in circuits:
-        assert first_dataset[circuit].total == 37
-        assert all(float(count).is_integer() for count in first_dataset[circuit].counts.values())
-        assert first_dataset[circuit].counts == second_dataset[circuit].counts
 
 
 @pytest.mark.parametrize('scenario, changes', [

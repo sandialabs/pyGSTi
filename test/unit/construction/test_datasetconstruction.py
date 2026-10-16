@@ -71,3 +71,20 @@ class DataSetConstructionTester(BaseCase):
         merged_dataset = pdata.aggregate_dataset_outcomes(self.dataset, {'merged_outcome_label': [('0',), ('1',)]})
         for dsRow in merged_dataset.values():
             self.assertEqual(dsRow.total, dsRow['merged_outcome_label'])
+
+
+def test_finite_shot_data_are_seeded_multinomial_counts():
+    model = models.create_explicit_model_from_expressions(
+        [('Q0',)], ['Gx', 'Gy'], ['X(pi/2,Q0)', 'Y(pi/2,Q0)'])
+    datagen_model = model.depolarize(op_noise=0.1)
+    circuits = pc.to_circuits([('Gx',), ('Gy', 'Gx')])
+    first_dataset = pdata.simulate_data(
+        datagen_model, circuits, num_samples=37,
+        sample_error='multinomial', seed=1234)
+    second_dataset = pdata.simulate_data(
+        datagen_model, circuits, num_samples=37,
+        sample_error='multinomial', seed=1234)
+    for circuit in circuits:
+        assert first_dataset[circuit].total == 37
+        assert all(float(count).is_integer() for count in first_dataset[circuit].counts.values())
+        assert first_dataset[circuit].counts == second_dataset[circuit].counts
