@@ -10,11 +10,12 @@ import subprocess
 import sys
 import time
 
+from pygsti.data import simulate_data
 from pygsti.protocols.gst import GateSetTomography
 from pygsti.protocols.protocol import ProtocolData
 from test.helpers.simultaneous_gst_validation import (
     ValidationProfile, build_ideal_and_datagen_models,
-    build_training_design_and_held_out_circuits, generate_finite_shot_data,
+    build_training_design_and_held_out_circuits,
     spectator_term_text,
 )
 from test.helpers.simultaneous_gst_statistics import score_validation_fit
@@ -96,7 +97,9 @@ def run_validation_profile(
     ideal_model, datagen_model = build_ideal_and_datagen_models(profile)
     training_design, held_out = build_training_design_and_held_out_circuits(profile)
     training_circuits = training_design.all_circuits_needing_data
-    dataset = generate_finite_shot_data(profile, datagen_model, training_circuits)
+    dataset = simulate_data(
+        datagen_model, training_circuits, num_samples=profile.shots,
+        sample_error='multinomial', seed=profile.seed)
     pdata = ProtocolData(training_design, dataset)
     pdata.write(artifacts.dataset_dir)
 

@@ -8,7 +8,6 @@ import numpy as np
 
 from pygsti.algorithms.fiducialselection import find_fiducials
 from pygsti.algorithms.germselection import find_germs
-from pygsti.data import simulate_data
 from pygsti.models import create_cloud_crosstalk_model, create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.gst import StandardGSTDesign
@@ -478,14 +477,3 @@ def build_training_design_and_held_out_circuits(profile: ValidationProfile):
         raise RuntimeError(
             'The second seeded design produced no held-out circuits at its largest maximum length')
     return training_design, HeldOutCircuits(circuits=held_out_circuits, deepest=deepest)
-
-
-def generate_finite_shot_data(profile: ValidationProfile, datagen_model, circuits):
-    """Sample reproducible multinomial counts for a validation profile."""
-    return simulate_data(
-        datagen_model,
-        circuits,
-        num_samples=profile.shots,
-        sample_error='multinomial',
-        seed=profile.seed,
-    )

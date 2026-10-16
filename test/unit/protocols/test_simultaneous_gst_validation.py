@@ -6,6 +6,7 @@ import itertools
 import numpy as np
 import pytest
 from pygsti.circuits import Circuit
+from pygsti.data import simulate_data
 
 import test.helpers.simultaneous_gst_validation as validation
 from test.helpers.simultaneous_gst_validation import (
@@ -16,7 +17,6 @@ from test.helpers.simultaneous_gst_validation import (
     build_component_designs,
     build_ideal_and_datagen_models,
     build_training_design_and_held_out_circuits,
-    generate_finite_shot_data,
     spectator_support,
     spectator_term_text,
 )
@@ -267,8 +267,12 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
         Circuit([('Gxpi2', 0)], line_labels=(0, 1, 2)),
         Circuit([('Gcnot', 0, 1)], line_labels=(0, 1, 2)),
     )
-    first_dataset = generate_finite_shot_data(profile, datagen_model, circuits)
-    second_dataset = generate_finite_shot_data(profile, datagen_model, circuits)
+    first_dataset = simulate_data(
+        datagen_model, circuits, num_samples=profile.shots,
+        sample_error='multinomial', seed=profile.seed)
+    second_dataset = simulate_data(
+        datagen_model, circuits, num_samples=profile.shots,
+        sample_error='multinomial', seed=profile.seed)
     for circuit in circuits:
         assert first_dataset[circuit].total == 37
         assert all(float(count).is_integer() for count in first_dataset[circuit].counts.values())
