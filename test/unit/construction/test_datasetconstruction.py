@@ -1,3 +1,11 @@
+"""Test production dataset simulation and outcome aggregation.
+
+Covers dataset-based resampling modes, equivalent seeded RNG initialization,
+invalid sampling-mode rejection, aggregation of all outcomes, and seeded
+multinomial counts from a standalone model. References are count conservation,
+integer-count and reproducibility contracts, not validation-harness results.
+"""
+
 import numpy as np
 
 import pygsti.circuits as pc
@@ -10,10 +18,21 @@ from ..util import BaseCase
 class DataSetConstructionTester(BaseCase):
     def setUp(self):
         # TODO optimize
+        """Prepare inputs for ``simulate_data`` and ``aggregate_dataset_outcomes`` tests.
+
+        Build a depolarized one-qubit model, explicit fiducial/germ circuit lists and
+        seeded binary counts. Expected answers come from each test's count/RNG/error
+        contract, not a stored golden dataset.
+        """
         self.model = models.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.depolGateset = self.model.depolarize(op_noise=0.1)
 
         def make_lsgst_lists(opLabels, fiducialList, germList, maxLengthList):
+            """Build explicit circuit inputs for dataset-construction tests.
+
+            Compose fiducials and length-truncated germ powers inline; this setup provides
+            inputs, while count conservation and RNG equivalence supply test references.
+            """
             singleOps = pc.to_circuits([(g,) for g in opLabels])
             lgstStrings = pc.create_lgst_circuits(fiducialList, fiducialList, opLabels)
             lsgst_list = pc.to_circuits([()])  # running list of all strings so far
@@ -47,6 +66,12 @@ class DataSetConstructionTester(BaseCase):
                                              sample_error='binomial', seed=100)
 
     def test_generate_fake_data(self):
+        """Check ``simulate_data`` resampling modes and equivalent RNG initialization.
+
+        Reference: none/round/multinomial calls must complete; binomial samples from a
+        fresh RandomState(1234) must equal samples from seed=1234 for each circuit.
+        The mode smoke calls have no independent numerical reference assertions.
+        """
         dataset = pdata.simulate_data(self.dataset, self.circuit_list, num_samples=None,
                                         sample_error='none', seed=100)
         dataset = pdata.simulate_data(self.dataset, self.circuit_list, num_samples=100,
@@ -63,17 +88,32 @@ class DataSetConstructionTester(BaseCase):
             self.assertEqual(dr1.counts, dr2.counts)
 
     def test_generate_fake_data_raises_on_bad_sample_error(self):
+        """Check ``simulate_data`` rejects an unknown sampling mode.
+
+        Reference: the literal invalid mode 'foobar' must raise ``ValueError``.
+        """
         with self.assertRaises(ValueError):
             pdata.simulate_data(self.dataset, self.circuit_list, num_samples=None,
                                   sample_error='foobar', seed=100)
 
     def test_merge_outcomes(self):
+        """Check ``aggregate_dataset_outcomes`` when all outcomes are merged.
+
+        Reference: count conservation makes the single merged count equal the row's
+        total, compared directly for every returned row.
+        """
         merged_dataset = pdata.aggregate_dataset_outcomes(self.dataset, {'merged_outcome_label': [('0',), ('1',)]})
         for dsRow in merged_dataset.values():
             self.assertEqual(dsRow.total, dsRow['merged_outcome_label'])
 
 
 def test_finite_shot_data_are_seeded_multinomial_counts():
+    """Check ``simulate_data`` produces reproducible integer multinomial counts.
+
+    Reference: the requested 37 shots fix each row total, multinomial counts must
+    be integers, and equal seeds must produce identical per-outcome dictionaries.
+    No particular sampled dictionary is assumed in advance.
+    """
     model = models.create_explicit_model_from_expressions(
         [('Q0',)], ['Gx', 'Gy'], ['X(pi/2,Q0)', 'Y(pi/2,Q0)'])
     datagen_model = model.depolarize(op_noise=0.1)

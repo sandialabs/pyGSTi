@@ -1,4 +1,9 @@
-"""Execution and artifact storage for simultaneous-GST validation experiments."""
+"""Execute simultaneous-GST validation profiles and persist their evidence.
+
+Applies environment overrides, creates per-run manifests and paths, samples data,
+delegates fitting to serial or persistent MPI execution, and writes fit metrics.
+Scientific acceptance assertions live in the integration tests, not this runner.
+"""
 
 import dataclasses
 import datetime

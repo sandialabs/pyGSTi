@@ -1,4 +1,10 @@
-"""Experiment configuration, models and circuits for simultaneous-GST validation."""
+"""Construct reproducible experiments for simultaneous-GST validation.
+
+Defines line/ring profiles, local error-term sets, ideal and noisy models,
+spectator-injection safeguards, component GST designs, and distinct training and
+held-out circuits. Sampling, fitting and persistence belong to the runner;
+statistical scoring belongs to the statistics helper.
+"""
 
 import dataclasses
 import itertools

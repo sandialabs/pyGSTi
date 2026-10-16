@@ -1,4 +1,10 @@
-"""Independent numerical references for simultaneous-GST validation scores."""
+"""Validate the harness statistics against independent numerical references.
+
+Checks Fisher information using a finite-difference expected-likelihood Hessian,
+identifiable dimension using matrix rank and a rank-one example, and linearized
+TVD quantiles using nonlinear Monte Carlo predictions. Controlled identical
+models and recorded Fisher calls check score assembly and scenario selection.
+"""
 
 import numpy as np
 import pytest
@@ -13,13 +19,24 @@ from test.helpers.simultaneous_gst_statistics import (
 
 
 def _noisy_oneq_model_and_circuits(shots):
-    """A noisy one-qubit `somehs` model, training data at powers 1 and 2, held-out circuits at 4."""
+    """Prepare training/held-out inputs for the harness statistics under test.
+
+    Use a fixed seeded nonzero parameter vector, explicit fiducial/germ products,
+    training powers 1/2 and distinct held-out power 4. Each test constructs its
+    own reference (Hessian, rank or nonlinear Monte Carlo), rather than treating
+    these generated inputs as golden expected answers.
+    """
     model = build_component_model(ValidationProfile.inclass(nqubits=3, max_lengths=(1,)), 1)
     model.from_vector(np.random.default_rng(7).uniform(0.002, 0.02, model.num_params))
     fiducials = [(), ('Gxpi2',), ('Gypi2',), ('Gxpi2',) * 2, ('Gxpi2',) * 3, ('Gypi2',) * 3]
     germs = [('Gi',), ('Gxpi2',), ('Gypi2',), ('Gxpi2', 'Gypi2')]
 
     def circuits(powers):
+        """Build the statistics fixture's explicit fiducial-germ circuit products.
+
+        The reference calculations use these same inputs; this helper generates no
+        expected Fisher matrix or prediction-error quantile.
+        """
         return list(dict.fromkeys(
             Circuit([(gate, 0) for gate in prep + germ * power + meas], line_labels=(0,))
             for prep in fiducials for germ in germs for power in powers for meas in fiducials))
@@ -33,6 +50,12 @@ def _noisy_oneq_model_and_circuits(shots):
 def test_expected_fisher_information_is_the_expected_negative_loglikelihood_hessian():
     # Brute-force reference from probabilities alone: central differences of
     # sum_c N_c sum_o p_o(theta) log p_o(theta') in theta', at theta' = theta.
+    """Check ``expected_fisher_information`` against an independent Hessian.
+
+    Reference: central differences of the inline expected log likelihood, with
+    fixed generating probabilities, give its negative parameter Hessian. The
+    comparison allows the stated finite-difference truncation/numerical tolerance.
+    """
     model, dataset, _ = _noisy_oneq_model_and_circuits(shots=1000)
     circuits = list(dataset.keys())
     theta = model.to_vector()
@@ -40,6 +63,11 @@ def test_expected_fisher_information_is_the_expected_negative_loglikelihood_hess
     trial = model.copy()
 
     def expected_loglikelihood(vector):
+        """Evaluate the inline reference for ``expected_fisher_information``.
+
+        Hold generating probabilities fixed while varying trial parameters in the
+        multinomial expected log likelihood; central differences supply the Hessian.
+        """
         trial.from_vector(vector)
         probabilities = trial.sim.bulk_probs(circuits)
         return sum(dataset[circuit].total * truth[circuit][outcome] * np.log(probabilities[circuit][outcome])
@@ -61,6 +89,12 @@ def test_expected_fisher_information_is_the_expected_negative_loglikelihood_hess
 
 
 def test_identifiable_parameter_count_is_the_fisher_information_rank():
+    """Check ``identifiable_parameter_count`` against matrix rank and a rank-one case.
+
+    Reference: NumPy matrix rank supplies the first answer using the computed
+    Fisher matrix. In the second example only the idle circuit contributes an
+    informative binary-outcome direction, whose opposite Jacobian rows imply rank one.
+    """
     model, dataset, _ = _noisy_oneq_model_and_circuits(shots=1000)
     fisher = expected_fisher_information(model, dataset)
     assert identifiable_parameter_count(model, dataset) == np.linalg.matrix_rank(fisher)
@@ -77,6 +111,13 @@ def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
     # Reference: draw theta_hat ~ N(theta, F^-1) and evaluate the exact (not linearized)
     # held-out TVDs.  Enough shots keep theta_hat close enough to theta for the
     # linearization to hold to within the Monte Carlo error.
+    """Check ``_shot_noise_quantiles`` against nonlinear Monte Carlo predictions.
+
+    Reference: invert the training Fisher matrix, draw Gaussian parameter vectors,
+    and evaluate exact model probabilities and TVDs inline, rather than linearized
+    responses. Compare empirical 90th percentiles with 10% relative tolerance for
+    sampling variation and linearization error at the chosen large shot count.
+    """
     model, dataset, held_out = _noisy_oneq_model_and_circuits(shots=100000)
     theta = model.to_vector()
     fisher = expected_fisher_information(model, dataset)
@@ -100,6 +141,13 @@ def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
 
 @pytest.mark.parametrize('scenario', ['inclass', 'outclass'])
 def test_score_assembly_and_scenario_specific_references(scenario, monkeypatch):
+    """Check ``score_validation_fit`` values and scenario-specific reference fields.
+
+    Reference: identical generator and estimate imply equal likelihood deficits
+    and zero predictive TVDs; a zero-noise baseline differs. Explicit field sets
+    and recorded calls require one shared Fisher calculation in class and none
+    out of class. This checks assembly, not an independent likelihood implementation.
+    """
     import test.helpers.simultaneous_gst_statistics as statistics
     from test.helpers.simultaneous_gst_validation import HeldOutCircuits
 
@@ -108,6 +156,11 @@ def test_score_assembly_and_scenario_specific_references(scenario, monkeypatch):
     ideal_model.from_vector(np.zeros(model.num_params))
     fisher_calls = []
     def fisher(model, dataset):
+        """Record Fisher calls made by ``score_validation_fit`` and delegate values.
+
+        The expected call count is fixed by the scenario; numerical Fisher correctness
+        is checked separately against the finite-difference reference.
+        """
         fisher_calls.append(True)
         return expected_fisher_information(model, dataset)
     monkeypatch.setattr(statistics, 'expected_fisher_information', fisher)

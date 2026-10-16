@@ -1,4 +1,10 @@
-"""Statistical references and scores for simultaneous-GST validation."""
+"""Compute likelihood, predictive-error and shot-noise references for validation.
+
+Builds expected multinomial Fisher information and its identifiable eigenspace,
+propagates Gaussian parameter fluctuations to held-out TVD quantiles, and scores
+fitted models against the generator and ideal baseline. These are test-support
+calculations, not production statistical APIs or acceptance assertions.
+"""
 
 import numpy as np
 from pygsti.tools import two_delta_logl, tvd
