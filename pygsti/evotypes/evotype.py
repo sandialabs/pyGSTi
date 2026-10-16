@@ -51,6 +51,7 @@ class Evotype(object):
         'computational effect': 'EffectRepComputational',
         'tensorproduct effect': 'EffectRepTensorProduct',
         'composed effect': 'EffectRepComposed',
+        # term reps: used only by the deprecated TermForwardSimulator machinery (remove in 0.12, see #916)
         'term': 'TermRep',
         'direct term': 'TermDirectRep'
     }
@@ -216,9 +217,16 @@ class Evotype(object):
     def create_computational_povm_rep(self, nqubits, qubit_filter):
         return self.module.ComputationalPOVMRep(nqubits, qubit_filter)
 
-    # TERM REPS
+    # TERM REPS (used only by the deprecated TermForwardSimulator machinery; remove in 0.12, see #916)
     def create_term_rep(self, coeff, mag, logmag, pre_state, post_state,
                         pre_effect, post_effect, pre_ops, post_ops):
+        """
+        Create a rank-1 term representation (with a polynomial coefficient).
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         try:  # see if module implements its own term rep, otherwise use "stock" version
             return self.module.TermRep(coeff, mag, logmag, pre_state, post_state,
                                        pre_effect, post_effect, pre_ops, post_ops)
@@ -228,6 +236,13 @@ class Evotype(object):
 
     def create_direct_term_rep(self, coeff, mag, logmag, pre_state, post_state,
                                pre_effect, post_effect, pre_ops, post_ops):
+        """
+        Create a rank-1 term representation with a numerical ("direct") coefficient.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         try:  # see if module implements its own term rep, otherwise use "stock" version
             return self.module.TermDirectRep(coeff, mag, logmag, pre_state, post_state,
                                              pre_effect, post_effect, pre_ops, post_ops)
@@ -236,7 +251,13 @@ class Evotype(object):
                                                 pre_effect, post_effect, pre_ops, post_ops)
 
     def conjugate_state_term_rep(self, term_rep):
-        """ Turns a state term => effect term via conjugation of the state """
+        """
+        Turns a state term => effect term via conjugation of the state.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         coeff = term_rep.coeff
         mag = term_rep.magnitude
         logmag = term_rep.logmagnitude

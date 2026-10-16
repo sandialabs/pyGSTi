@@ -3,7 +3,9 @@ mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
 import unittest
+import pytest
 import pygsti
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 
 import numpy as np
 
@@ -54,7 +56,9 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertLess( a+0.5, 0.05 )
 
     def test_miscellaneous(self):
-        self.runSilent(self.model.print_info) #just make sure it works
+        # print_info is deprecated (it previously used a broken bare `@deprecate` and silently did nothing)
+        with pytest.warns(pyGSTiDeprecationWarning):
+            self.runSilent(self.model.print_info) #just make sure it works
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

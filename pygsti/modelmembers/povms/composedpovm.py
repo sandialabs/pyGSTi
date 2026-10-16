@@ -246,6 +246,7 @@ class ComposedPOVM(_POVM, _Torchable):
         None
         """
         assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
+        # term caches: used only by the deprecated TermForwardSimulator machinery (remove in 0.12, see #916)
         self.terms = {}  # clear terms cache since param indices have changed now
         _collections.OrderedDict.clear(self)  # since cached elements may have invalid gpindices
         return super().set_gpindices(gpindices, parent, memo)

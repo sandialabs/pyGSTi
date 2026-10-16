@@ -11,6 +11,8 @@ The StaticPureState class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.modelmembers import term as _term
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
@@ -43,9 +45,14 @@ class StaticPureState(_DensePureState, _NoErrorGeneratorInterface):
     def __init__(self, purevec, basis='pp', evotype="default", state_space=None):
         _DensePureState.__init__(self, purevec, basis, evotype, state_space)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this state vector.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
