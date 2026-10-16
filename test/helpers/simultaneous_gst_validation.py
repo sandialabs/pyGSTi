@@ -1,16 +1,7 @@
 """Shared helpers for simultaneous-GST validation runs."""
 
 import dataclasses
-import datetime
-import functools
 import itertools
-import json
-import os
-import pathlib
-import shutil
-import subprocess
-import sys
-import time
 from typing import Literal, Sequence, get_args
 
 import numpy as np
@@ -20,13 +11,8 @@ from pygsti.algorithms.germselection import find_germs
 from pygsti.data import simulate_data
 from pygsti.models import create_cloud_crosstalk_model, create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
-from pygsti.protocols.gst import GateSetTomography, StandardGSTDesign
-from pygsti.protocols.protocol import ProtocolData
+from pygsti.protocols.gst import StandardGSTDesign
 from pygsti.protocols.simultaneous_gst import make_simultaneous_gst_design
-from test.helpers.simultaneous_gst_statistics import score_validation_fit
-
-
-REPO = pathlib.Path(__file__).resolve().parents[2]
 
 
 # Both term sets hold only H and S elementary error generators, a small part of the space
@@ -73,7 +59,7 @@ def _profile_name(topology: Topology, nqubits: int, model_terms: ModelTerms,
 
 @dataclasses.dataclass(frozen=True)
 class ValidationProfile:
-    """Configuration for one validation run, and the 1Q and 2Q component models that select its designs."""
+    """Configuration for one reproducible validation experiment; models are built separately."""
 
     name: str
     nqubits: int
@@ -103,6 +89,11 @@ class ValidationProfile:
             if getattr(self, field) not in get_args(allowed):
                 raise ValueError(f'Unknown {field} {getattr(self, field)!r}; '
                                  f'expected one of {get_args(allowed)}')
+        if self.scenario == 'inclass':
+            if self.spectator_error != 0.0 or self.spectator_term != ('S', 'Z:2'):
+                raise ValueError('In-class profiles cannot specify a spectator injection')
+        elif not np.isfinite(self.spectator_error) or self.spectator_error == 0.0:
+            raise ValueError('Out-of-class spectator_error must be finite and nonzero')
 
     @classmethod
     def inclass(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -125,23 +116,6 @@ class ValidationProfile:
         return cls(_profile_name(topology, nqubits, model_terms, 'outclass'), nqubits,
                    tuple(max_lengths), shots, model_terms, 'outclass', seed, spectator_error,
                    tuple(spectator_term), topology)
-
-    @functools.cached_property
-    def oneq_model(self):
-        return _build_model(_oneq_processor_spec(), self.model_terms, independent_gates=False)
-
-    @functools.cached_property
-    def twoq_model(self):
-        return _build_model(_processor_spec(2), self.model_terms, independent_gates=False)
-
-
-@dataclasses.dataclass(frozen=True)
-class ValidationArtifacts:
-    root: pathlib.Path
-    dataset_dir: pathlib.Path
-    results_dir: pathlib.Path
-    manifest_path: pathlib.Path
-
 
 LINE_3Q_INCLASS = ValidationProfile.inclass(
     nqubits=3, max_lengths=(1, 2, 4))
@@ -217,6 +191,14 @@ def _build_model(processor_spec: QubitProcessorSpec,
         lindblad_parameterization='H+S',
         independent_gates=independent_gates,
     )
+
+
+def build_component_model(profile: ValidationProfile, nqubits: Literal[1, 2]):
+    """Build a fresh selector model with parameters tied across gate placements."""
+    if nqubits not in (1, 2):
+        raise ValueError('Component models require one or two qubits')
+    spec = _oneq_processor_spec() if nqubits == 1 else _processor_spec(2)
+    return _build_model(spec, profile.model_terms, independent_gates=False)
 
 
 def spectator_support(spectator_term: Sequence[str]) -> tuple:
@@ -426,10 +408,10 @@ def build_component_designs(profile: ValidationProfile) -> tuple[StandardGSTDesi
     oneq_processor_spec = _oneq_processor_spec()
     twoq_processor_spec = _processor_spec(2)
     oneq_design = _build_component_design(
-        oneq_processor_spec, profile.oneq_model, profile.max_lengths, profile.seed
+        oneq_processor_spec, build_component_model(profile, 1), profile.max_lengths, profile.seed
     )
     twoq_design = _build_component_design(
-        twoq_processor_spec, profile.twoq_model, profile.max_lengths, profile.seed + 1
+        twoq_processor_spec, build_component_model(profile, 2), profile.max_lengths, profile.seed + 1
     )
     return oneq_design, twoq_design
 
@@ -496,20 +478,6 @@ def build_training_design_and_held_out_circuits(profile: ValidationProfile):
     return training_design, HeldOutCircuits(circuits=held_out_circuits, deepest=deepest)
 
 
-def openmpi_extra_args() -> list[str]:
-    """Return launcher arguments supported specifically by Open MPI."""
-    launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-    if launcher is None:
-        return []
-    try:
-        completed = subprocess.run(
-            [launcher, '--version'], capture_output=True, text=True, timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return []
-    output = completed.stdout + completed.stderr
-    return ['--oversubscribe'] if 'Open MPI' in output or 'OpenRTE' in output else []
-
-
 def generate_finite_shot_data(profile: ValidationProfile, datagen_model, circuits):
     """Sample reproducible multinomial counts for a validation profile."""
     return simulate_data(
@@ -519,101 +487,3 @@ def generate_finite_shot_data(profile: ValidationProfile, datagen_model, circuit
         sample_error='multinomial',
         seed=profile.seed,
     )
-
-
-def _mpi_worker_environment(existing_environment=None) -> dict[str, str]:
-    """Build worker overrides that import pyGSTi from this active checkout."""
-    environment = os.environ if existing_environment is None else existing_environment
-    existing_pythonpath = environment.get('PYTHONPATH')
-    pythonpath_entries = [str(REPO)]
-    if existing_pythonpath:
-        pythonpath_entries.append(existing_pythonpath)
-    return {'PYTHONPATH': os.pathsep.join(pythonpath_entries)}
-
-
-def _run_protocol_persistently(protocol, pdata, artifacts: ValidationArtifacts, mpi_ranks: int):
-    """Run the fit through its serial or persistent MPI execution path."""
-    started = time.perf_counter()
-    if mpi_ranks == 1:
-        results = protocol.run(pdata)
-        results.write(artifacts.results_dir)
-    else:
-        results = protocol.run_mpi(
-            pdata,
-            num_ranks=mpi_ranks,
-            persistent_dir=artifacts.results_dir,
-            blas_threads_per_rank=1,
-            extra_mpi_args=openmpi_extra_args(),
-            env=_mpi_worker_environment(),
-        )
-    return results, time.perf_counter() - started
-
-
-def run_validation_profile(
-        profile: ValidationProfile,
-        artifacts: ValidationArtifacts,
-        mpi_ranks: int,
-) -> dict[str, float | int | str]:
-    """Run one finite-shot validation profile and persist its complete evidence."""
-    if mpi_ranks < 1:
-        raise ValueError('mpi_ranks must be at least one')
-    artifacts.root.mkdir(parents=True, exist_ok=True)
-    artifacts.manifest_path.write_text(
-        json.dumps(dataclasses.asdict(profile), indent=2) + '\n')
-
-    fit_model, datagen_model = build_fit_and_datagen_models(profile)
-    training_design, held_out = build_training_design_and_held_out_circuits(profile)
-    training_circuits = training_design.all_circuits_needing_data
-    dataset = generate_finite_shot_data(profile, datagen_model, training_circuits)
-    pdata = ProtocolData(training_design, dataset)
-    pdata.write(artifacts.dataset_dir)
-
-    protocol = GateSetTomography(
-        fit_model,
-        gaugeopt_suite='none',
-        name='simultaneous_gst_validation',
-        verbosity=1,
-    )
-    results, elapsed_seconds = _run_protocol_persistently(
-        protocol, pdata, artifacts, mpi_ranks)
-
-    estimate = results.estimates[protocol.name]
-    fitted_model = estimate.models['final iteration estimate']
-    metrics = score_validation_fit(
-        fit_model, datagen_model, fitted_model, dataset, held_out, profile.scenario)
-    metrics.update({
-        'profile': profile.name,
-        'scenario': profile.scenario,
-        'spectator_term': spectator_term_text(profile.spectator_term),
-        'spectator_error': float(profile.spectator_error),
-        'elapsed_seconds': float(elapsed_seconds),
-        'fit_model_params': int(fit_model.num_params),
-        'training_circuits': int(len(training_circuits)),
-        'held_out_circuits': int(len(held_out.circuits)),
-        'held_out_deep_circuits': int(len(held_out.deepest)),
-        'shots': int(profile.shots),
-        'mpi_ranks': int(mpi_ranks),
-    })
-    (artifacts.root / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')
-    return metrics
-
-
-def create_run_root(artifact_root: pathlib.Path, profile_name: str) -> pathlib.Path:
-    """Create an artifact root and record the execution context."""
-    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    suffix = 0
-    while True:
-        collision_suffix = '' if suffix == 0 else f'-{suffix}'
-        root = artifact_root / f'{stamp}-{profile_name}{collision_suffix}'
-        try:
-            root.mkdir(parents=True, exist_ok=False)
-            break
-        except FileExistsError:
-            suffix += 1
-    (root / 'run-manifest.json').write_text(json.dumps({
-        'profile': profile_name,
-        'started_at_utc': stamp,
-        'git_sha': subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
-        'python': sys.executable,
-    }, indent=2) + '\n')
-    return root

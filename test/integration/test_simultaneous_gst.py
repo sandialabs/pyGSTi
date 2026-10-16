@@ -13,9 +13,6 @@ circuit generation -> noisy data simulation -> GST fitting, for each of the
 four Lindblad error types (H, S, H+S, and H+S+C+A).
 """
 
-import dataclasses
-import os
-import pathlib
 import unittest
 
 import pytest
@@ -41,56 +38,8 @@ from test.helpers.simultaneous_gst_validation import (
     RING_3Q_OUTCLASS,
     RING_4Q_INCLASS,
     RING_4Q_OUTCLASS,
-    ValidationArtifacts,
-    create_run_root,
-    run_validation_profile,
 )
-
-
-def artifact_dir(profile_name):
-    """Return a fresh run directory under ``PYGSTI_SGST_ARTIFACT_DIR`` for one profile.
-
-    Each run gets its own timestamped root, so running several profiles against one
-    ``PYGSTI_SGST_ARTIFACT_DIR`` keeps every profile's dataset, fit and metrics.
-    """
-    root = create_run_root(pathlib.Path(os.environ['PYGSTI_SGST_ARTIFACT_DIR']), profile_name)
-    return ValidationArtifacts(
-        root=root,
-        dataset_dir=root / 'dataset',
-        results_dir=root / 'fit',
-        manifest_path=root / 'profile.json',
-    )
-
-
-def mpi_ranks():
-    return int(os.environ.get('PYGSTI_SGST_MPI_RANKS', '1'))
-
-
-def run_profile(profile):
-    """Apply the runner's overrides to ``profile`` and run it in its own artifact directory."""
-    profile = profile_with_overrides(profile)
-    return run_validation_profile(profile, artifact_dir(profile.name), mpi_ranks())
-
-
-def profile_with_overrides(profile):
-    """Return ``profile`` or an immutable per-run replacement selected by the runner.
-
-    The spectator overrides let one queue sweep crosstalk strength and character
-    without editing the canonical profiles. ``PYGSTI_SGST_SPECTATOR_TERM`` is
-    pipe-separated because a weight-2 coefficient key already contains commas,
-    e.g. ``H|ZZ:1,2``.
-    """
-    changes = {}
-    seed = os.environ.get('PYGSTI_SGST_PROFILE_SEED')
-    if seed is not None:
-        changes['seed'] = int(seed)
-    spectator_error = os.environ.get('PYGSTI_SGST_SPECTATOR_ERROR')
-    if spectator_error is not None:
-        changes['spectator_error'] = float(spectator_error)
-    spectator_term = os.environ.get('PYGSTI_SGST_SPECTATOR_TERM')
-    if spectator_term is not None:
-        changes['spectator_term'] = tuple(spectator_term.split('|'))
-    return dataclasses.replace(profile, **changes) if changes else profile
+from test.helpers.simultaneous_gst_runner import run_profile
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):

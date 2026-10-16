@@ -1,10 +1,6 @@
 """Tests for simultaneous-GST validation execution helpers."""
 
 import dataclasses
-import os
-import pathlib
-import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -12,44 +8,24 @@ from pygsti.circuits import Circuit
 
 import test.helpers.simultaneous_gst_validation as validation
 import test.integration.test_simultaneous_gst as integration
-from test.integration.test_simultaneous_gst import profile_with_overrides
 from test.helpers.simultaneous_gst_validation import (
     LINE_3Q_OUTCLASS,
-    ValidationArtifacts,
     ValidationProfile,
+    build_component_model,
     build_component_designs,
     build_fit_and_datagen_models,
     build_training_design_and_held_out_circuits,
-    create_run_root,
     generate_finite_shot_data,
     spectator_support,
     spectator_term_text,
 )
 
 
-def test_long_running_marker_is_registered(pytestconfig):
-    assert any('long_running:' in line for line in pytestconfig.getini('markers'))
-
-
-def test_artifact_root_is_unique_and_has_manifest(tmp_path):
-    root = create_run_root(tmp_path, profile_name='line_3q_inclass')
-    assert root.is_dir()
-    assert (root / 'run-manifest.json').is_file()
-
-
-def test_artifact_roots_are_unique_for_colliding_profile_names(tmp_path):
-    first = create_run_root(tmp_path, profile_name='line_3q_inclass')
-    second = create_run_root(tmp_path, profile_name='line_3q_inclass')
-    assert first != second
-    assert first.is_dir()
-    assert second.is_dir()
-
-
 def test_somehs_component_models_have_expected_parameter_counts():
     profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2))
     oneq_design, twoq_design = build_component_designs(profile)
-    assert profile.oneq_model.num_params == 8
-    assert profile.twoq_model.num_params == 17
+    assert build_component_model(profile, 1).num_params == 8
+    assert build_component_model(profile, 2).num_params == 17
     assert oneq_design.qubit_labels == (0,)
     assert twoq_design.qubit_labels == (0, 1)
 
@@ -75,28 +51,6 @@ def test_spectator_profiles_default_to_calibrated_effect():
 
     for profile in (default_profile, LINE_3Q_OUTCLASS, validation.LINE_4Q_OUTCLASS):
         assert (profile.spectator_term, profile.spectator_error) == (('S', 'Z:2'), 0.01)
-
-
-def test_profile_overrides_are_immutable_and_optional(monkeypatch):
-    profile = ValidationProfile.outclass(nqubits=3, max_lengths=(1, 2), seed=20260901)
-    for variable in ('PYGSTI_SGST_PROFILE_SEED', 'PYGSTI_SGST_SPECTATOR_ERROR',
-                     'PYGSTI_SGST_SPECTATOR_TERM'):
-        monkeypatch.delenv(variable, raising=False)
-
-    assert profile_with_overrides(profile) is profile
-
-    monkeypatch.setenv('PYGSTI_SGST_PROFILE_SEED', '606')
-    monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_ERROR', '0.02')
-    monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_TERM', 'H|ZZ:1,2')
-    overridden = profile_with_overrides(profile)
-
-    assert overridden == ValidationProfile.outclass(
-        nqubits=3, max_lengths=(1, 2), seed=606, spectator_error=0.02,
-        spectator_term=('H', 'ZZ:1,2'))
-    assert overridden is not profile
-    # The canonical module-level profile must not be disturbed by a swept batch.
-    assert (profile.seed, profile.spectator_error, profile.spectator_term) == (
-        20260901, 0.01, ('S', 'Z:2'))
 
 
 def test_spectator_datagen_model_lies_outside_the_hypothesis_class():
@@ -318,25 +272,10 @@ def test_canonical_line_4q_outclass_profile_adds_s_z2_to_the_inclass_setup():
     assert spectator_value == pytest.approx(0.01)
 
 
-def test_long_running_collection_includes_line_4q_outclass_node():
-    checkout = pathlib.Path(__file__).resolve().parents[3]
-    node_id = (
-        'test/integration/test_simultaneous_gst.py::SimultaneousGSTValidationTester::'
-        'test_line_4q_outclass'
-    )
-    result = subprocess.run(
-        [sys.executable, '-m', 'pytest', '--collect-only', '-q', '-m', 'long_running',
-         'test/integration/test_simultaneous_gst.py'],
-        cwd=checkout, capture_output=True, text=True, check=False)
-
-    assert result.returncode == 0, result.stderr
-    assert node_id in result.stdout
-
-
 def test_allhs_component_models_have_expected_parameter_counts():
     profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2), model_terms='allhs')
-    assert profile.oneq_model.num_params == 18
-    assert profile.twoq_model.num_params == 78
+    assert build_component_model(profile, 1).num_params == 18
+    assert build_component_model(profile, 2).num_params == 78
 
 
 def test_component_design_selection_is_reproducible():
@@ -385,87 +324,14 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
         assert first_dataset[circuit].counts == second_dataset[circuit].counts
 
 
-def test_serial_validation_fit_uses_protocol_run_and_persists_results(tmp_path):
-    calls = []
-
-    class Results:
-        def write(self, path):
-            calls.append(('write', path))
-
-    class Protocol:
-        def run(self, pdata):
-            calls.append(('run', pdata))
-            return Results()
-
-    artifacts = ValidationArtifacts(
-        tmp_path, tmp_path / 'dataset', tmp_path / 'fit', tmp_path / 'profile.json')
-    pdata = object()
-    results, elapsed_seconds = validation._run_protocol_persistently(
-        Protocol(), pdata, artifacts, mpi_ranks=1)
-    assert isinstance(results, Results)
-    assert calls == [('run', pdata), ('write', artifacts.results_dir)]
-    assert elapsed_seconds >= 0.0
 
 
-def test_mpi_validation_fit_uses_persistent_directory_and_single_blas_thread(
-        tmp_path, monkeypatch):
-    calls = []
-    expected_results = object()
-
-    class Protocol:
-        def run(self, pdata):
-            raise AssertionError('serial run must not be used for multiple ranks')
-
-        def run_mpi(self, pdata, **kwargs):
-            calls.append((pdata, kwargs))
-            return expected_results
-
-    artifacts = ValidationArtifacts(
-        tmp_path, tmp_path / 'dataset', tmp_path / 'fit', tmp_path / 'profile.json')
-    pdata = object()
-    monkeypatch.setattr(validation, 'openmpi_extra_args', lambda: ['--oversubscribe'])
-    monkeypatch.setattr(
-        validation, '_mpi_worker_environment', lambda: {'PYTHONPATH': '/active:/existing'})
-    results, elapsed_seconds = validation._run_protocol_persistently(
-        Protocol(), pdata, artifacts, mpi_ranks=2)
-    assert results is expected_results
-    assert calls == [(pdata, {
-        'num_ranks': 2,
-        'persistent_dir': artifacts.results_dir,
-        'blas_threads_per_rank': 1,
-        'extra_mpi_args': ['--oversubscribe'],
-        'env': {'PYTHONPATH': '/active:/existing'},
-    })]
-    assert elapsed_seconds >= 0.0
-
-
-def test_mpi_worker_environment_imports_active_repo_before_existing_pythonpath(tmp_path):
-    shadow_root = tmp_path / 'shadow-checkout'
-    shadow_package = shadow_root / 'pygsti'
-    shadow_package.mkdir(parents=True)
-    (shadow_package / '__init__.py').write_text("SOURCE = 'shadow'\n")
-    retained_entry = tmp_path / 'retained-entry'
-    existing_pythonpath = os.pathsep.join((str(shadow_root), str(retained_entry)))
-
-    worker_overrides = validation._mpi_worker_environment({
-        'PYTHONPATH': existing_pythonpath,
-    })
-
-    assert worker_overrides['PYTHONPATH'].split(os.pathsep) == [
-        str(validation.REPO), str(shadow_root), str(retained_entry),
-    ]
-    completed = subprocess.run(
-        [
-            sys.executable,
-            '-c',
-            'import pathlib, pygsti, pygsti.protocols.simultaneous_gst; '
-            'print(pathlib.Path(pygsti.__file__).resolve())',
-        ],
-        cwd=tmp_path,
-        env={**os.environ, **worker_overrides},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    assert pathlib.Path(completed.stdout.splitlines()[-1]).is_relative_to(validation.REPO)
+@pytest.mark.parametrize('scenario, changes', [
+    ('inclass', {'spectator_error': 0.01}),
+    ('inclass', {'spectator_term': ('H', 'Z:2')}),
+    *[('outclass', {'spectator_error': value}) for value in (0.0, np.nan, np.inf, -np.inf)],
+])
+def test_profiles_reject_inconsistent_injections(scenario, changes):
+    profile = getattr(ValidationProfile, scenario)(nqubits=3, max_lengths=(1,))
+    with pytest.raises(ValueError, match='spectator'):
+        dataclasses.replace(profile, **changes)

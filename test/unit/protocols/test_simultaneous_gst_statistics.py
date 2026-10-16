@@ -5,7 +5,7 @@ import pytest
 from pygsti.circuits import Circuit
 from pygsti.data import simulate_data
 from pygsti.tools import tvd
-from test.helpers.simultaneous_gst_validation import ValidationProfile
+from test.helpers.simultaneous_gst_validation import ValidationProfile, build_component_model
 from test.helpers.simultaneous_gst_statistics import (
     expected_fisher_information, identifiable_parameter_count,
     shot_noise_held_out_tvd_quantiles,
@@ -14,7 +14,7 @@ from test.helpers.simultaneous_gst_statistics import (
 
 def _noisy_oneq_model_and_circuits(shots):
     """A noisy one-qubit `somehs` model, training data at powers 1 and 2, held-out circuits at 4."""
-    model = ValidationProfile.inclass(nqubits=3, max_lengths=(1,)).oneq_model.copy()
+    model = build_component_model(ValidationProfile.inclass(nqubits=3, max_lengths=(1,)), 1)
     model.from_vector(np.random.default_rng(7).uniform(0.002, 0.02, model.num_params))
     fiducials = [(), ('Gxpi2',), ('Gypi2',), ('Gxpi2',) * 2, ('Gxpi2',) * 3, ('Gypi2',) * 3]
     germs = [('Gi',), ('Gxpi2',), ('Gypi2',), ('Gxpi2', 'Gypi2')]
