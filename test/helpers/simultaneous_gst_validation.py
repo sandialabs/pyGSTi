@@ -23,7 +23,7 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.gst import GateSetTomography, StandardGSTDesign
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.protocols.simultaneous_gst import make_simultaneous_gst_design
-from pygsti.tools import two_delta_logl, tvd
+from test.helpers.simultaneous_gst_statistics import score_validation_fit
 
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -521,73 +521,6 @@ def generate_finite_shot_data(profile: ValidationProfile, datagen_model, circuit
     )
 
 
-def _probabilities_and_jacobian(model, circuits):
-    """Stack outcome probabilities and their parameter derivatives, one row per (circuit, outcome).
-
-    Also returns, for each row, the index in `circuits` of the circuit it belongs to.
-    """
-    probabilities = model.sim.bulk_probs(circuits)
-    derivatives = model.sim.bulk_dprobs(circuits)
-    rows = [(index, probabilities[circuit][outcome], derivatives[circuit][outcome])
-            for index, circuit in enumerate(circuits) for outcome in probabilities[circuit]]
-    owner, values, jacobian = zip(*rows)
-    return np.array(values), np.array(jacobian), np.array(owner)
-
-
-def expected_fisher_information(model, dataset) -> np.ndarray:
-    """Expected multinomial Fisher information of `dataset`'s circuits and shot counts at `model`."""
-    circuits = list(dataset.keys())
-    values, jacobian, owner = _probabilities_and_jacobian(model, circuits)
-    shots = np.array([dataset[circuit].total for circuit in circuits])[owner]
-    return (jacobian.T * (shots / np.clip(values, 1e-12, None))) @ jacobian
-
-
-def _identifiable_eigenpairs(fisher: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Eigenpairs of `fisher` above a relative threshold: the directions the data identify."""
-    eigenvalues, eigenvectors = np.linalg.eigh(fisher)
-    identifiable = eigenvalues > 1e-10 * eigenvalues.max()
-    return eigenvalues[identifiable], eigenvectors[:, identifiable]
-
-
-def identifiable_parameter_count(model, dataset) -> int:
-    """Return the rank of the expected Fisher information of `dataset` at `model`.
-
-    This is the number of parameter directions the data identify, and the degrees of
-    freedom in Wilks' theorem; gauge and other unidentifiable directions do not count.
-    """
-    eigenvalues, _ = _identifiable_eigenpairs(expected_fisher_information(model, dataset))
-    return len(eigenvalues)
-
-
-def shot_noise_held_out_tvd_quantiles(model, dataset, held_out_circuits, quantile: float = 0.999,
-                                      samples: int = 20000, seed: int = 0) -> tuple[float, float]:
-    """Return quantiles of the held-out mean and maximum TVD that shot noise alone produces.
-
-    To first order a maximum-likelihood estimate is distributed as
-    ``theta_hat ~ N(theta, F^+)``, where ``F`` is the expected Fisher information of the
-    training data at the true parameters, so its held-out prediction errors are
-    ``J_h (theta_hat - theta)``.  This samples that distribution and returns the `quantile`
-    of the mean and of the maximum per-circuit TVD over `held_out_circuits`.
-
-    `model` is the data-generating model, and it must have the fit's parameterization, so
-    this applies only to in-class scenarios.
-    """
-    eigenvalues, eigenvectors = _identifiable_eigenpairs(expected_fisher_information(model, dataset))
-    covariance_root = eigenvectors / np.sqrt(eigenvalues)
-    _, held_out_jacobian, owner = _probabilities_and_jacobian(model, list(held_out_circuits))
-    response = held_out_jacobian @ covariance_root
-    circuit_starts = np.flatnonzero(np.r_[True, np.diff(owner) != 0])
-    rng = np.random.default_rng(seed)
-    means, maxima = [], []
-    for chunk in np.array_split(np.arange(samples), max(1, samples // 500)):
-        errors = np.abs(response @ rng.standard_normal((response.shape[1], len(chunk))))
-        tvds = 0.5 * np.add.reduceat(errors, circuit_starts, axis=0)
-        means.append(tvds.mean(axis=0))
-        maxima.append(tvds.max(axis=0))
-    return (float(np.quantile(np.concatenate(means), quantile)),
-            float(np.quantile(np.concatenate(maxima), quantile)))
-
-
 def _mpi_worker_environment(existing_environment=None) -> dict[str, str]:
     """Build worker overrides that import pyGSTi from this active checkout."""
     environment = os.environ if existing_environment is None else existing_environment
@@ -646,35 +579,13 @@ def run_validation_profile(
 
     estimate = results.estimates[protocol.name]
     fitted_model = estimate.models['final iteration estimate']
-    two_delta_logl_value, nsigma, _ = two_delta_logl(
-        fitted_model, dataset, dof_calc_method='modeltest')
-    tvd_by_circuit = {
-        circuit: float(tvd(fitted_model.probabilities(circuit),
-                           datagen_model.probabilities(circuit)))
-        for circuit in held_out.circuits
-    }
-    held_out_tvds = list(tvd_by_circuit.values())
-    deep_tvds = [tvd_by_circuit[circuit] for circuit in held_out.deepest]
-    # References from the same run.  The data-generating model's own 2*deltaLogL is what the
-    # true model scores on exactly this dataset, and the target model's held-out TVD (the
-    # fit's noiseless starting point) is the prediction error of a fit that learned nothing.
-    datagen_two_delta_logl = two_delta_logl(datagen_model, dataset)
-    target_tvds = [float(tvd(fit_model.probabilities(circuit), datagen_model.probabilities(circuit)))
-                   for circuit in held_out.circuits]
-    metrics: dict[str, float | int | str] = {
+    metrics = score_validation_fit(
+        fit_model, datagen_model, fitted_model, dataset, held_out, profile.scenario)
+    metrics.update({
         'profile': profile.name,
         'scenario': profile.scenario,
         'spectator_term': spectator_term_text(profile.spectator_term),
         'spectator_error': float(profile.spectator_error),
-        'two_delta_logl': float(two_delta_logl_value),
-        'datagen_two_delta_logl': float(datagen_two_delta_logl),
-        'nsigma': float(nsigma),
-        'held_out_mean_tvd': float(np.mean(held_out_tvds)),
-        'held_out_max_tvd': float(np.max(held_out_tvds)),
-        'held_out_deep_mean_tvd': float(np.mean(deep_tvds)),
-        'held_out_deep_max_tvd': float(np.max(deep_tvds)),
-        'target_held_out_mean_tvd': float(np.mean(target_tvds)),
-        'target_held_out_max_tvd': float(np.max(target_tvds)),
         'elapsed_seconds': float(elapsed_seconds),
         'fit_model_params': int(fit_model.num_params),
         'training_circuits': int(len(training_circuits)),
@@ -682,13 +593,7 @@ def run_validation_profile(
         'held_out_deep_circuits': int(len(held_out.deepest)),
         'shots': int(profile.shots),
         'mpi_ranks': int(mpi_ranks),
-    }
-    if profile.scenario == 'inclass':
-        metrics['identifiable_params'] = identifiable_parameter_count(datagen_model, dataset)
-        mean_threshold, max_threshold = shot_noise_held_out_tvd_quantiles(
-            datagen_model, dataset, held_out.circuits)
-        metrics['shot_noise_held_out_mean_tvd_q999'] = mean_threshold
-        metrics['shot_noise_held_out_max_tvd_q999'] = max_threshold
+    })
     (artifacts.root / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')
     return metrics
 
