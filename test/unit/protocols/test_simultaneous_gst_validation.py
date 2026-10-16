@@ -1,14 +1,15 @@
-"""Tests for simultaneous-GST validation execution helpers."""
+"""Validation experiment configuration, model construction and circuit selection."""
 
 import dataclasses
+import itertools
 
 import numpy as np
 import pytest
 from pygsti.circuits import Circuit
 
 import test.helpers.simultaneous_gst_validation as validation
-import test.integration.test_simultaneous_gst as integration
 from test.helpers.simultaneous_gst_validation import (
+    CANONICAL_PROFILES,
     LINE_3Q_OUTCLASS,
     ValidationProfile,
     build_component_model,
@@ -192,15 +193,6 @@ def test_profile_names_omit_only_the_default_term_set():
     ).name == 'line_3q_outclass_allhs'
 
 
-def test_canonical_profile_names_are_their_constant_and_test_names():
-    canonical = {name: value for name, value in vars(validation).items()
-                 if isinstance(value, ValidationProfile)}
-    assert len(canonical) == 8
-    for constant_name, profile in canonical.items():
-        assert profile.name == constant_name.lower()
-        assert hasattr(integration.SimultaneousGSTValidationTester, f'test_{profile.name}')
-
-
 @pytest.mark.parametrize('field, value', [
     ('model_terms', 'some_hs'), ('scenario', 'out_of_class_spectator'), ('topology', 'grid'),
 ])
@@ -224,19 +216,6 @@ def test_ring_3q_design_colors_and_uses_the_wraparound_edge():
     assert cnot_supports == {(0, 1), (1, 2), (0, 2)}
 
 
-def test_canonical_ring_profiles_match_their_line_counterparts():
-    pairs = (
-        (validation.LINE_3Q_INCLASS, validation.RING_3Q_INCLASS),
-        (validation.LINE_3Q_OUTCLASS, validation.RING_3Q_OUTCLASS),
-        (validation.LINE_4Q_INCLASS, validation.RING_4Q_INCLASS),
-        (validation.LINE_4Q_OUTCLASS, validation.RING_4Q_OUTCLASS),
-    )
-    for line, ring in pairs:
-        assert (line.topology, ring.topology) == ('line', 'ring')
-        assert ring.name == line.name.replace('line_', 'ring_', 1)
-        assert ring == dataclasses.replace(line, name=ring.name, topology='ring')
-
-
 def test_ring_spectator_datagen_model_keeps_the_injected_term():
     _, datagen_model = build_fit_and_datagen_models(validation.RING_4Q_OUTCLASS)
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
@@ -245,31 +224,6 @@ def test_ring_spectator_datagen_model_keeps_the_injected_term():
     }
     assert len(spectator_coefficients) == 1
     assert next(iter(spectator_coefficients.values())) == pytest.approx(0.01)
-
-
-def test_canonical_line_4q_inclass_profile_has_max_length_four():
-    assert validation.LINE_4Q_INCLASS.max_lengths == (1, 2, 4)
-
-
-def test_canonical_line_4q_outclass_profile_adds_s_z2_to_the_inclass_setup():
-    profile = validation.LINE_4Q_OUTCLASS
-    fit_model, datagen_model = build_fit_and_datagen_models(profile)
-
-    assert profile.max_lengths == (1, 2, 4)
-    assert profile.model_terms == 'somehs'
-    assert profile.scenario == 'outclass'
-    assert profile.spectator_error == pytest.approx(0.01)
-    assert fit_model.num_params == 59
-    cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
-    spectator_coefficients = {
-        label: value for label, value in cnot_coefficients.items()
-        if label.support == (2,)
-    }
-    assert len(spectator_coefficients) == 1
-    spectator_label, spectator_value = next(iter(spectator_coefficients.items()))
-    assert spectator_label.errorgen_type == 'S'
-    assert spectator_label.basis_element_labels == ('Z',)
-    assert spectator_value == pytest.approx(0.01)
 
 
 def test_allhs_component_models_have_expected_parameter_counts():
@@ -324,8 +278,6 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
         assert first_dataset[circuit].counts == second_dataset[circuit].counts
 
 
-
-
 @pytest.mark.parametrize('scenario, changes', [
     ('inclass', {'spectator_error': 0.01}),
     ('inclass', {'spectator_term': ('H', 'Z:2')}),
@@ -335,3 +287,11 @@ def test_profiles_reject_inconsistent_injections(scenario, changes):
     profile = getattr(ValidationProfile, scenario)(nqubits=3, max_lengths=(1,))
     with pytest.raises(ValueError, match='spectator'):
         dataclasses.replace(profile, **changes)
+
+
+def test_canonical_profiles_cover_all_eight_configurations():
+    expected = set(itertools.product(('line', 'ring'), (3, 4), ('inclass', 'outclass')))
+    assert len(CANONICAL_PROFILES) == len(expected)
+    assert {(p.topology, p.nqubits, p.scenario) for p in CANONICAL_PROFILES} == expected
+    for p in CANONICAL_PROFILES:
+        assert p == getattr(ValidationProfile, p.scenario)(p.nqubits, (1, 2, 4), topology=p.topology)

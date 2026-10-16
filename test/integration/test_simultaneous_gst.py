@@ -174,47 +174,38 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
 
 @pytest.mark.long_running
 class SimultaneousGSTValidationTester:
-    """Finite-shot recovery and robustness of simultaneous GST, one profile per test.
+    """Seeded finite-shot recovery and crosstalk detection against same-run references.
 
-    Each fit is checked against references computed from the same run, so the
-    assertions hold for any seed rather than for recorded numbers:
-
-    * ``datagen_two_delta_logl`` is what the data-generating model scores on exactly the
-      training data.  Comparing the fit against it avoids the degrees-of-freedom
-      convention behind ``nsigma``, which sparse multi-qubit outcome counts make unusable.
-    * ``target_held_out_mean_tvd`` is the held-out error of the target model, the fit's
-      noiseless starting point, that is, of a fit that learned nothing.
-    * ``shot_noise_held_out_*_tvd_q999`` are 99.9th percentiles of the held-out error that
-      shot noise in the training data alone gives the fit (in-class profiles only).
+    In-class likelihood gains use Wilks' identifiable-parameter chi-squared bound;
+    held-out mean/max TVDs use predictive shot-noise quantiles. These asymptotic,
+    probabilistic checks do not guarantee every seed passes. Both scenarios must
+    remove half the noiseless target's held-out mean error. ``nsigma`` and
+    largest-L-increment TVDs are diagnostics, not acceptance criteria.
     """
 
     @staticmethod
-    def assert_recovers_datagen_model(result):
-        likelihood_gain = result['datagen_two_delta_logl'] - result['two_delta_logl']
-        # The data-generating model lies in the hypothesis class, so the maximum-likelihood
-        # fit explains the training data at least as well as that model does.  By Wilks'
-        # theorem the gain is asymptotically chi-squared with one degree of freedom per
-        # identifiable parameter (the rank of the Fisher information).
-        assert likelihood_gain >= 0.0
-        assert likelihood_gain <= chi2.ppf(0.999, result['identifiable_params'])
-        # Its held-out predictions are as accurate as shot noise in the training data allows.
-        assert result['held_out_mean_tvd'] <= result['shot_noise_held_out_mean_tvd_q999']
-        assert result['held_out_max_tvd'] <= result['shot_noise_held_out_max_tvd_q999']
-        # And the profile can tell a fit from no fit: the noise it injects is large enough
-        # that fitting removes most of the target model's held-out error.
-        assert result['held_out_mean_tvd'] <= 0.5 * result['target_held_out_mean_tvd']
+    def assert_improves_target(result):
+        error = result['held_out_mean_tvd']
+        limit = 0.5 * result['target_held_out_mean_tvd']
+        assert error <= limit, f"{result['profile']}: mean TVD {error} exceeds half-target limit {limit}"
 
-    @staticmethod
-    def assert_reveals_and_survives_crosstalk(result):
-        # The data-generating model lies outside the crosstalk-free hypothesis class.  If the
-        # best fit explains the training data worse than that model does, the data reveal the
-        # crosstalk, since an in-class fit can never do worse.  The converse fails: crosstalk
-        # whose likelihood cost is smaller than the fit's overfitting gain (about chi-squared
-        # in the identifiable parameters) goes unflagged here.
-        assert result['two_delta_logl'] > result['datagen_two_delta_logl']
-        # The violation is modest: the fit still removes most of the target model's
-        # held-out error.
-        assert result['held_out_mean_tvd'] <= 0.5 * result['target_held_out_mean_tvd']
+    def assert_recovers_datagen_model(self, result):
+        self.assert_improves_target(result)
+        gain = result['datagen_two_delta_logl'] - result['two_delta_logl']
+        limit = chi2.ppf(0.999, result['identifiable_params'])
+        # An in-class MLE beats the generator, with asymptotically chi-squared gain.
+        assert 0.0 <= gain <= limit, f"{result['profile']}: likelihood gain {gain} outside [0, {limit}]"
+        for summary in ('mean', 'max'):
+            error = result[f'held_out_{summary}_tvd']
+            limit = result[f'shot_noise_held_out_{summary}_tvd_q999']
+            assert error <= limit, f"{result['profile']}: {summary} TVD {error} exceeds shot-noise limit {limit}"
+
+    def assert_reveals_and_survives_crosstalk(self, result):
+        self.assert_improves_target(result)
+        loss = result['two_delta_logl'] - result['datagen_two_delta_logl']
+        # Detection requires the crosstalk cost to exceed the fit's overfitting gain;
+        # a nonpositive loss does not prove the absence of crosstalk.
+        assert loss > 0.0, f"{result['profile']}: likelihood loss {loss} does not reveal crosstalk"
 
     def test_line_3q_inclass(self):
         self.assert_recovers_datagen_model(run_profile(LINE_3Q_INCLASS))

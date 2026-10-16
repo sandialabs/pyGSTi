@@ -1,4 +1,4 @@
-"""Shared helpers for simultaneous-GST validation runs."""
+"""Experiment configuration, models and circuits for simultaneous-GST validation."""
 
 import dataclasses
 import itertools
@@ -133,6 +133,12 @@ RING_4Q_INCLASS = ValidationProfile.inclass(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
 RING_4Q_OUTCLASS = ValidationProfile.outclass(
     nqubits=4, max_lengths=(1, 2, 4), topology='ring')
+
+
+CANONICAL_PROFILES = (
+    LINE_3Q_INCLASS, LINE_3Q_OUTCLASS, LINE_4Q_INCLASS, LINE_4Q_OUTCLASS,
+    RING_3Q_INCLASS, RING_3Q_OUTCLASS, RING_4Q_INCLASS, RING_4Q_OUTCLASS,
+)
 
 
 def _oneq_processor_spec() -> QubitProcessorSpec:
@@ -418,13 +424,10 @@ def build_component_designs(profile: ValidationProfile) -> tuple[StandardGSTDesi
 
 @dataclasses.dataclass(frozen=True)
 class HeldOutCircuits:
-    """Held-out circuits, and the subset first added at the largest maximum length L.
+    """Distinct held-out circuits and their largest-L design increment.
 
-    An error injected during `Gcnot(0, 1)` accumulates with the number of times
-    that gate is applied, so the deepest circuits carry the most signal about it.  The
-    circuits a nested design first adds at its largest L include its deepest ones, and
-    scoring them separately measures the effect where it is largest, without changing the
-    data-generating model.
+    ``deepest`` is the subset first added at the largest maximum length, not
+    exclusively maximum-depth circuits. Its scores are recorded as diagnostics.
     """
 
     circuits: tuple
