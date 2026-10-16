@@ -44,8 +44,8 @@ from test.helpers.simultaneous_gst_runner import run_profile
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
     """
-    Return (target_model, noisy_model) for a given Lindblad error
-    specification. `target_model` has every coefficient zeroed (ideal
+    Return (ideal_model, noisy_model) for a given Lindblad error
+    specification. `ideal_model` has every coefficient zeroed (ideal
     device prior) but retains the same free parameters, so GST can
     optimise them starting from zero. `noisy_model` uses the supplied
     coefficient values and is used to generate synthetic data.
@@ -131,10 +131,10 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
     def test_pipeline_all_noise_types(self):
         for config_name, noise_coeffs, parameterization, max_two_delta_logl in _NOISE_CONFIGS:
             with self.subTest(noise_config=config_name):
-                target_model, noisy_model = _build_noise_model(
+                ideal_model, noisy_model = _build_noise_model(
                     self.pspec, noise_coeffs, parameterization)
-                self.assertGreater(target_model.num_params, 0)
-                self.assertEqual(target_model.num_params, noisy_model.num_params)
+                self.assertGreater(ideal_model.num_params, 0)
+                self.assertEqual(ideal_model.num_params, noisy_model.num_params)
 
                 # sample_error='none' -> deterministic frequencies exactly
                 # equal to noisy_model's probabilities, so a correct GST fit
@@ -157,7 +157,7 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
                 # have this failure mode and is sufficient for this fit-
                 # quality smoke test.
                 proto = GateSetTomography(
-                    target_model, gaugeopt_suite='none', name='simul_gst',
+                    ideal_model, gaugeopt_suite='none', name='simul_gst',
                     objfn_builders={'objective': 'chi2'},
                 )
                 results = proto.run(data)
@@ -179,7 +179,7 @@ class SimultaneousGSTValidationTester:
     In-class likelihood gains use Wilks' identifiable-parameter chi-squared bound;
     held-out mean/max TVDs use predictive shot-noise quantiles. These asymptotic,
     probabilistic checks do not guarantee every seed passes. Both scenarios must
-    remove half the noiseless target's held-out mean error. ``nsigma`` and
+    remove half the ideal model's held-out mean error. ``nsigma`` and
     largest-L-increment TVDs are diagnostics, not acceptance criteria.
     """
 

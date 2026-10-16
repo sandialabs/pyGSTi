@@ -13,7 +13,7 @@ import time
 from pygsti.protocols.gst import GateSetTomography
 from pygsti.protocols.protocol import ProtocolData
 from test.helpers.simultaneous_gst_validation import (
-    ValidationProfile, build_fit_and_datagen_models,
+    ValidationProfile, build_ideal_and_datagen_models,
     build_training_design_and_held_out_circuits, generate_finite_shot_data,
     spectator_term_text,
 )
@@ -93,7 +93,7 @@ def run_validation_profile(
     artifacts.manifest_path.write_text(
         json.dumps(dataclasses.asdict(profile), indent=2) + '\n')
 
-    fit_model, datagen_model = build_fit_and_datagen_models(profile)
+    ideal_model, datagen_model = build_ideal_and_datagen_models(profile)
     training_design, held_out = build_training_design_and_held_out_circuits(profile)
     training_circuits = training_design.all_circuits_needing_data
     dataset = generate_finite_shot_data(profile, datagen_model, training_circuits)
@@ -101,7 +101,7 @@ def run_validation_profile(
     pdata.write(artifacts.dataset_dir)
 
     protocol = GateSetTomography(
-        fit_model,
+        ideal_model,
         gaugeopt_suite='none',
         name='simultaneous_gst_validation',
         verbosity=1,
@@ -112,14 +112,15 @@ def run_validation_profile(
     estimate = results.estimates[protocol.name]
     fitted_model = estimate.models['final iteration estimate']
     metrics = score_validation_fit(
-        fit_model, datagen_model, fitted_model, dataset, held_out, profile.scenario)
+        ideal_model, datagen_model, fitted_model, dataset, held_out, profile.scenario)
     metrics.update({
         'profile': profile.name,
         'scenario': profile.scenario,
         'spectator_term': spectator_term_text(profile.spectator_term),
         'spectator_error': float(profile.spectator_error),
         'elapsed_seconds': float(elapsed_seconds),
-        'fit_model_params': int(fit_model.num_params),
+        # Preserve the artifact key for the hypothesis class's parameter count.
+        'fit_model_params': int(ideal_model.num_params),
         'training_circuits': int(len(training_circuits)),
         'held_out_circuits': int(len(held_out.circuits)),
         'held_out_deep_circuits': int(len(held_out.deepest)),

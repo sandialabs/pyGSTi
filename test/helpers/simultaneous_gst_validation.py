@@ -333,19 +333,21 @@ def _assert_spectator_term_survived(model, spectator_gate, profile: ValidationPr
         f'{_spectator_parameterization(profile.spectator_term)!r} cannot represent it')
 
 
-def build_fit_and_datagen_models(profile: ValidationProfile):
-    """Build the crosstalk-free fit model and the scenario's seeded data-generating model.
+def build_ideal_and_datagen_models(profile: ValidationProfile):
+    """Build the ideal model and the scenario's seeded data-generating model.
 
-    The fit model's parameterization defines the hypothesis class.
+    The ideal model has zero noise coefficients but free noise parameters, whose
+    parameterization defines the hypothesis class. It is the GST starting point
+    and the noiseless baseline for prediction comparisons.
     """
-    fit_model = _build_model(_processor_spec(profile.nqubits, profile.topology),
-                             profile.model_terms, independent_gates=True)
+    ideal_model = _build_model(_processor_spec(profile.nqubits, profile.topology),
+                               profile.model_terms, independent_gates=True)
     if profile.scenario == 'outclass':
         datagen_model = _build_spectator_datagen_model(profile)
     else:
-        datagen_model = fit_model.copy()
+        datagen_model = ideal_model.copy()
         _set_seeded_error_coefficients(datagen_model, profile.seed)
-    return fit_model, datagen_model
+    return ideal_model, datagen_model
 
 
 def _perturb_hamiltonian_terms(model, seed: int) -> None:

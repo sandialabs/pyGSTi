@@ -80,11 +80,11 @@ def _shot_noise_quantiles(model, held_out_circuits, eigenpairs, quantile=0.999,
             float(np.quantile(np.concatenate(maxima), quantile)))
 
 
-def score_validation_fit(fit_model, datagen_model, fitted_model, dataset, held_out, scenario):
+def score_validation_fit(ideal_model, datagen_model, fitted_model, dataset, held_out, scenario):
     """Score an existing fit against same-run references without executing or saving it.
 
     Returns fit/generator two_delta_logl and held_out_{mean,max}_tvd summaries
-    for the fit and target. In-class scores also include identifiable_params and
+    for the fitted and ideal models. In-class scores also include identifiable_params and
     shot_noise_held_out_{mean,max}_tvd_q999. The nsigma and held_out_deep_* scores
     are diagnostics, not acceptance criteria. Statistical bounds are asymptotic.
     """
@@ -98,11 +98,11 @@ def score_validation_fit(fit_model, datagen_model, fitted_model, dataset, held_o
     held_out_tvds = list(tvd_by_circuit.values())
     deep_tvds = [tvd_by_circuit[circuit] for circuit in held_out.deepest]
     # References from the same run.  The data-generating model's own 2*deltaLogL is what the
-    # true model scores on exactly this dataset, and the target model's held-out TVD (the
-    # fit's noiseless starting point) is the prediction error of a fit that learned nothing.
+    # true model scores on exactly this dataset, and the ideal model's held-out TVD (the
+    # GST's noiseless starting point) is the prediction error of a fit that learned nothing.
     datagen_two_delta_logl = two_delta_logl(datagen_model, dataset)
-    target_tvds = [float(tvd(fit_model.probabilities(circuit), datagen_model.probabilities(circuit)))
-                   for circuit in held_out.circuits]
+    ideal_tvds = [float(tvd(ideal_model.probabilities(circuit), datagen_model.probabilities(circuit)))
+                  for circuit in held_out.circuits]
     metrics: dict[str, float | int | str] = {
         'two_delta_logl': float(two_delta_logl_value),
         'datagen_two_delta_logl': float(datagen_two_delta_logl),
@@ -111,8 +111,8 @@ def score_validation_fit(fit_model, datagen_model, fitted_model, dataset, held_o
         'held_out_max_tvd': float(np.max(held_out_tvds)),
         'held_out_deep_mean_tvd': float(np.mean(deep_tvds)),
         'held_out_deep_max_tvd': float(np.max(deep_tvds)),
-        'target_held_out_mean_tvd': float(np.mean(target_tvds)),
-        'target_held_out_max_tvd': float(np.max(target_tvds)),
+        'target_held_out_mean_tvd': float(np.mean(ideal_tvds)),
+        'target_held_out_max_tvd': float(np.max(ideal_tvds)),
     }
     if scenario == 'inclass':
         eigenpairs = _identifiable_eigenpairs(expected_fisher_information(datagen_model, dataset))

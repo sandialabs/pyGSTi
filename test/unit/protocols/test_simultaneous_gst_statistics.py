@@ -103,15 +103,15 @@ def test_score_assembly_and_scenario_specific_references(scenario, monkeypatch):
     from test.helpers.simultaneous_gst_validation import HeldOutCircuits
 
     model, dataset, circuits = _noisy_oneq_model_and_circuits(shots=1000)
-    target = model.copy()
-    target.from_vector(np.zeros(model.num_params))
+    ideal_model = model.copy()
+    ideal_model.from_vector(np.zeros(model.num_params))
     fisher_calls = []
     def fisher(model, dataset):
         fisher_calls.append(True)
         return expected_fisher_information(model, dataset)
     monkeypatch.setattr(statistics, 'expected_fisher_information', fisher)
     scores = statistics.score_validation_fit(
-        target, model, model.copy(), dataset, HeldOutCircuits(tuple(circuits), tuple(circuits[-2:])), scenario)
+        ideal_model, model, model.copy(), dataset, HeldOutCircuits(tuple(circuits), tuple(circuits[-2:])), scenario)
     assert scores['two_delta_logl'] == pytest.approx(scores['datagen_two_delta_logl'])
     assert scores['held_out_mean_tvd'] == scores['held_out_max_tvd'] == 0.0
     assert scores['held_out_deep_mean_tvd'] == scores['held_out_deep_max_tvd'] == 0.0

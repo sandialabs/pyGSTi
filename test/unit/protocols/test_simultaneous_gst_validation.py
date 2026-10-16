@@ -14,7 +14,7 @@ from test.helpers.simultaneous_gst_validation import (
     ValidationProfile,
     build_component_model,
     build_component_designs,
-    build_fit_and_datagen_models,
+    build_ideal_and_datagen_models,
     build_training_design_and_held_out_circuits,
     generate_finite_shot_data,
     spectator_support,
@@ -31,18 +31,18 @@ def test_somehs_component_models_have_expected_parameter_counts():
     assert twoq_design.qubit_labels == (0, 1)
 
 
-def test_line_4q_allhs_fit_model_has_independent_placement_parameters():
+def test_line_4q_allhs_ideal_model_has_independent_placement_parameters():
     profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2), model_terms='allhs')
-    fit_model, _ = build_fit_and_datagen_models(profile)
-    assert fit_model.num_params == 252
+    ideal_model, _ = build_ideal_and_datagen_models(profile)
+    assert ideal_model.num_params == 252
 
 
 def test_inclass_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
     profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2))
-    fit_model, datagen_model = build_fit_and_datagen_models(profile)
-    assert fit_model.num_params == datagen_model.num_params
+    ideal_model, datagen_model = build_ideal_and_datagen_models(profile)
+    assert ideal_model.num_params == datagen_model.num_params
     assert np.any(datagen_model.to_vector() != 0.0)
-    _, repeated_datagen_model = build_fit_and_datagen_models(profile)
+    _, repeated_datagen_model = build_ideal_and_datagen_models(profile)
     assert np.array_equal(datagen_model.to_vector(), repeated_datagen_model.to_vector())
 
 
@@ -57,8 +57,8 @@ def test_spectator_profiles_default_to_calibrated_effect():
 def test_spectator_datagen_model_lies_outside_the_hypothesis_class():
     profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.001)
-    fit_model, datagen_model = build_fit_and_datagen_models(profile)
-    assert fit_model.num_params < datagen_model.num_params
+    ideal_model, datagen_model = build_ideal_and_datagen_models(profile)
+    assert ideal_model.num_params < datagen_model.num_params
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
     spectator_coefficients = {
         label: value for label, value in cnot_coefficients.items()
@@ -83,7 +83,7 @@ def test_weight_two_spectator_term_survives_the_seeded_local_noise():
     """A weight-2 key has support (1, 2), so the (2,)-only guard would not protect it."""
     profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.02, spectator_term=('H', 'ZZ:1,2'))
-    _, datagen_model = build_fit_and_datagen_models(profile)
+    _, datagen_model = build_ideal_and_datagen_models(profile)
 
     weight_two = {
         label: value
@@ -101,7 +101,7 @@ def test_correlation_spectator_terms_are_built_rather_than_silently_discarded():
     profile = ValidationProfile.outclass(
         nqubits=3, max_lengths=(1, 2), spectator_error=0.01,
         spectator_term=('C', 'Z:2', 'X:2'))
-    _, datagen_model = build_fit_and_datagen_models(profile)
+    _, datagen_model = build_ideal_and_datagen_models(profile)
 
     injected = {
         label: value
@@ -152,10 +152,10 @@ def test_deepest_held_out_circuits_come_from_the_largest_max_length():
             > min(circuit.depth for circuit in held_out.circuits))
 
 
-def test_line_4q_somehs_fit_model_has_59_parameters():
+def test_line_4q_somehs_ideal_model_has_59_parameters():
     profile = ValidationProfile.inclass(nqubits=4, max_lengths=(1, 2))
-    fit_model, _ = build_fit_and_datagen_models(profile)
-    assert fit_model.num_params == 59
+    ideal_model, _ = build_ideal_and_datagen_models(profile)
+    assert ideal_model.num_params == 59
 
 
 def test_ring_processor_spec_adds_the_wraparound_edge_to_the_line():
@@ -169,12 +169,12 @@ def test_ring_processor_spec_adds_the_wraparound_edge_to_the_line():
         validation._processor_spec(2, 'ring')
 
 
-def test_ring_fit_models_add_one_edge_of_parameters():
+def test_ring_ideal_models_add_one_edge_of_parameters():
     # Each edge carries 3 Gcnot and 6 Gii parameters, so the ring adds 9 to the line.
     for nqubits, num_params in ((3, 51), (4, 68)):
         profile = ValidationProfile.inclass(nqubits=nqubits, max_lengths=(1,), topology='ring')
-        fit_model, _ = build_fit_and_datagen_models(profile)
-        assert fit_model.num_params == num_params
+        ideal_model, _ = build_ideal_and_datagen_models(profile)
+        assert ideal_model.num_params == num_params
 
 
 def test_profile_names_omit_only_the_default_term_set():
@@ -214,7 +214,7 @@ def test_ring_3q_design_colors_and_uses_the_wraparound_edge():
 
 
 def test_ring_spectator_datagen_model_keeps_the_injected_term():
-    _, datagen_model = build_fit_and_datagen_models(validation.RING_4Q_OUTCLASS)
+    _, datagen_model = build_ideal_and_datagen_models(validation.RING_4Q_OUTCLASS)
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
     spectator_coefficients = {
         label: value for label, value in cnot_coefficients.items() if label.support == (2,)
@@ -262,7 +262,7 @@ def test_held_out_circuits_are_reproducible_and_disjoint_from_training():
 def test_finite_shot_data_are_seeded_multinomial_counts():
     profile = ValidationProfile.inclass(
         nqubits=3, max_lengths=(1,), shots=37, seed=1234)
-    _, datagen_model = build_fit_and_datagen_models(profile)
+    _, datagen_model = build_ideal_and_datagen_models(profile)
     circuits = (
         Circuit([('Gxpi2', 0)], line_labels=(0, 1, 2)),
         Circuit([('Gcnot', 0, 1)], line_labels=(0, 1, 2)),
