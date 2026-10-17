@@ -2,7 +2,7 @@
 
 Builds expected multinomial Fisher information and its identifiable eigenspace,
 propagates Gaussian parameter fluctuations to held-out TVD quantiles, and scores
-fitted models against the generator and ideal baseline. These are test-support
+fitted models against the data-generating model and ideal baseline. These are test-support
 calculations, not production statistical APIs or acceptance assertions.
 """
 
@@ -72,8 +72,8 @@ def _shot_noise_quantiles(model, held_out_circuits, eigenpairs, quantile=0.999,
 def score_validation_fit(ideal_model, datagen_model, fitted_model, dataset, held_out, scenario):
     """Score an existing fit against same-run references without executing or saving it.
 
-    Returns fit/generator two_delta_logl and held_out_{mean,max}_tvd summaries
-    for the fitted and ideal models. In-class scores also include identifiable_params and
+    Returns two_delta_logl for the fitted and data-generating models and
+    held_out_{mean,max}_tvd summaries for the fitted and ideal models. In-class scores also include identifiable_params and
     shot_noise_held_out_{mean,max}_tvd_q999. The nsigma and held_out_deep_* scores
     are diagnostics, not acceptance criteria. Statistical bounds are asymptotic.
     """
@@ -100,8 +100,8 @@ def score_validation_fit(ideal_model, datagen_model, fitted_model, dataset, held
         'held_out_max_tvd': float(np.max(held_out_tvds)),
         'held_out_deep_mean_tvd': float(np.mean(deep_tvds)),
         'held_out_deep_max_tvd': float(np.max(deep_tvds)),
-        'target_held_out_mean_tvd': float(np.mean(ideal_tvds)),
-        'target_held_out_max_tvd': float(np.max(ideal_tvds)),
+        'ideal_held_out_mean_tvd': float(np.mean(ideal_tvds)),
+        'ideal_held_out_max_tvd': float(np.max(ideal_tvds)),
     }
     if scenario == 'inclass':
         eigenpairs = _identifiable_eigenpairs(expected_fisher_information(datagen_model, dataset))

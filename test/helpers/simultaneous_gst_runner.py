@@ -127,8 +127,7 @@ def run_validation_profile(
         'spectator_term': spectator_term_text(profile.spectator_term),
         'spectator_error': float(profile.spectator_error),
         'elapsed_seconds': float(elapsed_seconds),
-        # Preserve the artifact key for the hypothesis class's parameter count.
-        'fit_model_params': int(ideal_model.num_params),
+        'hypothesis_class_num_params': int(ideal_model.num_params),
         'training_circuits': int(len(training_circuits)),
         'held_out_circuits': int(len(held_out.circuits)),
         'held_out_deep_circuits': int(len(held_out.deepest)),

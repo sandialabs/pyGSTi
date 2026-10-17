@@ -143,7 +143,7 @@ def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
 def test_score_assembly_and_scenario_specific_references(scenario, monkeypatch):
     """Check ``score_validation_fit`` values and scenario-specific reference fields.
 
-    Reference: identical generator and estimate imply equal likelihood deficits
+    Reference: identical data-generating model and estimate imply equal likelihood deficits
     and zero predictive TVDs; a zero-noise baseline differs. Explicit field sets
     and recorded calls require one shared Fisher calculation in class and none
     out of class. This checks assembly, not an independent likelihood implementation.
@@ -169,7 +169,7 @@ def test_score_assembly_and_scenario_specific_references(scenario, monkeypatch):
     assert scores['two_delta_logl'] == pytest.approx(scores['datagen_two_delta_logl'])
     assert scores['held_out_mean_tvd'] == scores['held_out_max_tvd'] == 0.0
     assert scores['held_out_deep_mean_tvd'] == scores['held_out_deep_max_tvd'] == 0.0
-    assert scores['target_held_out_mean_tvd'] > 0.0
+    assert scores['ideal_held_out_mean_tvd'] > 0.0
     reference_keys = {'identifiable_params', 'shot_noise_held_out_mean_tvd_q999',
                       'shot_noise_held_out_max_tvd_q999'}
     assert reference_keys.intersection(scores) == (reference_keys if scenario == 'inclass' else set())

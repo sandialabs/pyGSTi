@@ -54,8 +54,8 @@ def test_line_4q_allhs_ideal_model_has_independent_placement_parameters():
 def test_inclass_datagen_model_is_a_seeded_point_in_the_hypothesis_class():
     """Check ``build_ideal_and_datagen_models`` preserves the in-class parameter space.
 
-    Reference: ideal/generator parameter counts must match, generator coefficients
-    must not all vanish, and repeated construction with the same seed must return
+    Reference: ideal and data-generating models must have equal parameter counts,
+    the data-generating model coefficients must not all vanish, and repeated construction with the same seed must return
     an identical parameter vector. No fixed random vector is hard-coded.
     """
     profile = ValidationProfile.inclass(nqubits=3, max_lengths=(1, 2))
@@ -83,7 +83,7 @@ def test_spectator_datagen_model_lies_outside_the_hypothesis_class():
     """Check ``build_ideal_and_datagen_models`` adds the requested spectator term.
 
     Reference: inspect CNOT coefficients for exactly one S(Z:2) term with the
-    requested value 0.001 and require more generator parameters than ideal ones.
+    requested value 0.001 and require more data-generating model parameters than ideal ones.
     These are construction checks, not a proof of observable distinguishability.
     """
     profile = ValidationProfile.outclass(
