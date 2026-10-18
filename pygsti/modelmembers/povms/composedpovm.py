@@ -13,10 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import collections as _collections
 from typing import Optional
@@ -315,6 +311,7 @@ class ComposedPOVM(_POVM, _Torchable):
         (Torchable) error map; the base POVM is static (0 params).  The rows of base_povm
         are ordered according to self.keys().
         """
+        import torch as _torch
         base_effects = [self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]
         base_povm_np = _np.ascontiguousarray(_np.stack(base_effects))
         base_povm    = _torch.from_numpy(base_povm_np).to(dtype=real_dtype, device=device)

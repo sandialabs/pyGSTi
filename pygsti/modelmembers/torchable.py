@@ -17,10 +17,6 @@ from typing import Tuple, TYPE_CHECKING, Optional, Any
 
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
 from pygsti.modelmembers.modelmember import ModelMember
@@ -66,6 +62,7 @@ class StaticTorchable(Torchable):
     """
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
+        import torch as _torch
         mx = _np.ascontiguousarray(self.to_dense('HilbertSchmidt'))
         if _np.iscomplexobj(mx):
             dtype = _torch.complex64 if real_dtype.itemsize == 4 else _torch.complex128
@@ -88,6 +85,7 @@ class StackedMemberDictTorchable(Torchable):
     """
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        import torch as _torch
         member_data = []
         for (_, member), inds in zip(self.items(), self._submember_rpindices):
             assert isinstance(member, Torchable), \
@@ -99,6 +97,7 @@ class StackedMemberDictTorchable(Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        import torch as _torch
         (member_data,) = sd
         mats = [mtype.torch_base(msd, t_param[idx]) for (mtype, msd, idx) in member_data]
         return _torch.stack(mats)

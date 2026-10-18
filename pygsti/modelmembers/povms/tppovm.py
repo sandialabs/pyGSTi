@@ -14,10 +14,6 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
 from pygsti.modelmembers.torchable import Torchable as _Torchable
@@ -110,6 +106,7 @@ class TPPOVM(_BasePOVM, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
+        import torch as _torch
         num_effects, identity = sd
         dim = identity.size
 

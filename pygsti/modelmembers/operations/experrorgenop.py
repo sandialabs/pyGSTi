@@ -15,10 +15,6 @@ import math
 from typing import Union, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -231,6 +227,7 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
     @staticmethod
     def torch_base(sd, t_param):
         """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        import torch as _torch
         etype, esd = sd
         L = etype.torch_base(esd, t_param)
         return _torch.linalg.matrix_exp(L)

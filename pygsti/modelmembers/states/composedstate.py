@@ -13,10 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
 
@@ -161,6 +157,7 @@ class ComposedState(_State, _Torchable):
         error map; the prepared super-ket is `error_map_superop @ static_ket` (cf. `to_dense`), where
         `static_ket` is the constant base state in Hilbert-Schmidt space.
         """
+        import torch as _torch
         superket_np  = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt').ravel())
         superket     = _torch.from_numpy(superket_np).to(dtype=real_dtype, device=device)
         error_map_sd = self.error_map.stateless_data(real_dtype, device)

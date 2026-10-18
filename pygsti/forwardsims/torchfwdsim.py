@@ -29,18 +29,16 @@ if TYPE_CHECKING:
     from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
     import torch
 
+import importlib.util as _importlib_util
 import warnings as warnings
 import weakref as _weakref
 
 
-try:
-    import torch
-    TORCH_ENABLED = True
-    DEFAULT_REAL_TYPE = torch.float64
-
-except ImportError:
-    TORCH_ENABLED = False
-    pass
+# Check for torch without importing it. Importing torch loads its OpenMP runtime, which takes a
+# slice of glibc's small fixed reserve for libraries loaded after startup ("static TLS"). Doing
+# that at `import pygsti` can leave too little for libraries the user imports afterwards, such as
+# qiskit-aer, whose import then fails with "cannot allocate memory in static TLS block".
+TORCH_ENABLED = _importlib_util.find_spec('torch') is not None
 
 
 class StatelessCircuit:
@@ -173,6 +171,7 @@ class StatelessModelCircuitStore:
         We compare the labels of the input model's ModelMembers to those of the model provided
         to StatelessModelCircuitStore.__init__(...). We raise an error if an inconsistency is detected.
         """
+        import torch
         free_params = []
         free_param_sizes = []
         prev_idx = 0
@@ -306,6 +305,7 @@ def _copy_to_numpy(src: torch.Tensor, dest) -> None:
     Wrapping `dest` with ``torch.from_numpy`` lets the copy engine write into the caller's memory
     directly.
     """
+    import torch
     src = src.detach().reshape(dest.shape)
     try:
         torch.from_numpy(dest).copy_(src)
@@ -315,6 +315,7 @@ def _copy_to_numpy(src: torch.Tensor, dest) -> None:
 
 
 def get_device() -> str:
+    import torch
     if torch.cuda.is_available() and torch.cuda.device_count() > 0:
         return 'cuda:0'  # NVIDIA and AMD
     elif torch.mps.is_available() and torch.mps.device_count() > 0:
@@ -360,7 +361,7 @@ class TorchForwardSimulator(ForwardSimulator):
 
         dtype : torch.dtype, optional
             The real dtype used for free parameters and all baked constants. If None, defaults
-            to `DEFAULT_REAL_TYPE` (`torch.float64`, matching the precision of pyGSTi's other
+            to `torch.float64` (matching the precision of pyGSTi's other
             forward simulators), except on an MPS device where float64 is unsupported and
             float32 is used instead.
 
@@ -371,6 +372,7 @@ class TorchForwardSimulator(ForwardSimulator):
         """
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
+        import torch
         self.model = model
 
         if device == 'auto':
@@ -386,7 +388,7 @@ class TorchForwardSimulator(ForwardSimulator):
             raise ValueError('Specify at most one of `device` and `use_gpu`.')
 
         if dtype is None:
-            dtype = torch.float32 if 'mps' in str(device) else DEFAULT_REAL_TYPE
+            dtype = torch.float32 if 'mps' in str(device) else torch.float64
             # ^ float32 is the only real floating point dtype that MPS supports
 
         self.dtype  = dtype
@@ -463,6 +465,7 @@ class TorchForwardSimulator(ForwardSimulator):
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
+        import torch
         assert self.model is not None
         smcs = self._circuit_store(layout)
         free_params = smcs.get_free_params(self.model, self.dtype, self.device)

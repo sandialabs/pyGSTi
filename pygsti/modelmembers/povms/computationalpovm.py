@@ -15,10 +15,6 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import collections as _collections
 import itertools as _itertools
@@ -185,6 +181,7 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface, _Torchable):
         # row per effect (in self.keys() order, the order TorchForwardSimulator multiplies against
         # the super-ket), each row the effect's dual super-bra.  Computational effects have no
         # to_dense() of their own, so we stack the per-effect denses here.
+        import torch as _torch
         rows = _np.stack([self[k].to_dense('HilbertSchmidt') for k in self.keys()])
         t_rows = _torch.from_numpy(_np.ascontiguousarray(rows)).to(dtype=real_dtype, device=device)
         return (t_rows,)
