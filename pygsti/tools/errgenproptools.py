@@ -41,6 +41,7 @@ from pygsti.tools.mptools import (
     parallel_pair_reduce as _parallel_pair_reduce,
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
+    _pool_scope,
 )
 
 from functools import wraps as _wraps
@@ -5098,21 +5099,23 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
     scale = 1/2**(num_random) 
     
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
-                                                            num_workers=num_workers, pool=pool)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            #compute the taylor series approximation to the desired order.
+            taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                                num_workers=num_workers, pool=stage_pool)
+            # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    #can now do the correction computation in a single-shot.
-    alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring], num_workers=num_workers, pool=pool)
+        #can now do the correction computation in a single-shot.
+        alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring], num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
 
     alpha_errgen_prods = alphas*rates
@@ -5163,21 +5166,23 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
         selected pauli operator induced by the error generator (to specified order).
     """
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
-                                                            num_workers=num_workers, pool=pool)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            #compute the taylor series approximation to the desired order.
+            taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                                num_workers=num_workers, pool=stage_pool)
+            # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    #can now do the correction computation in a single-shot.
-    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli], num_workers=num_workers, pool=pool)
+        #can now do the correction computation in a single-shot.
+        alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli], num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     alpha_errgen_prods = alphas*rates
     correction = _np.sum(alpha_errgen_prods)
@@ -5555,21 +5560,23 @@ def approximate_stabilizer_probabilities(
     if len(bitstrings_list) == 0:
         return _np.empty(0, dtype=_np.double)
 
-    # Re-use Taylor series expansion once across all bitstrings
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        taylor_expansion = error_generator_taylor_expansion(
-            errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=pool
-        )
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Compute the Taylor series expansion once for all bitstrings, sharing one (lazily started) pool
+    # between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            taylor_expansion = error_generator_taylor_expansion(
+                errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=stage_pool
+            )
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    # Single bulk_alpha call (vectorized Cython or 2D parallel grid)
-    alphas = bulk_alpha(combined_taylor_dict, tableau, bitstrings_list, num_workers=num_workers, pool=pool)
+        # Single bulk_alpha call (vectorized Cython or 2D parallel grid)
+        alphas = bulk_alpha(combined_taylor_dict, tableau, bitstrings_list, num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     scale = 1.0 / (2.0 ** num_random)
     corrections = scale * (alphas @ rates)
@@ -5630,21 +5637,23 @@ def approximate_stabilizer_pauli_expectations(
     if len(pauli_objs) == 0:
         return _np.empty(0, dtype=_np.double)
 
-    # Re-use Taylor series expansion once across all Paulis
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        taylor_expansion = error_generator_taylor_expansion(
-            errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=pool
-        )
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Compute the Taylor series expansion once for all Paulis, sharing one (lazily started) pool
+    # between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            taylor_expansion = error_generator_taylor_expansion(
+                errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=stage_pool
+            )
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    # Single bulk_alpha_pauli call (vectorized Cython or 2D parallel grid)
-    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, pauli_objs, num_workers=num_workers, pool=pool)
+        # Single bulk_alpha_pauli call (vectorized Cython or 2D parallel grid)
+        alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, pauli_objs, num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     corrections = alphas @ rates
 
@@ -5728,14 +5737,16 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         # a 75-generator input, so every power is L o L^(k-1).
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
-        for current_order in range(2, order + 1):
-            order_scale = 1 / factorial(current_order)
-            current_power = _commuting_product(errorgen_dict, previous_power, identity,
-                                               truncation_threshold=truncation_threshold,
-                                               num_workers=num_workers, pool=pool)
-            taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
-                                                     if order_scale * abs(rate) > truncation_threshold}
-            previous_power = current_power
+        # A single (lazily started) pool is shared by the products of every order.
+        with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as order_pool:
+            for current_order in range(2, order + 1):
+                order_scale = 1 / factorial(current_order)
+                current_power = _commuting_product(errorgen_dict, previous_power, identity,
+                                                   truncation_threshold=truncation_threshold,
+                                                   num_workers=num_workers, pool=order_pool)
+                taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
+                                                         if order_scale * abs(rate) > truncation_threshold}
+                previous_power = current_power
 
     return taylor_order_terms
 

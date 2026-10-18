@@ -105,6 +105,8 @@ with SharedWorkerPool(num_workers="auto", prewarm_packages=_EGPROP_PREWARM_PACKA
     print("Pauli expectations:", expectations)
 ```
 
+A `SharedWorkerPool` must be used inside its `with` block. By default its worker processes start as soon as the block is entered. Passing `lazy=True` defers starting them until a stage first dispatches work, so if every stage decides its workload is too small to benefit from parallelism, no processes are started at all. Functions that are given `num_workers` but no `pool` (for example `propagate_errorgens_bch`) use a lazy pool internally and share it across their stages.
+
 ## Automated Threshold Cutoffs & Manual Configuration
 
 Multiprocessing incurs inter-process communication (IPC) overhead. If a circuit has only a few error generators or shallow depth, dispatching tasks across processes can be slower than executing sequentially on a single core.

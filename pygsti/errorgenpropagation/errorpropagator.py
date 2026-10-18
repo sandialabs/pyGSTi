@@ -41,6 +41,7 @@ from pygsti.tools.mptools import (
     SharedWorkerPool as _SharedWorkerPool,
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
+    _pool_scope,
 )
 import multiprocessing.pool as _mppool
 from itertools import islice
@@ -465,47 +466,39 @@ class ErrorGeneratorPropagator:
         elif mode != 'magnus':
             raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
 
-        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
-        if workers < 1:
-            raise ValueError(f"Worker count must be at least 1, got {workers}.")
-
-        # Top-level shared worker pool across propagation and Magnus stages
-        if workers > 1 and pool is None:
-            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as shared_pool:
-                return self.propagate_errorgens_bch(
-                    circuit, bch_order=bch_order, include_spam=include_spam,
-                    truncation_threshold=truncation_threshold, mode=mode,
-                    circuit_conversion_kwargs=circuit_conversion_kwargs,
-                    pool=shared_pool
-                )
-
-        propagated_errorgen_layers = self.propagate_errorgens(
-            circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs,
-            pool=pool
-        )
-        #if length one no need to do anything.
-        if len(propagated_errorgen_layers)==1:
-            return propagated_errorgen_layers[0]
-        
-        if mode == 'magnus':
-            assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
-            combined_err_layer = _eprop.magnus_expansion(
-                propagated_errorgen_layers, magnus_order=bch_order,
-                truncation_threshold=truncation_threshold,
-                pool=pool
+        # One pool shared by the propagation and Magnus stages. When the caller does not supply a
+        # pool, a lazy one is used: its workers start only if (and when) a stage decides that its
+        # workload merits parallelism, so an all-serial run never starts any processes, while e.g.
+        # a serial propagation followed by a parallel Magnus expansion starts the pool exactly once.
+        # (The deprecated pairwise mode has no parallel stage beyond propagation.)
+        with _pool_scope(num_workers, pool, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as stage_pool:
+            propagated_errorgen_layers = self.propagate_errorgens(
+                circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs,
+                pool=stage_pool
             )
+            #if length one no need to do anything.
+            if len(propagated_errorgen_layers)==1:
+                return propagated_errorgen_layers[0]
 
-        else:  # 'pairwise' (deprecated, see above)
-            assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
-            #iterate through in reverse order (the propagated layers are
-            #in circuit ordering and not matrix multiplication ordering at the moment)
-            #and combine the terms pairwise
-            combined_err_layer = propagated_errorgen_layers[-1]
-            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-                combined_err_layer = _eprop.bch_approximation(
-                    combined_err_layer, propagated_errorgen_layers[i],
-                    bch_order=bch_order, truncation_threshold=truncation_threshold
+            if mode == 'magnus':
+                assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+                combined_err_layer = _eprop.magnus_expansion(
+                    propagated_errorgen_layers, magnus_order=bch_order,
+                    truncation_threshold=truncation_threshold,
+                    pool=stage_pool
                 )
+
+            else:  # 'pairwise' (deprecated, see above)
+                assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+                #iterate through in reverse order (the propagated layers are
+                #in circuit ordering and not matrix multiplication ordering at the moment)
+                #and combine the terms pairwise
+                combined_err_layer = propagated_errorgen_layers[-1]
+                for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                    combined_err_layer = _eprop.bch_approximation(
+                        combined_err_layer, propagated_errorgen_layers[i],
+                        bch_order=bch_order, truncation_threshold=truncation_threshold
+                    )
 
         return combined_err_layer
         

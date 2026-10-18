@@ -10,6 +10,7 @@ Functions for working with Python multiprocessing (more than just map)
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import contextlib as _contextlib
 import itertools as _itertools
 import math as _math
 import multiprocessing as _mp
@@ -298,9 +299,16 @@ class SharedWorkerPool:
     """
     Reusable worker pool context manager with caller-configurable worker pre-warming.
 
-    Eliminates process spin-up and teardown overhead across sequential algorithm stages.
-    When wrapping an existing Pool or SharedWorkerPool instance, transparently reuses
-    the active processes without spawning duplicates.
+    Eliminates process spin-up and teardown overhead across sequential algorithm stages:
+    create the pool once in a `with` block and pass it (via the `pool` argument) to every
+    function that should share its worker processes.
+
+    Lifecycle: a pool is *created* by the constructor, becomes *active* on entering its `with`
+    block, has its worker processes *started* either on entry (default) or on first use
+    (`lazy=True`), and is *closed* on leaving the block. Outside of its `with` block a pool with
+    more than one worker cannot be used; calling `map`, `starmap` or `imap_unordered` then raises
+    a `RuntimeError` rather than silently running serially. A pool with a single worker never
+    starts any processes and always executes serially in the calling process.
 
     Parameters
     ----------
@@ -315,6 +323,16 @@ class SharedWorkerPool:
         Custom worker initializer callable. Overrides `prewarm_packages` if provided.
     initargs : tuple, optional
         Arguments passed to `initializer`.
+    lazy : bool, optional (default False)
+        If False, worker processes are started on entering the `with` block. If True, they are
+        started only when work is first dispatched to the pool, so a multi-stage workflow whose
+        stages all decide to run serially never pays the process start-up cost.
+
+    Notes
+    -----
+    When used from inside a daemonic process (e.g. from within a worker of another pool), which
+    is not permitted to start child processes, work dispatched to the pool is executed serially
+    in the calling process and a `RuntimeWarning` is issued once per pool.
     """
 
     def __init__(
@@ -324,22 +342,46 @@ class SharedWorkerPool:
         prewarm_packages: Optional[Sequence[str]] = None,
         initializer: Optional[Callable] = None,
         initargs: tuple = (),
+        lazy: bool = False,
     ):
         self.num_workers = determine_num_workers(num_workers)
         self.start_method = start_method
         self.prewarm_packages = prewarm_packages
         self.initializer = initializer
         self.initargs = initargs
+        self.lazy = lazy
         self._pool = None
-        self._owns_pool = True
+        self._active = False
+        self._warned_daemonic = False
 
     def __enter__(self):
-        if self.num_workers < 1:
-            raise ValueError(f"Worker count must be at least 1, got {self.num_workers}.")
-        if self.num_workers == 1:
-            self._pool = None
-            return self
+        if self._active:
+            raise RuntimeError("SharedWorkerPool is already active; it cannot be entered twice.")
+        self._active = True
+        if self.num_workers > 1 and not self.lazy:
+            self._ensure_started()
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._active = False
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            if exc_type is None:
+                # Normal exit: let outstanding work finish, then shut the workers down.
+                pool.close()
+            else:
+                # Exceptional exit (including KeyboardInterrupt): stop the workers immediately
+                # instead of waiting for tasks whose results will never be used.
+                pool.terminate()
+            pool.join()
+
+    @property
+    def is_started(self) -> bool:
+        """Whether worker processes are currently running for this pool."""
+        return self._pool is not None
+
+    def _start(self):
+        """Create the underlying multiprocessing pool (worker processes)."""
         ctx = _mp.get_context(self.start_method)
         if self.initializer is not None:
             init_fn = self.initializer
@@ -350,35 +392,78 @@ class SharedWorkerPool:
         else:
             init_fn = None
             init_args = ()
-
         self._pool = ctx.Pool(processes=self.num_workers, initializer=init_fn, initargs=init_args)
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._pool is not None and self._owns_pool:
-            self._pool.close()
-            self._pool.join()
-            self._pool = None
+    def _ensure_started(self):
+        """
+        Return the underlying multiprocessing pool, starting it on first use, or None when
+        work should be executed serially in the calling process.
+        """
+        if self.num_workers == 1:
+            return None
+        if not self._active:
+            raise RuntimeError(
+                f"SharedWorkerPool(num_workers={self.num_workers}) must be used inside its 'with' block; "
+                "it is either not yet entered or already closed."
+            )
+        if self._pool is None:
+            if _mp.current_process().daemon:
+                if not self._warned_daemonic:
+                    _warnings.warn("SharedWorkerPool used from within a daemonic process (e.g. a worker of "
+                                   "another pool), which cannot start child processes; executing serially.",
+                                   RuntimeWarning, stacklevel=3)
+                    self._warned_daemonic = True
+                return None
+            self._start()
+        return self._pool
 
     def map(self, func: Callable, iterable: Sequence, chunksize: Optional[int] = None):
-        """Execute func across iterable items, falling back to serial execution if pool has 1 worker."""
-        if self._pool is None:
+        """Execute func across iterable items (serially if the pool has a single worker)."""
+        pool = self._ensure_started()
+        if pool is None:
             return [func(x) for x in iterable]
-        return self._pool.map(func, iterable, chunksize=chunksize)
+        return pool.map(func, iterable, chunksize=chunksize)
 
     def starmap(self, func: Callable, iterable: Sequence, chunksize: Optional[int] = None):
-        """Execute func(*args) across iterable item tuples."""
-        if self._pool is None:
+        """Execute func(*args) across iterable item tuples (serially if the pool has a single worker)."""
+        pool = self._ensure_started()
+        if pool is None:
             return [func(*args) for args in iterable]
-        return self._pool.starmap(func, iterable, chunksize=chunksize)
+        return pool.starmap(func, iterable, chunksize=chunksize)
 
     def imap_unordered(self, func: Callable, iterable: Sequence, chunksize: int = 1):
-        """Stream func(x) results across workers as they complete, falling back to serial execution if pool has 1 worker."""
-        if self._pool is None:
-            for x in iterable:
-                yield func(x)
-        else:
-            yield from self._pool.imap_unordered(func, iterable, chunksize=chunksize)
+        """
+        Return an iterator over func(x) results in completion order (serially, in input order,
+        if the pool has a single worker).
+        """
+        pool = self._ensure_started()
+        if pool is None:
+            return (func(x) for x in iterable)
+        return pool.imap_unordered(func, iterable, chunksize=chunksize)
+
+
+@_contextlib.contextmanager
+def _pool_scope(num_workers: Union[int, str, None] = None,
+                pool: Optional[Union[SharedWorkerPool, _mppool.Pool]] = None,
+                prewarm_packages: Optional[Sequence[str]] = None):
+    """
+    Context manager providing a worker pool shared across the stages of a multi-stage workflow.
+
+    Yields `pool` unchanged if one was supplied by the caller. Otherwise, if `num_workers`
+    resolves to more than one worker, yields a *lazy* `SharedWorkerPool` owned by this scope:
+    its worker processes are started only when a stage first dispatches work to it (so stages
+    that decide to run serially cost nothing) and are reused by every later stage. Yields None
+    when execution should be serial.
+    """
+    if pool is not None:
+        yield pool
+        return
+    workers = determine_num_workers(num_workers) if num_workers is not None else 1
+    if workers > 1:
+        with SharedWorkerPool(num_workers=workers, prewarm_packages=prewarm_packages, lazy=True) as scoped:
+            yield scoped
+    else:
+        yield None
 
 
 def resolve_pool_workers(pool: Any) -> int:

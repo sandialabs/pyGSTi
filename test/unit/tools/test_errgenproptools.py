@@ -47,9 +47,10 @@ class _PoolDispatchSpy:
         for name in ('map', 'imap_unordered'):
             orig = getattr(_mpt.SharedWorkerPool, name)
             def wrapper(pool_self, func, *args, _orig=orig, **kwargs):
-                if pool_self._pool is not None:
+                result = _orig(pool_self, func, *args, **kwargs)  # (lazy pools start inside this call)
+                if pool_self.is_started:
                     self.dispatched.append(getattr(func, '__name__', type(func).__name__))
-                return _orig(pool_self, func, *args, **kwargs)
+                return result
             p = mock.patch.object(_mpt.SharedWorkerPool, name, wrapper)
             p.start()
             self._patches.append(p)

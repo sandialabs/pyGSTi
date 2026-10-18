@@ -129,6 +129,30 @@ class ErrorgenPropTester(BaseCase):
             self.assertNotIn(_ep._prop_layer_chunk_worker, dispatched)
             self.assertEqual(par_layers, seq_layers)
 
+    def test_propagate_errorgens_bch_lazy_pool(self):
+        from unittest import mock
+        from pygsti.tools import mptools as _mpt
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        seq = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=2)
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+
+        def run_counting_pool_starts():
+            with mock.patch.object(_mpt.SharedWorkerPool, '_start', autospec=True,
+                                   side_effect=_mpt.SharedWorkerPool._start) as start_spy:
+                res = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=2, num_workers=2)
+            for k in set(seq) | set(res):
+                self.assertAlmostEqual(seq.get(k, 0), res.get(k, 0), places=12)
+            return start_spy.call_count
+
+        # Every stage decides to run serially: no worker processes are ever started.
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=True)
+        self.assertEqual(run_counting_pool_starts(), 0)
+
+        # Serial propagation followed by a parallel Magnus expansion: the pool starts exactly once.
+        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=['layer_prop'], force_parallel=['magnus'])
+        self.assertEqual(run_counting_pool_starts(), 1)
+
     def test_propagate_errorgens_bch_parallel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         seq_bch = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, include_spam=True, num_workers=None)

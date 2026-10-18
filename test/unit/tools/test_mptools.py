@@ -172,6 +172,83 @@ class MPToolsTester(BaseCase):
             starmap_res = pool.starmap(_add, [(1, 2), (3, 4)])
             self.assertEqual(starmap_res, [3, 7])
 
+    def test_shared_worker_pool_lazy_start(self):
+        with mpt.SharedWorkerPool(num_workers=2, lazy=True) as pool:
+            self.assertFalse(pool.is_started)
+            self.assertEqual(mpt.resolve_pool_workers(pool), 2)  # known without starting workers
+            self.assertEqual(pool.map(_square, [1, 2, 3]), [1, 4, 9])
+            self.assertTrue(pool.is_started)
+            self.assertEqual(sorted(pool.imap_unordered(_square, [1, 2])), [1, 4])
+        self.assertFalse(pool.is_started)
+
+        # An eager pool starts on entry; a pool that never started is a no-op on exit.
+        with mpt.SharedWorkerPool(num_workers=2) as pool:
+            self.assertTrue(pool.is_started)
+        with mpt.SharedWorkerPool(num_workers=2, lazy=True) as pool:
+            pass
+        self.assertFalse(pool.is_started)
+
+    def test_shared_worker_pool_requires_active_context(self):
+        pool = mpt.SharedWorkerPool(num_workers=2)
+        for method, args in (('map', (_square, [1])), ('starmap', (_add, [(1, 2)])),
+                             ('imap_unordered', (_square, [1]))):
+            with self.assertRaises(RuntimeError):
+                getattr(pool, method)(*args)
+        with pool:
+            pool.map(_square, [1])
+        with self.assertRaises(RuntimeError):  # already closed
+            pool.map(_square, [1])
+        with self.assertRaises(RuntimeError):  # cannot be entered while active
+            with pool:
+                with pool:
+                    pass
+
+        # A single-worker pool is always serial and never needs an active context.
+        self.assertEqual(mpt.SharedWorkerPool(num_workers=1).map(_square, [2, 3]), [4, 9])
+
+    def test_shared_worker_pool_terminates_on_exception(self):
+        with self.assertRaises(ZeroDivisionError):
+            with mpt.SharedWorkerPool(num_workers=2) as pool:
+                inner = pool._pool
+                terminate = mock.patch.object(inner, 'terminate', wraps=inner.terminate).start()
+                close = mock.patch.object(inner, 'close', wraps=inner.close).start()
+                self.addCleanup(mock.patch.stopall)
+                raise ZeroDivisionError
+        terminate.assert_called_once()
+        close.assert_not_called()
+
+        with mpt.SharedWorkerPool(num_workers=2) as pool:
+            inner = pool._pool
+            terminate = mock.patch.object(inner, 'terminate', wraps=inner.terminate).start()
+            close = mock.patch.object(inner, 'close', wraps=inner.close).start()
+        close.assert_called_once()
+        terminate.assert_not_called()
+
+    def test_shared_worker_pool_in_daemonic_process_runs_serially(self):
+        daemonic = mock.Mock(daemon=True)
+        with mock.patch.object(mpt._mp, 'current_process', return_value=daemonic), \
+                mpt.SharedWorkerPool(num_workers=2, lazy=True) as pool:
+            with warnings.catch_warnings(record=True) as rec:
+                warnings.simplefilter("always")
+                self.assertEqual(pool.map(_get_pid, [0, 1]), [os.getpid()] * 2)
+                pool.map(_square, [1])
+            self.assertFalse(pool.is_started)
+            self.assertEqual(sum(issubclass(w.category, RuntimeWarning) for w in rec), 1)
+
+    def test_pool_scope(self):
+        with mpt.SharedWorkerPool(num_workers=2, lazy=True) as supplied:
+            with mpt._pool_scope(4, supplied) as scoped:
+                self.assertIs(scoped, supplied)
+        for n in (None, 1):
+            with mpt._pool_scope(n, None) as scoped:
+                self.assertIsNone(scoped)
+        with mpt._pool_scope(2, None) as scoped:
+            self.assertIsInstance(scoped, mpt.SharedWorkerPool)
+            self.assertFalse(scoped.is_started)
+            scoped.map(_square, [1])
+            self.assertTrue(scoped.is_started)
+        self.assertFalse(scoped.is_started)
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "fork start method only supported and safe on Linux")
     def test_shared_worker_pool_fork_start_method(self):
         with mpt.SharedWorkerPool(num_workers=2, start_method="fork") as pool:
