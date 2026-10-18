@@ -11,6 +11,7 @@ Tools for the propagation of error generators through circuits.
 #***************************************************************************************************
 from __future__ import annotations
 import warnings as _warnings
+import copy as _copy
 import gc as _gc
 from contextlib import contextmanager as _contextmanager
 try:
@@ -445,6 +446,9 @@ _DEFAULT_THRESHOLD_TABLE: dict[str, dict[str, int]] = {
 # Manual overrides configured via configure_errorgen_propagation_parallelization
 _MANUAL_PARALLEL_OVERRIDES: dict[str, Any] = {}
 
+# Names of the parallelized operations accepted by `force_parallel` / `force_serial`.
+_PARALLEL_OPERATIONS = frozenset({'alpha', 'magnus', 'layer_prop', 'commuting_product'})
+
 
 def configure_errorgen_propagation_parallelization(
     min_km_alpha: Optional[int] = None,
@@ -478,14 +482,16 @@ def configure_errorgen_propagation_parallelization(
     min_terms_commuting_product : int, optional
         Minimum workload product W = n1 * n2 of term counts in the two input dictionaries
         required to engage parallel bilinear slicing in `_commuting_product`.
-    force_parallel : bool or sequence of str, optional
+    force_parallel : bool, str, or sequence of str, optional
         If True, unconditionally enables multiprocessing across all operations regardless
-        of workload size. If a sequence of strings (e.g. ('alpha', 'magnus', 'layer_prop', 'commuting_product')),
-        forces parallelization only for the named operations.
-    force_serial : bool or sequence of str, optional
+        of workload size. If an operation name or a sequence of operation names (any of
+        'alpha', 'magnus', 'layer_prop', 'commuting_product'), forces parallelization only
+        for the named operations. False clears any previous setting.
+    force_serial : bool, str, or sequence of str, optional
         If True, unconditionally forces single-threaded sequential execution across all
-        operations, bypassing multiprocessing. If a sequence of strings, forces sequential
-        execution only for the named operations.
+        operations, bypassing multiprocessing. If an operation name or a sequence of operation
+        names, forces sequential execution only for the named operations. False clears any
+        previous setting. An operation may not be forced both parallel and serial.
     reset_to_defaults : bool, optional (default False)
         If True, clears all dynamic profiling calibrations and manual overrides,
         restoring pyGSTi's default multi-scale threshold table.
@@ -502,7 +508,19 @@ def configure_errorgen_propagation_parallelization(
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
-        return {"status": "reset_to_defaults", "defaults": _DEFAULT_THRESHOLD_TABLE.copy()}
+        return {"status": "reset_to_defaults", "defaults": _copy.deepcopy(_DEFAULT_THRESHOLD_TABLE)}
+
+    # Validate the force settings against the combined (existing + requested) state before
+    # mutating anything, so an invalid call leaves the configuration unchanged.
+    new_force_parallel = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False) if force_parallel is None \
+        else _normalize_forced_operations(force_parallel, "force_parallel")
+    new_force_serial = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False) if force_serial is None \
+        else _normalize_forced_operations(force_serial, "force_serial")
+    par_ops = set(_PARALLEL_OPERATIONS) if new_force_parallel is True else set(new_force_parallel or ())
+    ser_ops = set(_PARALLEL_OPERATIONS) if new_force_serial is True else set(new_force_serial or ())
+    if par_ops & ser_ops:
+        raise ValueError(f"Operations {sorted(par_ops & ser_ops)} cannot be forced both parallel and serial. "
+                         "Clear one of the settings (e.g. force_serial=False) first.")
 
     if min_km_alpha is not None:
         _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"] = int(min_km_alpha)
@@ -515,11 +533,51 @@ def configure_errorgen_propagation_parallelization(
     if min_terms_commuting_product is not None:
         _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"] = int(min_terms_commuting_product)
     if force_parallel is not None:
-        _MANUAL_PARALLEL_OVERRIDES["force_parallel"] = force_parallel
+        _MANUAL_PARALLEL_OVERRIDES["force_parallel"] = new_force_parallel
     if force_serial is not None:
-        _MANUAL_PARALLEL_OVERRIDES["force_serial"] = force_serial
+        _MANUAL_PARALLEL_OVERRIDES["force_serial"] = new_force_serial
 
-    return _MANUAL_PARALLEL_OVERRIDES.copy()
+    return _copy.deepcopy(_MANUAL_PARALLEL_OVERRIDES)
+
+
+def _normalize_forced_operations(value: Union[bool, str, Sequence[str]], arg_name: str) -> Union[bool, tuple[str, ...]]:
+    """
+    Normalize a `force_parallel`/`force_serial` setting to either a bool or a tuple of
+    validated operation names (a bare string is treated as a single operation name).
+    """
+    if isinstance(value, (bool, _np.bool_)):
+        return bool(value)
+    if isinstance(value, str):
+        value = (value,)
+    try:
+        ops = tuple(value)
+    except TypeError:
+        raise TypeError(f"{arg_name} must be a bool, an operation name, or a sequence of operation names; "
+                        f"got {value!r}.")
+    unknown = [op for op in ops if op not in _PARALLEL_OPERATIONS]
+    if unknown:
+        raise ValueError(f"Unknown operation name(s) {unknown} in {arg_name}; "
+                         f"expected any of {sorted(_PARALLEL_OPERATIONS)}.")
+    return ops
+
+
+def _forced_parallelism_mode(operation: str) -> Optional[bool]:
+    """
+    The manually forced execution mode for `operation`: False if it is forced serial,
+    True if it is forced parallel, and None if neither applies. Serial takes precedence.
+    """
+    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, tuple) and operation in force_ser):
+        return False
+    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, tuple) and operation in force_par):
+        return True
+    return None
+
+
+def _qubit_scale_tier(n_qubits: int) -> str:
+    """The row of the default threshold table ('small', 'medium' or 'large') for `n_qubits`."""
+    return 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
 
 
 def measure_lse_entry_size(n_qubits: int) -> int:
@@ -704,23 +762,15 @@ def _should_parallelize_magnus(
     if n_pairs < 1:
         return False
 
-    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
-    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "magnus" in force_ser):
-        return False
+    forced = _forced_parallelism_mode("magnus")
+    if forced is not None:
+        return forced
 
-    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
-    if force_par is True or (isinstance(force_par, (list, tuple)) and "magnus" in force_par):
-        return True
-
-    min_pairs = _MANUAL_PARALLEL_OVERRIDES.get("min_magnus_pairs", None)
-    min_terms = _MANUAL_PARALLEL_OVERRIDES.get("min_terms_per_magnus_pair", None)
-    if min_pairs is not None:
-        terms_ok = avg_terms_per_layer >= min_terms if min_terms is not None else True
-        return n_pairs >= min_pairs and terms_ok
-
-    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
-    cutoffs = _DEFAULT_THRESHOLD_TABLE[scale]
-    return n_pairs >= cutoffs['min_magnus_pairs'] and avg_terms_per_layer >= cutoffs['min_magnus_terms']
+    # Each manual override replaces only its own default-table cutoff.
+    cutoffs = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]
+    min_pairs = _MANUAL_PARALLEL_OVERRIDES.get("min_magnus_pairs", cutoffs['min_magnus_pairs'])
+    min_terms = _MANUAL_PARALLEL_OVERRIDES.get("min_terms_per_magnus_pair", cutoffs['min_magnus_terms'])
+    return n_pairs >= min_pairs and avg_terms_per_layer >= min_terms
 
 
 def _should_parallelize_commuting_product(
@@ -747,19 +797,14 @@ def _should_parallelize_commuting_product(
     if w <= 0:
         return False
 
-    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
-    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "commuting_product" in force_ser):
-        return False
-
-    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
-    if force_par is True or (isinstance(force_par, (list, tuple)) and "commuting_product" in force_par):
-        return True
+    forced = _forced_parallelism_mode("commuting_product")
+    if forced is not None:
+        return forced
 
     if "min_terms_commuting_product" in _MANUAL_PARALLEL_OVERRIDES:
         return w >= _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"]
 
-    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
-    threshold = _DEFAULT_THRESHOLD_TABLE[scale]['min_terms_commuting_product']
+    threshold = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]['min_terms_commuting_product']
     return w >= threshold
 
 
@@ -1093,7 +1138,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
     n_q = len(identity)
-    avg_terms = (len(errorgen_layers[0]) + len(errorgen_layers[1])) // 2 if len(errorgen_layers) >= 2 else 0
+    avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
 
     if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
         # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs sequentially
@@ -5057,7 +5102,8 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
         combined_taylor_dict = errorgen_dict
     else:
         #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                            num_workers=num_workers, pool=pool)
         # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
         combined_taylor_dict = {}
         get = combined_taylor_dict.get
@@ -5121,7 +5167,8 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
         combined_taylor_dict = errorgen_dict
     else:
         #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                            num_workers=num_workers, pool=pool)
         # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
         combined_taylor_dict = {}
         get = combined_taylor_dict.get
@@ -5445,14 +5492,20 @@ def approximate_stabilizer_probabilities(
     Parameters
     ----------
     errorgen_dict : dict
-        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding rates.
+        Dictionary whose keys are `LocalStimErrorgenLabel` or `LocalElementaryErrorgenLabel`
+        and whose values are corresponding rates. `LocalElementaryErrorgenLabel` keys are recast
+        (in canonical basis element label order) to `LocalStimErrorgenLabel`.
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
         case this should be a Clifford circuit and convertible to a stim.Tableau.
     bitstrings : sequence of str, optional
         Specific bitstrings to compute probabilities for. If None (default), computes
-        the exhaustive probability distribution over all 2^n bitstrings. If 2^n > 1024
-        and bitstrings is None, raises a UserWarning alerting to exponential scaling.
+        the exhaustive probability distribution over all 2^n bitstrings. If n > 10
+        and bitstrings is None, a UserWarning alerting to exponential scaling is issued.
+
+        Note on backwards compatibility: in pyGSTi 0.10 and earlier this function had no
+        `bitstrings` argument and its third positional argument was `order`. Callers
+        that passed `order` positionally must now pass it by keyword (`order=...`).
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.
@@ -5475,6 +5528,11 @@ def approximate_stabilizer_probabilities(
         tableau = circuit
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
+    if errorgen_dict and isinstance(next(iter(errorgen_dict)), (_GEEL, _LEEL)):
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     num_random = random_support(tableau)
     if num_random > 2148:
@@ -5535,7 +5593,9 @@ def approximate_stabilizer_pauli_expectations(
     Parameters
     ----------
     errorgen_dict : dict
-        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding rates.
+        Dictionary whose keys are `LocalStimErrorgenLabel` or `LocalElementaryErrorgenLabel`
+        and whose values are corresponding rates. `LocalElementaryErrorgenLabel` keys are recast
+        (in canonical basis element label order) to `LocalStimErrorgenLabel`.
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or stim.Tableau to compute the expectation values for.
     paulis : sequence of str or stim.PauliString
@@ -5560,6 +5620,11 @@ def approximate_stabilizer_pauli_expectations(
         tableau = circuit
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
+    if errorgen_dict and isinstance(next(iter(errorgen_dict)), (_GEEL, _LEEL)):
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     pauli_objs = [stim.PauliString(p) if isinstance(p, str) else p for p in paulis]
     if len(pauli_objs) == 0:
@@ -6032,13 +6097,9 @@ def _should_parallelize_alpha(
     if w <= 0:
         return False
 
-    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
-    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "alpha" in force_ser):
-        return False
-
-    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
-    if force_par is True or (isinstance(force_par, (list, tuple)) and "alpha" in force_par):
-        return True
+    forced = _forced_parallelism_mode("alpha")
+    if forced is not None:
+        return forced
 
     if "min_km_alpha" in _MANUAL_PARALLEL_OVERRIDES:
         return w >= _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"]
@@ -6058,8 +6119,7 @@ def _should_parallelize_alpha(
         # If any locally-run parameter is missing, immediately fallback to the simpler table
 
     # Default fallback: multi-scale cutoff table
-    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
-    threshold_km = _DEFAULT_THRESHOLD_TABLE[scale]['min_km_alpha']
+    threshold_km = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]['min_km_alpha']
     return w >= threshold_km
 
 

@@ -24,6 +24,42 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
 #TODO: errorgen_layer_to_matrix 
 
+def _mock_taylor_expansion():
+    """
+    Patch `error_generator_taylor_expansion` with a mock that records its call arguments but
+    always evaluates serially (so tests checking argument forwarding do not spawn workers).
+    """
+    real = _eprop.error_generator_taylor_expansion
+    def serial(errorgen_dict, order=1, truncation_threshold=1e-14, num_workers=None, pool=None):
+        return real(errorgen_dict, order, truncation_threshold)
+    return mock.patch.object(_eprop, 'error_generator_taylor_expansion', side_effect=serial)
+
+
+class _PoolDispatchSpy:
+    """
+    Context manager recording the names of callables dispatched to an *active* worker pool
+    through `SharedWorkerPool.map` / `imap_unordered`, i.e. whether a parallel code path ran.
+    """
+    def __enter__(self):
+        from pygsti.tools import mptools as _mpt
+        self.dispatched = []
+        self._patches = []
+        for name in ('map', 'imap_unordered'):
+            orig = getattr(_mpt.SharedWorkerPool, name)
+            def wrapper(pool_self, func, *args, _orig=orig, **kwargs):
+                if pool_self._pool is not None:
+                    self.dispatched.append(getattr(func, '__name__', type(func).__name__))
+                return _orig(pool_self, func, *args, **kwargs)
+            p = mock.patch.object(_mpt.SharedWorkerPool, name, wrapper)
+            p.start()
+            self._patches.append(p)
+        return self
+
+    def __exit__(self, *exc):
+        for p in self._patches:
+            p.stop()
+        return False
+
 class ErrgenCompositionCommutationTester(BaseCase):
 
     def setUp(self):
@@ -578,6 +614,15 @@ class ErrgenCompositionCommutationTester(BaseCase):
         self.assertEqual(set(seq.keys()), set(par.keys()))
         for k in seq.keys():
             self.assertAlmostEqual(seq[k], par[k], places=12)
+
+    def test_second_order_magnus_decision_uses_all_layers(self):
+        # Regression: the parallelization decision previously averaged only the first two layers,
+        # so an empty (or small) state-prep layer disabled parallelism for the whole expansion.
+        layers = [{}] + list(self.propagated_errorgen_layers)
+        expected_avg = sum(len(l) for l in layers) // len(layers)
+        with mock.patch.object(_eprop, '_should_parallelize_magnus', return_value=False) as decision:
+            _eprop.magnus_expansion(layers, magnus_order=2, num_workers=2)
+        self.assertEqual(decision.call_args.args[1], expected_avg)
 
     def test_zassenhaus_formula_parallel(self):
         seq = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=None)
@@ -1169,6 +1214,45 @@ class ApproxStabilizerMethodTester(BaseCase):
         res = _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
         self.assertEqual(res['status'], 'reset_to_defaults')
 
+    def test_configure_parallelization_validation(self):
+        configure = _eprop.configure_errorgen_propagation_parallelization
+        self.addCleanup(configure, reset_to_defaults=True)
+
+        # A bare operation name is treated as a single-element sequence.
+        configure(force_parallel='magnus')
+        self.assertTrue(_eprop._should_parallelize_magnus(3, 1, num_workers=4, n_qubits=4))
+        configure(force_parallel=False)
+
+        # Unknown operation names and invalid types are rejected, leaving the configuration unchanged.
+        with self.assertRaises(ValueError):
+            configure(force_parallel=['magnu'])
+        with self.assertRaises(ValueError):
+            configure(force_serial='not_an_operation')
+        with self.assertRaises(TypeError):
+            configure(force_serial=3)
+        self.assertIsNone(_eprop._forced_parallelism_mode('magnus'))
+
+        # An operation cannot be forced both parallel and serial.
+        configure(force_serial=['magnus'])
+        with self.assertRaises(ValueError):
+            configure(force_parallel=['magnus'])
+        with self.assertRaises(ValueError):
+            configure(force_parallel=True)
+        self.assertFalse(_eprop._forced_parallelism_mode('magnus'))
+        configure(reset_to_defaults=True)
+
+        # min_terms_per_magnus_pair takes effect on its own (min_magnus_pairs left at its default).
+        configure(min_terms_per_magnus_pair=10**9)
+        self.assertFalse(_eprop._should_parallelize_magnus(100, 500, num_workers=4, n_qubits=4))
+        configure(min_terms_per_magnus_pair=1)
+        self.assertTrue(_eprop._should_parallelize_magnus(100, 2, num_workers=4, n_qubits=4))
+        configure(reset_to_defaults=True)
+
+        # reset_to_defaults returns a deep copy: mutating it does not alter the defaults.
+        res = configure(reset_to_defaults=True)
+        res['defaults']['small']['min_km_alpha'] = -1
+        self.assertNotEqual(_eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha'], -1)
+
     def test_optimize_errorgen_propagation_parallelization(self):
         # Missing all three inputs raises ValueError
         with self.assertRaises(ValueError):
@@ -1425,6 +1509,41 @@ class ApproxStabilizerMethodTester(BaseCase):
             self.assertEqual(rec.errorgen_type, lbl.errorgen_type)
             self.assertEqual(rec.basis_element_labels, lbl.basis_element_labels)
             self.assertEqual(rec._hashable_basis_element_labels, lbl._hashable_basis_element_labels)
+
+    def _leel_dict_with_out_of_order_pairs(self):
+        # LocalElementaryErrorgenLabel-keyed rates whose C/A basis element label pairs are not in
+        # the canonical (string-sorted) order used by LocalStimErrorgenLabel.
+        return {LEEL('H', ('XIII',)): 2e-3, LEEL('S', ('ZYII',)): 1e-3,
+                LEEL('A', ('ZIII', 'XIII')): 1e-3, LEEL('C', ('ZXII', 'XYII')): 5e-4}
+
+    def test_approximate_stabilizer_probabilities_leel_keys(self):
+        leel_dict = self._leel_dict_with_out_of_order_pairs()
+        bitstrings = ['0000', '0101', '1111', '1010']
+        for order in (1, 2):
+            bulk = _eprop.approximate_stabilizer_probabilities(leel_dict, self.circuit, bitstrings, order=order)
+            for b, p in zip(bitstrings, bulk):
+                single = _eprop.approximate_stabilizer_probability(leel_dict, self.circuit, b, order=order)
+                self.assertAlmostEqual(p, single, places=14)
+
+    def test_approximate_stabilizer_pauli_expectations_leel_keys(self):
+        leel_dict = self._leel_dict_with_out_of_order_pairs()
+        paulis = ['ZZZZ', 'XIII', 'YYII', 'IZIZ']
+        for order in (1, 2):
+            bulk = _eprop.approximate_stabilizer_pauli_expectations(leel_dict, self.circuit, paulis, order=order)
+            for p, e in zip(paulis, bulk):
+                single = _eprop.approximate_stabilizer_pauli_expectation(leel_dict, self.circuit, p, order=order)
+                self.assertAlmostEqual(e, single, places=14)
+
+    def test_correction_functions_forward_parallel_args_to_taylor_expansion(self):
+        tableau = self.circuit_tableau
+        with _mock_taylor_expansion() as taylor_mock:
+            _eprop.stabilizer_probability_correction(self.propagated_errorgen_layer, tableau, '0000', order=2,
+                                                     num_workers=3)
+            self.assertEqual(taylor_mock.call_args.kwargs.get('num_workers'), 3)
+        with _mock_taylor_expansion() as taylor_mock:
+            _eprop.stabilizer_pauli_expectation_correction(self.propagated_errorgen_layer, tableau,
+                                                           stim.PauliString('ZIII'), order=2, num_workers=3)
+            self.assertEqual(taylor_mock.call_args.kwargs.get('num_workers'), 3)
 
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll

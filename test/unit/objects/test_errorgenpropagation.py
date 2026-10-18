@@ -110,6 +110,25 @@ class ErrorgenPropTester(BaseCase):
             for k in s_l.keys():
                 self.assertAlmostEqual(s_l[k], p_l[k], places=12)
 
+    def test_propagate_errorgens_respects_serial_decision_with_pool(self):
+        # Regression: supplying `pool` used to bypass the layer-propagation threshold and force_serial.
+        from unittest import mock
+        from pygsti.tools import mptools as _mpt
+        import pygsti.errorgenpropagation.errorpropagator as _ep
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        seq_layers = error_propagator.propagate_errorgens(self.circuit)
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+        for config in ({'force_serial': ['layer_prop']}, {}):  # explicit force_serial, then default depth threshold
+            _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+            if config:
+                _eprop.configure_errorgen_propagation_parallelization(**config)
+            with _mpt.SharedWorkerPool(2) as pool, \
+                    mock.patch.object(pool, 'map', wraps=pool.map) as map_spy:
+                par_layers = error_propagator.propagate_errorgens(self.circuit, pool=pool)
+            dispatched = [c.args[0] for c in map_spy.call_args_list]
+            self.assertNotIn(_ep._prop_layer_chunk_worker, dispatched)
+            self.assertEqual(par_layers, seq_layers)
+
     def test_propagate_errorgens_bch_parallel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         seq_bch = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, include_spam=True, num_workers=None)

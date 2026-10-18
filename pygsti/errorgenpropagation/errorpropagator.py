@@ -105,20 +105,15 @@ def _should_parallelize_layer_prop(
     if workers == 1:
         return False
 
-    force_ser = _eprop._MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
-    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "layer_prop" in force_ser):
-        return False
-
-    force_par = _eprop._MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
-    if force_par is True or (isinstance(force_par, (list, tuple)) and "layer_prop" in force_par):
-        return True
+    forced = _eprop._forced_parallelism_mode("layer_prop")
+    if forced is not None:
+        return forced
 
     min_depth = _eprop._MANUAL_PARALLEL_OVERRIDES.get("min_layer_prop_depth", None)
     if min_depth is not None:
         return num_layers >= min_depth
 
-    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
-    cutoffs = _eprop._DEFAULT_THRESHOLD_TABLE[scale]
+    cutoffs = _eprop._DEFAULT_THRESHOLD_TABLE[_eprop._qubit_scale_tier(n_qubits)]
     return num_layers >= cutoffs['min_layer_prop_depth']
 
 
@@ -910,7 +905,12 @@ class ErrorGeneratorPropagator:
         if stopping_idx <= 0:
             return list(errorgen_layers)
 
-        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+        # An explicit num_workers=1 (e.g. passed by `propagate_errorgens` after deciding that the
+        # workload does not merit parallelism) forces serial execution even when a pool is supplied.
+        if pool is None or num_workers == 1:
+            workers = _determine_num_workers(num_workers)
+        else:
+            workers = _resolve_pool_workers(pool)
         if workers < 1:
             raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
