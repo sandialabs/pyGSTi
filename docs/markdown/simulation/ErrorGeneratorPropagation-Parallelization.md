@@ -162,9 +162,9 @@ High-order Magnus expansions and Taylor series compositions on dense multiqubit 
 - `eprop.estimate_bulk_alpha_peak_memory(n_qubits, n_errorgens, n_outcomes, num_workers)`
 - `pygsti.errorgenpropagation.errorpropagator.estimate_propagation_peak_memory(n_qubits, n_layers, avg_errorgens_per_layer, num_workers)`
 
-These models account for dictionary overhead, `LocalStimErrorgenLabel` memory footprint, overhead/duplication among workers. Note that as these functions don't know a priori the precise outputs, the computed values should be intepretted as upper bounds. Foe example by assuming the maximal number of terms of possible terms for each individual commutator ($\le 4$ terms) and anticommutator ($\le 7$ terms) between elementary error generators.
+These estimate the *additional* memory an operation needs beyond what the calling process already uses, accounting for the memory of each `LocalStimErrorgenLabel` dictionary entry and for the baseline footprint and buffers of each worker process. Because the exact outputs are not known in advance, the estimates are upper bounds: they assume, for example, that every commutator of two elementary error generators produces the maximal number of terms (at most 4), and that every anticommutator produces at most 7. They can therefore substantially overestimate the memory actually needed.
 
-If an estimated workload exceeds available system memory, pyGSTi automatically raises a `ResourceWarning`:
+For layer propagation, Taylor expansions and sensitivity (`bulk_alpha`) calculations, pyGSTi automatically issues an `InsufficientMemoryWarning` (from `pygsti.tools.exceptions`) if the estimated workload exceeds available system memory. This automatic check is currently disabled for Magnus expansions, where the estimates were found to be too conservative to be useful, but you can still check manually:
 
 ```{code-cell} ipython3
 # Estimate memory footprint for a 50-layer, 4-qubit Magnus expansion:

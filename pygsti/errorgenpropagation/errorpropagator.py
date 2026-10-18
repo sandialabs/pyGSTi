@@ -42,6 +42,7 @@ from pygsti.tools.mptools import (
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
     _pool_scope,
+    WORKER_PROCESS_BASELINE_BYTES as _WORKER_PROCESS_BASELINE_BYTES,
 )
 import multiprocessing.pool as _mppool
 from itertools import islice
@@ -60,7 +61,8 @@ def estimate_propagation_peak_memory(
     num_workers: Union[int, str, None] = "auto",
 ) -> int:
     """
-    Estimates peak aggregated memory footprint in bytes for single-circuit layer propagation.
+    Estimates the additional peak memory in bytes (beyond the calling process's existing
+    footprint) needed for single-circuit layer propagation.
 
     Parameters
     ----------
@@ -81,8 +83,8 @@ def estimate_propagation_peak_memory(
     w = _determine_num_workers(num_workers)
     if w < 1:
         raise ValueError(f"Worker count must be at least 1, got {w}.")
-    master_base = 50 * 1024 * 1024
-    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
     bytes_per_term = _eprop.measure_lse_entry_size(n_qubits)
     layers_per_worker = max(1, n_layers // max(1, w))
     worker_buffer = (layers_per_worker * avg_errorgens_per_layer * bytes_per_term) if w > 1 else 0

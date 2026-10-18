@@ -11,6 +11,7 @@ from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import sys
 import warnings
 import pickle
 from unittest import mock
@@ -1310,6 +1311,31 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertGreater(s4, s1)
         self.assertGreater(s16, s4)
         self.assertGreater(s64, s16)
+        # cached per qubit count
+        self.assertGreaterEqual(_eprop.measure_lse_entry_size.cache_info().hits, 0)
+        before = _eprop.measure_lse_entry_size.cache_info().hits
+        _eprop.measure_lse_entry_size(64)
+        self.assertEqual(_eprop.measure_lse_entry_size.cache_info().hits, before + 1)
+        # accounts for the stim.PauliStrings and attribute dictionary of the label, not just the label object
+        lbl = _LSE('C', [stim.PauliString('X' * 64), stim.PauliString('Z' * 64)])
+        self.assertGreater(s64, sys.getsizeof(lbl.__dict__) + 2 * sys.getsizeof(lbl.basis_element_labels[0]))
+
+    def test_distinct_errorgen_label_counts(self):
+        # exact counts by enumeration: H/S labels are non-identity Paulis, C/A labels unordered pairs of distinct ones
+        for n in (1, 2, 3):
+            paulis = [''.join(p) for p in product('IXYZ', repeat=n)][1:]
+            exact = 2 * len(paulis) + 2 * (len(paulis) * (len(paulis) - 1) // 2)
+            self.assertEqual(_eprop._num_distinct_errorgen_labels(n), exact)
+        # support-limited bound: equals the exact count at full support, is monotone, and counts support-1 labels
+        self.assertEqual(_eprop._num_labels_with_support_at_most(3, 3), _eprop._num_distinct_errorgen_labels(3))
+        self.assertEqual(_eprop._num_labels_with_support_at_most(3, 1), 3 * (2 * 3 + 15 - 3))
+        self.assertEqual(_eprop._num_labels_with_support_at_most(5, 0), 0)
+        vals = [_eprop._num_labels_with_support_at_most(10, s) for s in range(11)]
+        self.assertEqual(vals, sorted(vals))
+        # the worst-case Magnus estimate no longer caps the term count at the number of H labels (4^n - 1)
+        entry = _eprop.measure_lse_entry_size(2)
+        self.assertGreaterEqual(_eprop.estimate_magnus_peak_memory(2, 30, 50, num_workers=1, magnus_order=2),
+                                _eprop._num_distinct_errorgen_labels(2) * entry)
 
     def test_estimate_taylor_peak_memory(self):
         mem_o1 = _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=2)
@@ -1322,6 +1348,26 @@ class ApproxStabilizerMethodTester(BaseCase):
             _eprop.estimate_taylor_peak_memory(4, 20, order=0)
         with self.assertRaises(ValueError):
             _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=0)
+
+    def test_estimate_magnus_peak_memory_from_layers(self):
+        # Upper-bounds the dictionaries actually built, and is far tighter than the worst-case scalar estimate.
+        layers = ErrorGeneratorPropagator(self.error_model.copy()).propagate_errorgens(self.circuit)
+        n = 4
+        entry = _eprop.measure_lse_entry_size(n)
+        identity = 'I' * n
+        second = _eprop._second_order_magnus_term(layers, identity)
+        second3, third3 = _eprop._second_and_third_order_magnus_terms(layers, identity)
+        first = sum(len(l) for l in layers)
+        est2 = _eprop._estimate_magnus_peak_memory_from_layers(layers, n, num_workers=1, magnus_order=2)
+        est3 = _eprop._estimate_magnus_peak_memory_from_layers(layers, n, num_workers=1, magnus_order=3)
+        self.assertGreaterEqual(est2, (first + len(second)) * entry)
+        self.assertGreaterEqual(est3, (first + len(second3) + len(third3)) * entry)
+        self.assertGreaterEqual(est3, est2)
+        # workers add their baseline footprint and buffers
+        self.assertGreater(_eprop._estimate_magnus_peak_memory_from_layers(layers, n, num_workers=4, magnus_order=2), est2)
+        # nothing to estimate for first order or a single layer
+        self.assertEqual(_eprop._estimate_magnus_peak_memory_from_layers(layers, n, magnus_order=1), 0)
+        self.assertEqual(_eprop._estimate_magnus_peak_memory_from_layers(layers[:1], n, magnus_order=2), 0)
 
     def test_magnus_expansion_empty_first_layer(self):
         # Empty first layer should correctly infer n_q from subsequent layer

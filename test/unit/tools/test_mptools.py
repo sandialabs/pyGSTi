@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 
 import pygsti.tools.mptools as mpt
+from pygsti.tools.exceptions import InsufficientMemoryWarning
 from ..util import BaseCase
 
 
@@ -397,12 +398,13 @@ class MPToolsTester(BaseCase):
             mpt.warn_if_insufficient_memory(avail // 2, available_bytes=avail, task_name="test_ok")
             self.assertEqual(len(recorded), 0)
 
-        # Insufficient memory -> ResourceWarning without exception
+        # Insufficient memory -> InsufficientMemoryWarning (visible under default filters) without exception
         with warnings.catch_warnings(record=True) as recorded:
             warnings.simplefilter("always")
             mpt.warn_if_insufficient_memory(avail + 10**9, available_bytes=avail, task_name="test_oom")
             self.assertEqual(len(recorded), 1)
-            self.assertTrue(issubclass(recorded[-1].category, ResourceWarning))
+            self.assertTrue(issubclass(recorded[-1].category, InsufficientMemoryWarning))
+            self.assertFalse(issubclass(recorded[-1].category, ResourceWarning))
             self.assertIn("Estimated peak memory footprint", str(recorded[-1].message))
 
     def test_multiprocessing_pool_compatibility(self):

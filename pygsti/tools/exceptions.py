@@ -130,6 +130,16 @@ class UnnamedReportWarning(UserWarning):
     pass
 
 
+class InsufficientMemoryWarning(UserWarning):
+    """
+    Alert the user that the estimated peak memory footprint of an operation exceeds the
+    currently available system memory (or that available memory could not be determined),
+    so the operation risks swapping or memory exhaustion. Deliberately not a subclass of
+    `ResourceWarning`, which Python's default warning filters ignore.
+    """
+    pass
+
+
 class StolenResourceWarning(UserWarning):
     """
     Suppose we have two types with a parent-child relationship, Foo and Bar.

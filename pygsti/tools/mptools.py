@@ -23,6 +23,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as _np
 
+from pygsti.tools.exceptions import InsufficientMemoryWarning as _InsufficientMemoryWarning
+
 
 # ===================================================================================================
 # Existing Starmap Helper (Preserved for Backward Compatibility)
@@ -748,6 +750,16 @@ def parallel_pair_reduce(
 # Memory Utilities & Headroom Checking
 # ===================================================================================================
 
+# Baseline memory footprint of one pool worker process: the unique set size (USS) of a worker that
+# has imported numpy, stim and pyGSTi's Cython extensions, measured at ~125 MiB for 'spawn' and
+# 'forkserver' workers (Linux, Python 3.13; see review/scripts/phase3_baseline_rss.py). 'fork'
+# workers start out sharing their parent's pages (USS ~2 MiB) but un-share them as reference counts
+# are touched, so the spawn value is used as a conservative bound for every start method. The main
+# process's own footprint is deliberately *not* part of any estimate: it is already resident, and
+# hence already excluded from the available memory the estimates are compared against.
+WORKER_PROCESS_BASELINE_BYTES = 125 * 1024 * 1024
+
+
 def get_available_system_memory() -> int:
     """
     Query currently available system memory in bytes.
@@ -789,7 +801,8 @@ def warn_if_insufficient_memory(
 ) -> None:
     """
     Compare estimated peak memory against available system RAM.
-    Issues a non-fatal ResourceWarning if estimated memory exceeds available RAM.
+    Issues a non-fatal `InsufficientMemoryWarning` if estimated memory exceeds available RAM
+    (or if available memory cannot be determined).
 
     Parameters
     ----------
@@ -808,7 +821,7 @@ def warn_if_insufficient_memory(
             "Unable to resolve available system memory. Cannot determine whether or not operation"
             + " can be successfully performed within memory budget."
         )
-        _warnings.warn(msg, ResourceWarning, stacklevel=2)
+        _warnings.warn(msg, _InsufficientMemoryWarning, stacklevel=2)
     elif estimated_bytes > available_bytes:
         msg = (
             f"Estimated peak memory footprint ({estimated_bytes / (1024**3):.2f} GB) for "
@@ -816,4 +829,4 @@ def warn_if_insufficient_memory(
             f"({available_bytes / (1024**3):.2f} GB). The operation will proceed, but may risk "
             f"swapping or memory exhaustion. Consider reducing num_workers or adjusting truncation."
         )
-        _warnings.warn(msg, ResourceWarning, stacklevel=2)
+        _warnings.warn(msg, _InsufficientMemoryWarning, stacklevel=2)

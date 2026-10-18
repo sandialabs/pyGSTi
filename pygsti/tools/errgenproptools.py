@@ -12,6 +12,7 @@ Tools for the propagation of error generators through circuits.
 from __future__ import annotations
 import warnings as _warnings
 import copy as _copy
+import functools as _functools
 import gc as _gc
 from contextlib import contextmanager as _contextmanager
 try:
@@ -42,6 +43,7 @@ from pygsti.tools.mptools import (
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
     resolve_pool_workers as _resolve_pool_workers,
     _pool_scope,
+    WORKER_PROCESS_BASELINE_BYTES as _WORKER_PROCESS_BASELINE_BYTES,
 )
 
 from functools import wraps as _wraps
@@ -581,9 +583,23 @@ def _qubit_scale_tier(n_qubits: int) -> str:
     return 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
 
 
+# Memory of one stim.PauliString (Python object plus its SIMD-aligned bit buffers): measured at
+# ~240 bytes for up to ~128 qubits, growing by roughly a byte per 4 additional qubits beyond that
+# (see review/scripts/phase3_component_size.py); `240 + n // 4` bounds the measurements from above.
+_STIM_PAULISTRING_BASE_BYTES = 240
+
+# Memory of one slot of a Python dict (hash, key and value pointers, plus the index entry), scaled
+# for the dict's typical fill factor.
+_DICT_SLOT_BYTES = 64
+
+
+@_functools.lru_cache(maxsize=None)
 def measure_lse_entry_size(n_qubits: int) -> int:
     """
-    Measure the exact byte size of a worst-case LocalStimErrorgenLabel dict entry with a real rate.
+    Estimate the memory in bytes of a worst-case (C- or A-type, full-weight) `LocalStimErrorgenLabel`
+    dictionary entry with a real rate: the label instance and its attribute dictionary, its two
+    stim.PauliStrings and their cached string forms, its cached support mask, the rate, and the
+    dictionary slot. Results are cached per qubit count.
 
     Parameters
     ----------
@@ -596,18 +612,39 @@ def measure_lse_entry_size(n_qubits: int) -> int:
         Memory in bytes consumed by a single dictionary entry holding a LocalStimErrorgenLabel and real rate.
     """
     n = max(1, int(n_qubits))
-    p1 = stim.PauliString("X" * n)
-    p2 = stim.PauliString("Z" * n)
-    lbl = _LSE("C", [p1, p2])
-    rate = 1.0  # Real-valued rate as requested
+    lbl = _LSE("C", [stim.PauliString("X" * n), stim.PauliString("Z" * n)])
+    mask = lbl.support_mask  # cached on the instance by the commutator routines
     return (
         _sys.getsizeof(lbl)
+        + _sys.getsizeof(lbl.__dict__)
+        + _sys.getsizeof(lbl.basis_element_labels)
+        + 2 * (_STIM_PAULISTRING_BASE_BYTES + n // 4)
         + _sys.getsizeof(lbl._hashable_basis_element_labels)
         + sum(_sys.getsizeof(s) for s in lbl._hashable_basis_element_labels)
         + _sys.getsizeof(lbl._hashable_string_rep)
-        + _sys.getsizeof(rate)
-        + 32  # Hash table bucket overhead in Python dict
+        + _sys.getsizeof(mask)
+        + _sys.getsizeof(1.0)
+        + _DICT_SLOT_BYTES
     )
+
+
+def _string_entry_size(n_qubits: int) -> int:
+    """
+    Memory in bytes of one entry of a string-keyed rate dictionary (as exchanged with and merged
+    from worker processes), keyed by a worst-case (two-Pauli) `_hashable_string_rep`.
+    """
+    n = max(1, int(n_qubits))
+    return _sys.getsizeof('C' + 'X' * (2 * n)) + _sys.getsizeof(1.0) + _DICT_SLOT_BYTES
+
+
+def _num_distinct_errorgen_labels(n_qubits: int) -> int:
+    """
+    The number of distinct elementary error generator labels on `n_qubits` qubits: 4^n - 1 each of
+    H and S type (one non-identity Pauli), and (4^n - 1)(4^n - 2)/2 each of C and A type (an
+    unordered pair of distinct non-identity Paulis).
+    """
+    m = 4**int(n_qubits) - 1
+    return 2 * m + m * (m - 1)
 
 
 def estimate_magnus_peak_memory(
@@ -618,7 +655,12 @@ def estimate_magnus_peak_memory(
     magnus_order: int = 2,
 ) -> int:
     """
-    Estimates peak memory footprint in bytes for Magnus expansion commutator accumulation.
+    Worst-case estimate of the additional peak memory in bytes (beyond the calling process's
+    existing footprint) needed by a Magnus expansion, from summary statistics of its input. This
+    assumes every pair of terms in every pair of layers emits the maximal number of new terms,
+    capped by the number of distinct labels on `n_qubits` qubits, and so can grossly overestimate
+    the memory needed by large, local workloads. `magnus_expansion` itself uses a tighter estimate
+    computed from the supports of the actual input terms.
 
     Parameters
     ----------
@@ -644,10 +686,10 @@ def estimate_magnus_peak_memory(
     if magnus_order not in (1, 2, 3):
         raise ValueError(f"magnus_order must be 1, 2, or 3, got {magnus_order}.")
 
-    master_base = 50 * 1024 * 1024
-    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
     bytes_per_term = measure_lse_entry_size(n_qubits)
-    max_distinct_terms = 4**n_qubits - 1
+    max_distinct_terms = _num_distinct_errorgen_labels(n_qubits)
 
     K = avg_errorgens_per_layer
     # In the worst case, each pair of elementary error generators in a layer pair emits at most 4 terms
@@ -678,6 +720,143 @@ def estimate_magnus_peak_memory(
     return int(total_bytes)
 
 
+def _num_labels_with_support_at_most(n_qubits: int, max_support: int) -> int:
+    """
+    Upper bound on the number of distinct elementary error generator labels on `n_qubits` qubits
+    whose (combined) support has at most `max_support` qubits: for each support set of size k,
+    2 * 3^k H/S labels and at most 15^k - 3^k C/A labels (pairs of Paulis that are jointly
+    non-identity on every qubit of the set). Equals `_num_distinct_errorgen_labels` up to the C/A
+    pairs involving an identity, which this bound includes.
+    """
+    n = int(n_qubits)
+    s = max(0, min(n, int(max_support)))
+    if s == n:
+        return _num_distinct_errorgen_labels(n)
+    return sum(_math.comb(n, k) * (2 * 3**k + 15**k - 3**k) for k in range(1, s + 1))
+
+
+def _layer_support_statistics(errorgen_layers: list[_ErrorgenDict], n_qubits: int):
+    """
+    Per-layer support statistics of a list of error generator layers.
+
+    Returns
+    -------
+    sizes : numpy.ndarray of shape (L,)
+        Number of terms in each layer.
+    qubit_counts : numpy.ndarray of shape (L, n_qubits)
+        `qubit_counts[i, q]` is the number of terms of layer i acting non-trivially on qubit q.
+    max_weight : int
+        The largest support size (number of qubits acted on) of any term.
+    """
+    num_layers = len(errorgen_layers)
+    nbytes = (n_qubits + 7) // 8
+    sizes = _np.array([len(layer) for layer in errorgen_layers], dtype=_np.float64)
+    qubit_counts = _np.zeros((num_layers, n_qubits), dtype=_np.float64)
+    max_weight = 0
+    for i, layer in enumerate(errorgen_layers):
+        if not layer:
+            continue
+        # support masks are cached on the labels (and needed by the commutator routines anyway)
+        buf = b''.join(lbl.support_mask.to_bytes(nbytes, 'little') for lbl in layer)
+        bits = _np.unpackbits(_np.frombuffer(buf, dtype=_np.uint8).reshape(len(layer), nbytes),
+                              axis=1, bitorder='little')[:, :n_qubits]
+        qubit_counts[i] = bits.sum(axis=0)
+        max_weight = max(max_weight, int(bits.sum(axis=1).max()))
+    return sizes, qubit_counts, max_weight
+
+
+def _estimate_magnus_peak_memory_from_layers(errorgen_layers: list[_ErrorgenDict], n_qubits: int,
+                                             num_workers: int = 1, magnus_order: int = 2) -> int:
+    """
+    Estimate the additional peak memory in bytes needed by `magnus_expansion` for the given layers,
+    using the supports of the actual input terms. Compared to the worst-case
+    `estimate_magnus_peak_memory`, this
+
+    1. counts only pairs of terms with overlapping support (pairs acting on disjoint qubits commute
+       and are skipped by the commutator routines), bounding the number of overlapping pairs
+       between layers i and j by sum_q c_i[q] c_j[q], where c_i[q] is the number of terms of
+       layer i acting on qubit q;
+    2. caps the number of distinct output terms by locality: a commutator's output acts within the
+       union of its inputs' supports, so second-order (third-order) terms have support of at most
+       2w (3w) qubits, w being the largest input support;
+    3. models every intermediate result as a dictionary, whose memory is set by its number of
+       distinct keys, min(emitted terms, distinct-label cap), rather than by the number of emitted terms.
+
+    The estimate assumes every overlapping pair emits the maximal number (4) of terms, so it is
+    still an upper bound in that respect.
+    """
+    num_layers = len(errorgen_layers)
+    if magnus_order < 2 or num_layers < 2:
+        return 0
+
+    entry = measure_lse_entry_size(n_qubits)
+    str_entry = _string_entry_size(n_qubits)
+    sizes, counts, max_weight = _layer_support_statistics(errorgen_layers, n_qubits)
+    cap2 = float(_num_labels_with_support_at_most(n_qubits, 2 * max_weight))
+
+    # 1. bound on overlapping term pairs for every layer pair (i > j)
+    pair_overlaps = _np.minimum(counts @ counts.T, _np.outer(sizes, sizes))
+    lower = _np.tril(pair_overlaps, k=-1)
+    pair_emissions = 4.0 * lower  # terms emitted by each layer-pair commutator
+    distinct_first = min(float(sizes.sum()), float(_num_distinct_errorgen_labels(n_qubits)))
+    distinct_second = min(float(pair_emissions.sum()), cap2)
+
+    # magnus_expansion holds the first- and second-order dictionaries, their sum, and its truncated copy.
+    final_entries = distinct_first + 3.0 * distinct_second
+
+    if magnus_order == 2:
+        if num_workers <= 1:
+            return int(final_entries * entry)
+        # Main process: merged string-keyed dict, then the materialized survivors (accounted above).
+        # Each worker holds the inputs and the (label- and string-keyed) result of its largest task.
+        largest_task = min(float(pair_emissions.max()), cap2)
+        worker = (2.0 * sizes.max() + largest_task) * entry + largest_task * str_entry
+        return int(final_entries * entry + distinct_second * str_entry
+                   + num_workers * (worker + _WORKER_PROCESS_BASELINE_BYTES))
+
+    # magnus_order == 3
+    cap3 = float(_num_labels_with_support_at_most(n_qubits, 3 * max_weight))
+    row_terms = pair_emissions.sum(axis=1)  # emitted into row i (pairs (i, k), k < i)
+    col_terms = pair_emissions.sum(axis=0)  # emitted into column k (pairs (i, k), i > k)
+    prefix_terms = _np.minimum(_np.cumsum(row_terms), cap2)  # size bound of the running row sum R_i
+    suffix_terms = _np.minimum(_np.cumsum(col_terms[::-1])[::-1], cap2)  # running column sum C_k
+
+    # Per-qubit bounds on the terms of R_i / C_k acting on qubit q: an output of pair (a, b) acts within
+    # supp(a) | supp(b), so outputs of layer pair (j, k) touching q number at most 4 (c_j[q] K_k + K_j c_k[q]).
+    cum_sizes = _np.concatenate(([0.0], _np.cumsum(sizes)[:-1]))            # sum_{k<j} K_k
+    cum_counts = _np.vstack((_np.zeros(n_qubits), _np.cumsum(counts, axis=0)[:-1]))  # sum_{k<j} c_k
+    row_q = 4.0 * (counts * cum_sizes[:, None] + sizes[:, None] * cum_counts)
+    prefix_q = _np.minimum(_np.cumsum(row_q, axis=0), prefix_terms[:, None])
+    rev_sizes = _np.concatenate((_np.cumsum(sizes[::-1])[::-1][1:], [0.0]))   # sum_{j>k} K_j
+    rev_counts = _np.vstack((_np.cumsum(counts[::-1], axis=0)[::-1][1:], _np.zeros(n_qubits)))
+    col_q = 4.0 * (counts * rev_sizes[:, None] + sizes[:, None] * rev_counts)
+    suffix_q = _np.minimum(_np.cumsum(col_q[::-1], axis=0)[::-1], suffix_terms[:, None])
+
+    # third-order emissions: [A(i), R_i] and [A(k), C_k], restricted to overlapping pairs
+    outer_row = 4.0 * _np.minimum(sizes * prefix_terms, (counts * prefix_q).sum(axis=1))
+    outer_col = 4.0 * _np.minimum(sizes * suffix_terms, (counts * suffix_q).sum(axis=1))
+    distinct_third = min(float(outer_row.sum() + outer_col.sum()), cap3)
+    final_entries += 3.0 * distinct_third
+
+    held_columns = float(_np.minimum(col_terms, cap2).sum())
+    if num_workers <= 1:
+        # held columns, the running sum and its truncated copy, plus the final dictionaries
+        return int((final_entries + held_columns + 2.0 * distinct_second) * entry)
+
+    # Parallel: the main process keeps every pairwise result plus the rows and columns as string-keyed
+    # dicts, and materializes every prefix R_i and suffix C_k as label-keyed dicts for the outer tasks.
+    pairwise = float(_np.minimum(pair_emissions[pair_emissions > 0], cap2).sum())
+    rows = float(_np.minimum(row_terms, cap2).sum())
+    main = (pairwise + rows + held_columns) * str_entry \
+        + float(prefix_terms.sum() + suffix_terms.sum()) * entry + final_entries * entry
+    largest_p1 = min(float(pair_emissions.max()), cap2)
+    largest_p2 = min(float(max(outer_row.max(), outer_col.max())), cap3)
+    largest_acc = float(max(prefix_terms.max(), suffix_terms.max()))
+    worker = max((2.0 * sizes.max() + largest_p1) * entry + largest_p1 * str_entry,
+                 (sizes.max() + largest_acc + largest_p2) * entry + largest_p2 * str_entry)
+    return int(main + num_workers * (worker + _WORKER_PROCESS_BASELINE_BYTES))
+
+
 def estimate_taylor_peak_memory(
     n_qubits: int,
     num_errorgens: int,
@@ -685,7 +864,8 @@ def estimate_taylor_peak_memory(
     num_workers: Union[int, str, None] = "auto",
 ) -> int:
     """
-    Estimates peak memory footprint in bytes for error generator Taylor expansion.
+    Worst-case estimate of the additional peak memory in bytes (beyond the calling process's
+    existing footprint) needed by an error generator Taylor expansion.
 
     Parameters
     ----------
@@ -709,10 +889,10 @@ def estimate_taylor_peak_memory(
     if order < 1:
         raise ValueError(f"order must be an integer >= 1, got {order}.")
 
-    master_base = 50 * 1024 * 1024
-    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
     entry_bytes = measure_lse_entry_size(n_qubits)
-    max_distinct_terms = 4**n_qubits - 1
+    max_distinct_terms = _num_distinct_errorgen_labels(n_qubits)
 
     K = num_errorgens
     if order == 1 or K == 0:
@@ -1048,15 +1228,23 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
             identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
             break
 
-    # Strategic single-point memory check for Magnus expansion (evaluates sequential, pool, and worker configurations)
-    if len(errorgen_layers) > 1 and magnus_order >= 2 and identity is not None:
-        n_q = len(identity)
-        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
-        workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
-        _warn_if_insufficient_memory(
-            estimate_magnus_peak_memory(n_q, len(errorgen_layers), avg_k, num_workers=workers, magnus_order=magnus_order),
-            task_name="magnus_expansion"
-        )
+    # NOTE: The automatic memory headroom check for the Magnus expansion is disabled for now. Empirical
+    # testing (4 to 100 qubits, orders 2 and 3, serial and parallel) found that both the worst-case
+    # estimate (`estimate_magnus_peak_memory`) and the support-aware estimate
+    # (`_estimate_magnus_peak_memory_from_layers`) overestimate actual memory use by too much to be
+    # practically useful at present (roughly 25-1000x at order 2 and up to ~10^5-10^6x at order 3),
+    # which would produce spurious warnings for routine large-qubit workloads. The overestimate is
+    # dominated by data-dependent effects (overlapping pairs that still commute, and outputs repeated
+    # across layer pairs) that cannot be bounded from term supports alone.
+    #
+    # if len(errorgen_layers) > 1 and magnus_order >= 2 and identity is not None:
+    #     n_q = len(identity)
+    #     workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
+    #     _warn_if_insufficient_memory(
+    #         _estimate_magnus_peak_memory_from_layers(errorgen_layers, n_q, num_workers=workers,
+    #                                                  magnus_order=magnus_order),
+    #         task_name="magnus_expansion"
+    #     )
 
     if magnus_order == 2:
         # second-order magnus term: (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
@@ -6054,7 +6242,8 @@ def estimate_bulk_alpha_peak_memory(
     num_workers: Union[int, str, None] = "auto",
 ) -> int:
     """
-    Estimate peak memory in bytes for parallel bulk_alpha / bulk_alpha_pauli computation.
+    Estimate the additional peak memory in bytes (beyond the calling process's existing footprint)
+    for bulk_alpha / bulk_alpha_pauli computation.
 
     Parameters
     ----------
@@ -6076,8 +6265,8 @@ def estimate_bulk_alpha_peak_memory(
     if w < 1:
         raise ValueError(f"Worker count must be at least 1, got {w}.")
     output_matrix_bytes = n_outcomes * n_errorgens * 8
-    master_base = 50 * 1024 * 1024
-    worker_base_rss = 45 * 1024 * 1024 if w > 1 else 0
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base_rss = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
     tableau_bytes = (n_qubits ** 2 // 8 + 64) * 8
     sub_matrix_bytes = (n_outcomes * n_errorgens * 8) // max(1, w)
     total_bytes = master_base + output_matrix_bytes + (w * worker_base_rss) + (w * sub_matrix_bytes) + w * tableau_bytes
