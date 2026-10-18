@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.modelmembers.operations import DenseOperator as _DenseOperator
@@ -145,7 +146,7 @@ class TPInstrumentOp(_DenseOperator, _Torchable):
         :meth:`_construct_matrix`:  ``Mi = D_{index+1} + MT`` for ``index < n-1`` (coeffs ``(1, 1)`` over
         ``[MT, D_{index+1}]``) and ``M_{n-1} = -(n-2) MT - sum_i D_i`` for the last member (coeffs
         ``(-(n-2), -1, ..., -1)`` over ``[MT, D_1, ..., D_{n-1}]``)."""
-        import torch as _torch
+        _torch = _import_torch()
         nEls = self.num_instrument_elements
         if self.index < nEls - 1:
             coeffs = (1.0, 1.0)

@@ -1,4 +1,5 @@
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import collections as _collections
@@ -200,7 +201,7 @@ class _StaticParam(_BlockParameterization):
         return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
     def torch_stateless_data(self, blk, real_dtype, device):
-        import torch as _torch
+        _torch = _import_torch()
         arr = _np.ascontiguousarray(blk.block_data)
         ten = _torch.from_numpy(arr).to(dtype=real_dtype, device=device)
         return (ten,)
@@ -355,7 +356,7 @@ class _Depol(_BlockParameterization):
 
     @staticmethod
     def block_data_torch(sd, t_param):
-        import torch as _torch
+        _torch = _import_torch()
         n = sd[0]
         return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
@@ -396,7 +397,7 @@ class _RelDepol(_BlockParameterization):
 
     @staticmethod
     def block_data_torch(sd, t_param):
-        import torch as _torch
+        _torch = _import_torch()
         n = sd[0]
         return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
@@ -479,7 +480,7 @@ class _OtherElements(_BlockParameterization):
 
     @staticmethod
     def block_data_torch(sd, t_param):
-        import torch as _torch
+        _torch = _import_torch()
         n = sd[0]
         P = t_param.reshape(n, n)
         lowP = _torch.tril(P, -1)
@@ -640,7 +641,7 @@ class _OtherCholesky(_BlockParameterization):
 
     @staticmethod
     def block_data_torch(sd, t_param):
-        import torch as _torch
+        _torch = _import_torch()
         n = sd[0]
         P = t_param.reshape(n, n)
         Cre = _torch.tril(P, -1) + _torch.diag(_torch.diagonal(P))

@@ -18,6 +18,7 @@ import warnings as _warnings
 import itertools as _itertools
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 
@@ -771,7 +772,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         complex (the Hamiltonian block's coefficients are real), and is `None` if there are none.
         Dense path only.
         """
-        import torch as _torch
+        _torch = _import_torch()
         assert self._rep_type != 'sparse superop', \
             "LindbladErrorgen.stateless_data (the torch path) requires a dense representation."
         const = _np.ascontiguousarray(self.combined_lindblad_term_superops)
@@ -807,7 +808,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         raveled block_datas against the constant term-superoperator stack. See `stateless_data` for
         why that contraction is kept as two real matmuls.
         """
-        import torch as _torch
+        _torch = _import_torch()
         G_re, G_im, superop_shape, blocks, param_dims, block_is_complex = sd
         re_parts = []
         im_parts = []

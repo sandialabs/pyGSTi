@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs import _compatibility as _compat
@@ -164,13 +165,13 @@ class TPState(_DenseState, _Torchable):
         self.dirty = dirty_value
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
-        import torch as _torch
+        _torch = _import_torch()
         t_const = (self.dim ** -0.25) * _torch.ones(1, dtype=real_dtype, device=device) 
         return (t_const,)
 
     @staticmethod
     def torch_base(sd: Tuple[_torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
-        import torch as _torch
+        _torch = _import_torch()
         t_const = sd[0]
         t = _torch.concat((t_const, t_param)) 
         return t

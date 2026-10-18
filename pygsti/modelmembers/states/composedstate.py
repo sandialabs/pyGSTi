@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
@@ -157,7 +158,7 @@ class ComposedState(_State, _Torchable):
         error map; the prepared super-ket is `error_map_superop @ static_ket` (cf. `to_dense`), where
         `static_ket` is the constant base state in Hilbert-Schmidt space.
         """
-        import torch as _torch
+        _torch = _import_torch()
         superket_np  = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt').ravel())
         superket     = _torch.from_numpy(superket_np).to(dtype=real_dtype, device=device)
         error_map_sd = self.error_map.stateless_data(real_dtype, device)

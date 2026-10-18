@@ -17,6 +17,10 @@ kernelspec:
 !pip install qiskit-aer -q  # qiskit-aer is REQUIRED by this notebook. This makes sure you have it.
 ```
 
+```{note}
+On Linux, `from qiskit_aer import AerSimulator` below can fail with `ImportError: ... cannot allocate memory in static TLS block`. qiskit, qiskit-aer, torch, and the OpenMP runtimes they bundle all draw on a small fixed reserve of memory that glibc keeps for libraries loaded after Python starts, and together they can use it up. The fix is to start the kernel with the environment variable `GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096`. Setting it from inside the notebook has no effect: set it in the environment you launch Jupyter from (e.g. `GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 jupyter lab`), or in the `"env"` entry of the kernel spec, then restart the kernel.
+```
+
 ```{code-cell} ipython3
 import pygsti
 from collections import defaultdict

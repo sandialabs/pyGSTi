@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
@@ -166,14 +167,14 @@ class FullTPOp(_DenseOperator, _Torchable):
         self.dirty = dirty_value
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int, _torch.Tensor]:
-        import torch as _torch
+        _torch = _import_torch()
         t_const = _torch.zeros(size=(1, self.dim), dtype=real_dtype, device=device)
         t_const[0,0] = 1.0
         return (self.dim, t_const)
 
     @staticmethod
     def torch_base(sd: Tuple[int, _torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
-        import torch as _torch
+        _torch = _import_torch()
         dim, t_const = sd
         t_param_mat = t_param.reshape((dim - 1, dim))
         t = _torch.row_stack((t_const, t_param_mat))

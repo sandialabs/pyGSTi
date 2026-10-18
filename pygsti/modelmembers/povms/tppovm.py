@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
@@ -106,7 +107,7 @@ class TPPOVM(_BasePOVM, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
-        import torch as _torch
+        _torch = _import_torch()
         num_effects, identity = sd
         dim = identity.size
 

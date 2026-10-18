@@ -72,6 +72,7 @@ if TYPE_CHECKING:
 
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 
 
 # Cap on the temporary that holds a batch of outer products while a scatter-add accumulates the
@@ -144,7 +145,7 @@ class _SequenceDag:
         Returns the ``old index -> new index`` map so the caller can translate the node indices it
         collected during construction.
         """
-        import torch
+        torch = _import_torch()
         assert not self._finalized
         n = len(self._parent)
         depth = _np.asarray(self._depth)
@@ -199,7 +200,7 @@ def _member_value_and_jacobian(type_handle, stateless_data, param_vec, out_numel
     ``torch_base`` call -- for a CPTPLND modelmember that second call is a matrix exponential we
     have already paid for.
     """
-    import torch
+    torch = _import_torch()
     def f(v):
         out = type_handle.torch_base(stateless_data, v)
         return out, out
@@ -271,7 +272,7 @@ class _PovmGroup:
             self._out_rows.append(elem_offset + j)
 
     def finalize(self, op_ids, device):
-        import torch
+        torch = _import_torch()
         fwd_map = self.fwd.finalize(op_ids, device)
         bwd_map = self.bwd.finalize(op_ids, device)
 
@@ -318,7 +319,7 @@ class _PovmGroup:
 
     def forward_states(self, torch_bases, dim, dtype, device):
         """All prefix-DAG node states, shape ``(num_nodes, dim)``."""
-        import torch
+        torch = _import_torch()
         dag = self.fwd
         states = torch.empty((dag.num_nodes, dim), dtype=dtype, device=device)
         for i, prep_label in enumerate(dag.root_keys):
@@ -330,7 +331,7 @@ class _PovmGroup:
 
     def backward_states(self, torch_bases, dim, dtype, device, povm_mat):
         """All suffix-DAG node states, shape ``(num_nodes, n_eff, dim)``."""
-        import torch
+        torch = _import_torch()
         dag = self.bwd
         n_eff = self.n_eff
         states = torch.empty((dag.num_nodes, n_eff, dim), dtype=dtype, device=device)
@@ -407,7 +408,7 @@ class TorchEvalPlan:
 
     def probs(self, torch_bases, dim, out=None):
         """Outcome probabilities for every circuit, in layout element order."""
-        import torch
+        torch = _import_torch()
         if out is None:
             out = torch.empty(self.outcome_probs_dim, dtype=self.dtype, device=self.device)
         for g in self.groups:
@@ -472,7 +473,7 @@ class TorchEvalPlan:
         Everything here is a fixed sequence of fixed-shape kernels determined by the plan, which is
         what makes it capturable into a CUDA graph.
         """
-        import torch
+        torch = _import_torch()
         dtype, device = self.dtype, self.device
 
         if out is None:
@@ -496,7 +497,7 @@ class TorchEvalPlan:
         return out
 
     def _jacobian_group(self, g, torch_bases, derivs, member_of_op, dim, out, probs_out):
-        import torch
+        torch = _import_torch()
         dtype, device = self.dtype, self.device
         n_eff, n_c, n_dense = g.n_eff, g.num_circuits, g.n_dense
         d2 = dim * dim
@@ -571,7 +572,7 @@ class TorchEvalPlan:
         ``A[(c,e), a, b] = sum_{positions p of this gate in circuit c} L_p[e,a] R_p[b]``,
         returned flattened to ``(n_dense, dim*dim)``.
         """
-        import torch
+        torch = _import_torch()
         dtype, device = self.dtype, self.device
         n_eff, n_dense = g.n_eff, g.n_dense
         d2 = dim * dim
