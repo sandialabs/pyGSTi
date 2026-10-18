@@ -223,6 +223,7 @@ def _unitary_members_from_cptr(op_arrays: dict[str, _np.ndarray], basis: _Basis,
                                trunc_tol: float = 1e-7) -> tuple[dict[str, _np.ndarray], dict[str, _np.ndarray]]:
     """
     Factor each dense CPTR member exactly as `Ad_U o RootConj(E)` with a unitary `U`, or raise.
+    Here `Ad_U(rho) = U rho U^dagger`; see :mod:`~pygsti.modelmembers.instruments.unitaryfactors`.
 
     `U` is chosen by :func:`~pygsti.modelmembers.instruments.unitaryfactors.infer_unitary_factors`
     (ties broken toward the identity).  A member that no unitary reproduces within `error_tol`
@@ -241,7 +242,7 @@ def _unitary_members_from_cptr(op_arrays: dict[str, _np.ndarray], basis: _Basis,
     if inexact:
         raise ValueError(
             "No unitary static base reproduces instrument member(s) " + ", ".join(inexact) + ": a member "
-            "factors as Ad_U o RootConj(E) with U unitary only if it has a single Kraus operator. "
+            "factors as rho -> U E^{1/2} rho E^{1/2} U^dagger with U unitary only if it has a single Kraus operator. "
             "To start from the effect-preserving unitary approximation, use "
             "pygsti.modelmembers.instruments.infer_unitary_factors with Instrument.from_effects; the "
             "Lindblad parameters can then fit the remaining noise. " + _HAND_BUILT_NOTE)

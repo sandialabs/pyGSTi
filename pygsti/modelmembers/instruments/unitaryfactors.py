@@ -5,7 +5,9 @@ An instrument member `I_k` with effect `E_k = I_k^dagger(I)` factors as
 
     I_k = Ad_U o RootConj(E_k),   Ad_U(rho) = U rho U^dagger,   RootConj(E)(rho) = E^{1/2} rho E^{1/2},
 
-for some unitary `U` exactly when `I_k` has a single Kraus operator (Choi rank one).  Lindblad
+for some unitary `U` exactly when `I_k` has a single Kraus operator (Choi rank one).  `Ad_U` is the
+literature's name for conjugation by `U`, the adjoint action of `U`.  Despite the name, it is neither
+`U^dagger` nor the Hilbert-Schmidt adjoint of `rho -> U rho U^dagger` (that is `Ad_{U^dagger}`).  Lindblad
 instrument charts freeze `U` as the static base of the member's post-measurement gate, so
 :meth:`Instrument.from_effects` expects the caller to supply it.  When only the members are known,
 :func:`infer_unitary_factors` chooses one `U` per member.
