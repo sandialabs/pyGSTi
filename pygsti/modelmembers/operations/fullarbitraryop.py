@@ -14,10 +14,6 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
 

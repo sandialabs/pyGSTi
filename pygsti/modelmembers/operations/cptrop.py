@@ -38,14 +38,11 @@ from __future__ import annotations
 from typing import Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-    _TORCH_AVAILABLE = True
-except ImportError:
-    _TORCH_AVAILABLE = False
 
+import functools as _functools
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.pgtypes import SpaceT
 from pygsti.baseobjs.basis import Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers.povms.effect import POVMEffect
@@ -59,7 +56,11 @@ from typing import Union
 BasisLike = Union[Basis, str]
 
 
-if _TORCH_AVAILABLE:
+@_functools.cache
+def _effect_sqrt_function():
+    # Built on first use so that importing this module doesn't import torch.
+    _torch = _import_torch()
+
     class _EffectSqrt(_torch.autograd.Function):
         """
         E ↦ E½ for a Hermitian E whose eigenvalues are clamped to [0, 1], as in
@@ -113,6 +114,8 @@ if _TORCH_AVAILABLE:
         def jvp(ctx, tangent_E, tangent_tol):
             V, vals = ctx.saved_tensors
             return _EffectSqrt._frechet(V, vals, ctx.tol, tangent_E), None, None
+
+    return _EffectSqrt
 
 
 class RootConjOperator(LinearOperator, _Torchable):
@@ -275,6 +278,7 @@ class RootConjOperator(LinearOperator, _Torchable):
         here (mirroring :func:`pygsti.tools.optools.rootconj_superop`), along with
         :attr:`DERIV_EIGTOL`.
         """
+        _torch = _import_torch()
         cdtype = _torch.complex128 if real_dtype.itemsize == 8 else _torch.complex64
         dim = self._state_space.dim
         # B[i] = self._basis.elements[i]; E = einsum('i,iab->ab', effect_superket, B) == vec_to_stdmx.
@@ -308,11 +312,12 @@ class RootConjOperator(LinearOperator, _Torchable):
         magnitude of violation.  So under torch-driven optimization it can keep returning
         (clamped) values in regions where the numpy path would refuse to evaluate.
         """
+        _torch = _import_torch()
         etype, esd, B, toMx, fromMx, deriv_eigtol = sd
         v = etype.torch_base(esd, t_param).to(B.dtype)  # whole t_param: params delegate to the effect
         E = _torch.einsum('i,iab->ab', v, B)            # vec_to_stdmx
         E = (E + E.mH) / 2                               # match eigendecomposition's Hermitian symmetrize
-        R = _EffectSqrt.apply(E, deriv_eigtol)[0]
+        R = _effect_sqrt_function().apply(E, deriv_eigtol)[0]
         # plain (non-conjugate) transpose, matching np.kron(R, R.T); .contiguous() because
         # torch.kron cannot view the transposed (non-contiguous) operand.
         return (toMx @ _torch.kron(R, R.transpose(0, 1).contiguous()) @ fromMx).real

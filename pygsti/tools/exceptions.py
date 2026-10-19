@@ -213,3 +213,25 @@ class RBFitFailureWarning(UserWarning):
     than just the failed piece.
     """
     pass
+
+
+class StaticTLSImportError(ImportError):
+    """
+    Raised when an installed dependency (such as torch or qiskit) cannot be
+    imported because the process has run out of glibc's reserve of static
+    thread-local storage, which libraries loaded after the interpreter starts
+    share. The message explains how to enlarge the reserve with
+    GLIBC_TUNABLES.
+    """
+    pass
+
+
+class StaticTLSWarning(UserWarning):
+    """
+    Inform the user that an installed optional dependency could not be
+    imported because the process has run out of glibc's reserve of static
+    thread-local storage, and that pyGSTi is continuing without it. Raised
+    instead of StaticTLSImportError where pyGSTi only probes for the
+    dependency at import time.
+    """
+    pass

@@ -161,6 +161,13 @@ jobs:
       # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
       # so it cannot run on the Windows/macOS runners even if a caller requests it.
       if: ${{ inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      env:
+        # glibc serves the thread-local storage of libraries built for "initial-exec" TLS from a
+        # small fixed reserve (1664 bytes by default on x86_64) when they are loaded after startup.
+        # qiskit's _accelerate takes 1544 bytes as of qiskit 2.6, and qiskit-aer's bundled libgomp
+        # needs 120 more, so MCFE-Example's `import qiskit_aer` failed with "cannot allocate memory
+        # in static TLS block". Enlarging the reserve leaves room for both.
+        GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
       run: |
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
         # .md with an .ipynb sitting NEXT TO IT in the same directory (see

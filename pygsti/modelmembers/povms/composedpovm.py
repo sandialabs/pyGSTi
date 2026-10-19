@@ -13,15 +13,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import collections as _collections
 from typing import Optional
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
 from pygsti.modelmembers.povms.povm import POVM as _POVM
@@ -315,6 +312,7 @@ class ComposedPOVM(_POVM, _Torchable):
         (Torchable) error map; the base POVM is static (0 params).  The rows of base_povm
         are ordered according to self.keys().
         """
+        _torch = _import_torch()
         base_effects = [self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]
         base_povm_np = _np.ascontiguousarray(_np.stack(base_effects))
         base_povm    = _torch.from_numpy(base_povm_np).to(dtype=real_dtype, device=device)
