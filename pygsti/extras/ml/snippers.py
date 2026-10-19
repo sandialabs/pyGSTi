@@ -53,7 +53,7 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
 
 def layer_snipper_from_qubit_graph(
     error_generators: list[tuple], encoder: "StandardCircuitEncoder", qubit_graph: Any = None,
-    hops: int | None = None,
+    hops: int | None = None, is_nonmark: bool = False
 ) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
@@ -95,6 +95,9 @@ def layer_snipper_from_qubit_graph(
 
     hops : int
         The number of steps on the qubit graph to take.
+
+    is_nonmark : bool
+        Lets the snipper know there is a time index in the layer it must also pay attention to
 
     Returns
     -------
@@ -140,6 +143,9 @@ def layer_snipper_from_qubit_graph(
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
         # The encoding indices that encode what is happening to these qubits
         relevant_encoding_indices = encoder.indices_for_qubits(list(relevant_qubits))
+        if is_nonmark:
+            relevant_encoding_indices.append(encoder.length - 1)
         encoding_indices.append(relevant_encoding_indices)
+        
 
     return encoding_indices

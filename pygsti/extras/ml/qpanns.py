@@ -49,7 +49,7 @@ class QPANN(_keras.Model):
     """
 
     def __init__(self, encoding_length : int, modelled_error_generators: list,  snipper: list,
-                 dense_units: list[int] = [30, 20, 10, 5, 5], probability_computation: str = 'concise', **kwargs) -> None:
+                 dense_units: list[int] = [30, 20, 10, 5, 5], activation : str | list[str] = 'linear', probability_computation: str = 'concise', **kwargs) -> None:
         """
         Initialize a QPANN, with random weights and biases. An initialized QPANN should be trained
         on data, to create meaningful predictions and internal model parameters. The inputs for a
@@ -83,6 +83,10 @@ class QPANN(_keras.Model):
         probability_computation : {'concise','expanded'}, default 'concise'
             Selects the probability approximation implementation.
 
+        activation : str | list[str], default 'linear'
+            activation function for entire neural network(str) or activation type for each layer in the neural network (list[str]).
+        
+
 
         Returns
         -------
@@ -96,6 +100,7 @@ class QPANN(_keras.Model):
         self.snipper = _copy.deepcopy(snipper)
         self.dense_units = dense_units.copy()
         self.probability_computation = probability_computation
+        self.activation = activation
         # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
         # NOTE: these are plain numpy arrays, not tf.constant(...). A tf.constant created here
         # (eagerly, at __init__ time) gets captured by reference into whatever FuncGraph happens
@@ -106,7 +111,10 @@ class QPANN(_keras.Model):
         # numpy/Python values don't have this problem: TF converts them fresh in whatever graph
         # context actually needs them.
         self.stochastic_mask = _np.array([i[0] == 'S' for i in self.modelled_error_generators])
-
+        self.hamiltonian_mask = _np.array([i[0] == 'H' for i in self.modelled_error_generators])
+        self.active_mask = _np.array([i[0] == 'A' for i in self.modelled_error_generators])
+        self.correlated_mask = _np.array([i[0] == 'C' for i in self.modelled_error_generators])
+    
     def get_config(self) -> dict:
         """Return a serializable config dictionary for Keras model saving/loading."""
         # This is required for any custom Keras model. Just contains all of the custom attributes.
@@ -124,7 +132,7 @@ class QPANN(_keras.Model):
 
     def build(self) -> None:
         """Instantiate sublayers used by this QPANN (rate predictor + probability layer)."""
-        self.dense_layer = CircuitToErrorRatesEinSum(self.snipper, self.modelled_error_generators, self.dense_units)
+        self.dense_layer = CircuitToErrorRatesEinSum(self.snipper, self.modelled_error_generators, self.dense_units, self.activation)
         if self.probability_computation == 'expanded':
             self.probability_approximation_layer = ProbabilitiesLayer()
         elif self.probability_computation == 'concise':
@@ -192,7 +200,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
     Output is a tensor of shape `(depth, num_modelled_error_generators)` for each circuit.
     """
 
-    def __init__(self, snipper: list[list[int]], modelled_error_generators: list, dense_units: list[int] = [30, 20, 10, 5, 5], **kwargs) -> None:
+    def __init__(self, snipper: list[list[int]], modelled_error_generators: list, dense_units: list[int] = [30, 20, 10, 5, 5], activation: str | list[str] = 'linear', **kwargs) -> None:
         """
         # layer_snipper: func
         #     A function that takes a primitive error generator and maps it to a list that encodes which parts
@@ -209,6 +217,8 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             List of primitive error generators whose rates are  to be predicted.
         dense_units : list[int], default [30,20,10,5,5]
             Hidden layer widths; a final output unit is appended internally.
+        activation : str | list[str], default 'linear'
+            activation function for entire neural network(str) or activation type for each layer in the neural network (list[str]).
 
         """
         super().__init__()
@@ -217,6 +227,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         self.modelled_error_generators = modelled_error_generators
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
+        self.activation = activation
         # Mask that finds the 'S' (stochastic) error generators, so their rates can be squared
         # to enforce non-negativity (see EinsumSubNetwork's caller below).
         # NOTE: a plain numpy array, not tf.constant(...) -- see the identical note in
@@ -233,6 +244,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             'dense_units': self.dense_units,
             'layer_snipper': self.snipper,
             'stochastic_mask': self.stochastic_mask,
+            'activation': self.activation,
         })
         return config
 
@@ -243,7 +255,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
 
     def build(self, input_shape: tuple | list) -> None:
         """Instantiate the internal subnetwork used to predict per-generator rates."""
-        self.dense = EinsumSubNetwork(self.dense_units, self.snipper)
+        self.dense = EinsumSubNetwork(self.dense_units, self.snipper, self.activation)
         super().build(input_shape)
 
     def call(self, inputs: _tf.Tensor) -> _tf.Tensor:
@@ -308,7 +320,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
     per-generator predictions.
     """
 
-    def __init__(self, units: list[int], snipper: list[list[int]]) -> None:
+    def __init__(self, units: list[int], snipper: list[list[int]], activation: str | list[str] = 'linear') -> None:
         """Initialize the subnetwork.
 
         Parameters
@@ -317,28 +329,52 @@ class EinsumSubNetwork(_keras.layers.Layer):
             Layer widths; last element is output dimension per generator.
         snipper : list[list[int]]
             Snipper specification; used here to determine number of modelled error generators.
+        activation : str | list[str], default 'linear'
+            activation function for entire neural network(str) or activation type for each layer in the neural network (list[str]).
         """
         super().__init__()
         self.units = units
         self.outdim = units[-1]
         self.number_of_modelled_error_generators = len(snipper)
         self.snipper = snipper
+        
+        if isinstance(activation, str):
+            self.activation = activation
+        elif isinstance(activation, list) and isinstance(activation[0],str):
+            if len(activation) == len(units):
+                self.activation = activation
+            else:
+                raise ValueError('Each layer in the network must have a defined activation function if activation type is list!')
+        else:
+            raise ValueError('Other activation types not implemented! Activation must be type str or type list[str]!')
 
     def build(self, input_shape: tuple | list) -> None:
         """Build the underlying Sequential model (stack of CustomDense layers)."""
         init = _keras.initializers.RandomUniform(minval=-0.0001, maxval=0.0001)
 
+        if isinstance(self.activation, str):
         # Define the sub-unit's dense layers
-        self.sequential = _keras.Sequential(
-            [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='linear') for i in self.units[:-1]] +
-            [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation='linear', kernel_initializer=init, bias_initializer=init)])
+            self.sequential = _keras.Sequential(
+                [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation=self.activation) for i in self.units[:-1]] +
+                [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation=self.activation, kernel_initializer=init, bias_initializer=init)])
+            
+        elif isinstance(self.activation, list):
+            self.sequential = _keras.Sequential(
+                [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation=self.activation[i]) for i in self.units[:-1]] +
+                [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation=self.activation[-1], kernel_initializer=init, bias_initializer=init)])
+
+        else:
+            raise ValueError('Other activation types not implemented! Activation must be type str or type list[str]!')
+            
+            
 
     def get_config(self) -> dict:
         """Return serializable config for Keras."""
         config = super().get_config()
         config.update({
             'outdim': self.outdim,
-            'units': self.units
+            'units': self.units,
+            'activation': self.activation
         })
         return config
 

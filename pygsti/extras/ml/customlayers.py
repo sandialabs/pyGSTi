@@ -27,7 +27,7 @@ from typing import Any
 
 
 class SelectiveDense(Layer):
-    def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True,
+    def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True, trainable : bool = True
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
                  kernel_constraint=None, bias_constraint=None, **kwargs) -> None:
@@ -78,6 +78,7 @@ class SelectiveDense(Layer):
         self.input_indices = input_indices
         self.activation = tf.keras.activations.get(activation)
         self.use_bias = use_bias
+        self.trainable = trainable
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
@@ -109,6 +110,7 @@ class SelectiveDense(Layer):
                 initializer=self.kernel_initializer,
                 regularizer=self.kernel_regularizer,
                 constraint=self.kernel_constraint,
+                trainable = self.trainable,
                 name='kernel'
             )
             self.kernels.append(kernel)

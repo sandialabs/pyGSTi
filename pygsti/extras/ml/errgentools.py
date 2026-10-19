@@ -463,12 +463,10 @@ def index_to_pauli_pair(idx: int, n: int) -> tuple[str, str]:
 # when enumerating pairs of Paulis for 'C'/'A' error generators (see `_pauli_pairs_for_support`
 # below): 3 where only P is non-trivial at this qubit, 3 where only Q is, and 9 where both are
 # (letters need not differ locally -- only the *overall* n-qubit strings P and Q must differ).
-_PAULI_PAIR_LOCAL_CHOICES: list[tuple[str, str]] = (
-    [(p, 'I') for p in 'XYZ'] + [('I', q) for q in 'XYZ'] + [(p, q) for p in 'XYZ' for q in 'XYZ']
-)
 
 
-def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bool) -> list[tuple[str, str]]:
+
+def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bool, pauli:str = 'XYZ') -> list[tuple[str, str]]:
     """
     Enumerate all canonically-ordered pairs `(P, Q)`, `P < Q` lexicographically, of DISTINCT,
     non-identity n-qubit Pauli strings such that `support(P) union support(Q)` equals `support`
@@ -514,10 +512,14 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
     `num_pauli_pairs(n)` (summed over all supports/sizes) and the paper's stated total of 105 for
     `n=2`; see the corresponding unit tests.
     """
+
+    pauli_pair_local_choices: list[tuple[str, str]] = (
+    [(p, 'I') for p in pauli] + [('I', q) for q in pauli] + [(p, q) for p in pauli for q in pauli]
+)
     w = len(support)
     pairs = []
     base = ['I'] * n
-    for combo in _itertools.product(_PAULI_PAIR_LOCAL_CHOICES, repeat=w):
+    for combo in _itertools.product(pauli_pair_local_choices, repeat=w):
         p_letters = [c[0] for c in combo]
         q_letters = [c[1] for c in combo]
         if all(letter == 'I' for letter in p_letters):
@@ -542,7 +544,7 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
     return pairs
 
 
-def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
+def up_to_weight_k_paulis(k: int, n: int , pauli: str ='XYZ') -> list[str]:
     """
     Return all n-qubit Pauli strings with weight 1..k (non-identity count). If k=0, returns the all-identity string. If k>n, automatically sets k=n.
 
@@ -607,7 +609,7 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
 
             # For those w positions, choose an assignment of X/Y/Z at each position.
             # There are 3^w such assignments.
-            for letters in _itertools.product("XYZ", repeat=w):
+            for letters in _itertools.product(pauli, repeat=w):
 
                 # Copy the all-identity template, then place X/Y/Z on the support.
                 s = base[:]  # shallow copy of list of characters
@@ -620,7 +622,7 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
     return paulis
 
 
-def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
+def up_to_weight_k_pauli_pairs(k: int, n: int, pauli: str = 'XYZ') -> list[tuple[str, str]]:
     """
     Return all unordered pairs `(P, Q)` (canonically ordered, `P < Q`) of DISTINCT, non-identity
     n-qubit Pauli strings such that the *union* of P's and Q's individual qubit supports has
@@ -664,7 +666,7 @@ def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
         # `_pauli_pairs_for_support`'s docstring for why "exactly" avoids double-counting across
         # different values of w).
         for support in _itertools.combinations(positions, w):
-            pairs.extend(_pauli_pairs_for_support(support, n, reverse_index=False))
+            pairs.extend(_pauli_pairs_for_support(support, n,reverse_index=False,  pauli = pauli ))
 
     return pairs
 
@@ -1050,7 +1052,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(
     return error_generators
 
 
-def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -> list[tuple[str, tuple[str, ...]]]:
+def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S'], paulis: str ='XYZ') -> list[tuple[str, tuple[str, ...]]]:
     """Returns a list of all n-qubit error generators up to weight k, of types given in
     egtypes, in a tuple-of-strings format.
 
@@ -1076,12 +1078,12 @@ def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -
     error_generators: list[tuple[str, tuple[str, ...]]] = []
 
     if single_pauli_types:
-        relevant_paulis = up_to_weight_k_paulis(k, n)
+        relevant_paulis = up_to_weight_k_paulis(k, n, pauli = paulis)
         for egtype in single_pauli_types:
             error_generators += [(egtype, (p,)) for p in relevant_paulis]
 
     if pair_types:
-        relevant_pairs = up_to_weight_k_pauli_pairs(k, n)
+        relevant_pairs = up_to_weight_k_pauli_pairs(k, n, pauli = paulis)
         for egtype in pair_types:
             error_generators += [(egtype, (p1, p2)) for (p1, p2) in relevant_pairs]
 
