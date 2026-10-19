@@ -226,6 +226,17 @@ except ImportError:
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
 #is like a third of runtime when using higher-order BCH, e.g.)
+def _rebuild_local_stim_errorgen_label(errorgen_type: str, pauli_strs: tuple[str, ...], label: Optional[str],
+                                       circuit_time: Optional[float], initial_label: Any) -> LocalStimErrorgenLabel:
+    """
+    Reconstruct a `LocalStimErrorgenLabel` from the plain-string forms of its basis element labels
+    (the pickle/copy constructor used by `LocalStimErrorgenLabel.__reduce__`).
+    """
+    return LocalStimErrorgenLabel(errorgen_type, tuple([stim.PauliString(ps) for ps in pauli_strs]),
+                                  initial_label=initial_label, label=label, circuit_time=circuit_time,
+                                  pauli_str_reps=pauli_strs)
+
+
 class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     """
@@ -438,31 +449,24 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     def __reduce__(self) -> tuple[Any, ...]:
         """
-        Custom pickle reduction returning a compact tuple of attributes directly
-        reconstructed via __new__, eliminating redundant __dict__ serialization.
-        Falls back to dictionary state if legacy or mutated attributes are detected.
-        """
-        d = self.__dict__
-        if '_hashable_basis_element_labels' in d:
-            expected_rep = self.errorgen_type + ''.join(self._hashable_basis_element_labels)
-            if 'type_idx' in d and d.get('_hashable_string_rep') == expected_rep and 'initial_label' not in d:
-                state = (
-                    self.errorgen_type,
-                    self.type_idx,
-                    self.basis_element_labels,
-                    self.label,
-                    self.circuit_time,
-                    self._hashable_basis_element_labels,
-                    expected_rep,
-                    d.get('_initial_label', None),
-                )
-                return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), state)
-        return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), self.__dict__)
+        Compact pickle reduction (also used by `copy`). Only the plain-string forms of the basis
+        element labels are serialized; the (comparatively expensive to pickle) `stim.PauliString`
+        objects are rebuilt from them on load, and all other cached attributes are re-derived.
 
-    def __setstate__(self, state: Union[tuple[Any, ...], dict[str, Any]]) -> None:
+        Note that, like `bel_str`, this does not preserve the +/-1 sign of the `stim.PauliString`s in
+        `basis_element_labels`, which are ignored by the label's hashing and equality everywhere
+        (the propagation routines clear them). Cached attributes, such as the support mask, are
+        rebuilt on first use.
         """
-        Restore from a pickled/copied state, supporting both compact tuple states
-        and legacy dictionary states written by older versions:
+        return (_rebuild_local_stim_errorgen_label,
+                (self.errorgen_type, self._hashable_basis_element_labels, self.label, self.circuit_time,
+                 self._initial_label))
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """
+        Restore from a pickled/copied dictionary state, migrating states written by older versions
+        of this class (pickles written by the current version go through
+        `_rebuild_local_stim_errorgen_label` instead):
 
         - `type_idx` did not exist: derive it from `errorgen_type`.
         - `initial_label` was a plain attribute (it is now the read-only property backed
@@ -470,13 +474,6 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         - the cached `_hashable_basis_element_labels` did not exist: rebuild it; the hash/equality
           string `_hashable_string_rep` is always rebuilt since its format has changed.
         """
-        if isinstance(state, tuple):
-            (self.errorgen_type, self.type_idx, self.basis_element_labels,
-             self.label, self.circuit_time, self._hashable_basis_element_labels,
-             self._hashable_string_rep, self._initial_label) = state
-            self._support_mask = None
-            return
-
         if 'initial_label' in state:
             state['_initial_label'] = state.pop('initial_label')
         if 'type_idx' not in state:

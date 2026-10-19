@@ -11,6 +11,7 @@ from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import math
 import sys
 import warnings
 import pickle
@@ -1283,6 +1284,81 @@ class ApproxStabilizerMethodTester(BaseCase):
         # Clean up
         _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
+    def test_alpha_calibration_profiling_inputs_for_all_qubit_counts(self):
+        # The profiling stabilizer state has exactly the requested number of qubits (including odd
+        # counts and a single qubit), and calibration runs end to end for each.
+        for n in (1, 2, 3, 5, 8):
+            tableau, gens = _eprop._calibration_tableau_and_errorgens(n, num_errorgens=20)
+            self.assertEqual(len(tableau), n)
+            self.assertEqual(len(gens), 20)
+            self.assertTrue(all(len(g.basis_element_labels[0]) == n for g in gens))
+            self.assertTrue(_eprop._measure_alpha_throughput_us(n, repeats=1) >= 0.1)
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+        for n in (1, 3):
+            res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=n, num_workers=2, set_as_default=False)
+            self.assertEqual(res['num_qubits'], n)
+            self.assertGreater(res['tau_alpha_us'], 0)
+            self.assertGreaterEqual(res['alpha_b'], 0)
+            self.assertGreaterEqual(res['threshold_KM'], 1)
+
+    def test_fit_alpha_scaling(self):
+        a, b = _eprop._fit_alpha_scaling(4, 2.0, 20, 2.8)
+        self.assertAlmostEqual(b, 0.05)
+        self.assertAlmostEqual(a, 1.8)
+        # the fitted line is a local one; extrapolating it to other sizes cannot give a non-positive throughput
+        self.assertEqual(_eprop._alpha_tau_us(-1.7, 0.3, 5), _eprop._MIN_ALPHA_TAU_US)
+        self.assertAlmostEqual(_eprop._alpha_tau_us(2.0, 0.05, 10), 2.5)
+        # a negative slope (measurement noise) is clamped to a constant model through the mean
+        self.assertEqual(_eprop._fit_alpha_scaling(4, 3.0, 20, 2.0), (2.5, 0.0))
+
+    def test_alpha_calibration_values_and_decision_threshold(self):
+        configure = _eprop.configure_errorgen_propagation_parallelization
+        self.addCleanup(configure, reset_to_defaults=True)
+        n, t_ipc = 10, 1e-4
+        fake_tau = lambda m: 2.0 + 0.05 * m  # microseconds per cell at m qubits
+        with mock.patch.object(_eprop, '_measure_alpha_throughput_us', side_effect=fake_tau) as timing, \
+                mock.patch.object(_eprop, '_measure_ipc_latency', return_value=t_ipc):
+            res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=n, num_workers=2)
+            # measured at the target size and `_ALPHA_CALIBRATION_QUBIT_SPAN` qubits above it
+            self.assertEqual([c.args[0] for c in timing.call_args_list], [n, n + _eprop._ALPHA_CALIBRATION_QUBIT_SPAN])
+            self.assertAlmostEqual(res['alpha_a'], 2.0)
+            self.assertAlmostEqual(res['alpha_b'], 0.05)
+            self.assertAlmostEqual(res['tau_alpha_us'], fake_tau(n))
+            beta = _eprop._ACTIVE_PARALLEL_THRESHOLDS['safety_factor']
+            expected = beta * t_ipc / (fake_tau(n) * 1e-6)  # 400 for the default safety factor of 10
+            self.assertEqual(res['threshold_KM'], math.ceil(expected))
+            km = res['threshold_KM']
+
+            # the decision flips exactly at the reported threshold
+            self.assertFalse(_eprop._should_parallelize_alpha(n, km - 1, 1, num_workers=2))
+            self.assertTrue(_eprop._should_parallelize_alpha(n, km, 1, num_workers=2))
+            self.assertFalse(_eprop._should_parallelize_alpha(n, 1, km - 1, num_workers=2))
+            self.assertTrue(_eprop._should_parallelize_alpha(n, 1, km, num_workers=2))
+
+            # the configured safety factor is used (not a hard-coded value)
+            with mock.patch.dict(_eprop._ACTIVE_PARALLEL_THRESHOLDS, {'safety_factor': 2 * beta}):
+                res2 = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=n, num_workers=2,
+                                                                            set_as_default=False)
+            self.assertAlmostEqual(res2['threshold_KM'] / res['threshold_KM'], 2.0, places=2)
+
+        # reset clears all of the calibration state, restoring the table-based decision
+        configure(reset_to_defaults=True)
+        self.assertEqual(set(_eprop._ACTIVE_PARALLEL_THRESHOLDS), {'safety_factor'})
+        table_km = _eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha']
+        self.assertFalse(_eprop._should_parallelize_alpha(n, table_km - 1, 1, num_workers=2))
+        self.assertTrue(_eprop._should_parallelize_alpha(n, table_km, 1, num_workers=2))
+
+    def test_alpha_calibration_with_single_worker_does_not_record_ipc_latency(self):
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+        with mock.patch.object(_eprop, '_measure_alpha_throughput_us', return_value=1.0):
+            _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=1)
+        self.assertTrue(_eprop._ACTIVE_PARALLEL_THRESHOLDS['dynamic_calibrated'])
+        self.assertNotIn('t_ipc_s', _eprop._ACTIVE_PARALLEL_THRESHOLDS)
+        # a later multi-worker decision measures the latency instead of using a latency of zero (always parallel)
+        with mock.patch.object(_eprop, '_measure_ipc_latency', return_value=1e-3) as ipc:
+            self.assertFalse(_eprop._should_parallelize_alpha(4, 1, 1, num_workers=2))
+            ipc.assert_called_once()
+
     def test_estimate_magnus_peak_memory(self):
         # Order 1 < Order 2 < Order 3 for multi-layer circuits
         mem_o1 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=1)
@@ -1542,6 +1618,29 @@ class ApproxStabilizerMethodTester(BaseCase):
             self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
             for k in s_dict:
                 self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+
+    def test_commuting_product_parallel_matches_serial_truncation(self):
+        # The parallel commuting product must keep exactly the terms the serial one does: partial sums
+        # must not be truncated in the workers (or after merging), which the serial path never does.
+        layer = self.propagated_errorgen_layer
+        tiny = {lbl: 1e-9 * rate / abs(rate) for lbl, rate in layer.items()}  # products ~1e-18, below the 1e-14 threshold
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+        _eprop.configure_errorgen_propagation_parallelization(force_parallel=['commuting_product'])
+        for rates in (layer, tiny):
+            seq = _eprop._commuting_product(rates, rates, 'IIII', num_workers=1)
+            with _PoolDispatchSpy() as spy:
+                par = _eprop._commuting_product(rates, rates, 'IIII', num_workers=2)
+            self.assertIn('_CommutingProductSliceWorker', spy.dispatched)  # the parallel branch ran
+            self.assertEqual(set(seq), set(par))
+            for k in seq:  # (relative comparison: summation order differs, and `tiny` terms are ~1e-18)
+                self.assertLessEqual(abs(seq[k] - par[k]), 1e-9 * abs(seq[k]) + 1e-30)
+        self.assertTrue(any(abs(v) <= 1e-14 for v in par.values()))  # terms below the threshold were retained
+
+        # and the Taylor expansion built from it agrees with the serial one, term for term
+        t_seq = _eprop.error_generator_taylor_expansion(layer, order=3, num_workers=1)
+        t_par = _eprop.error_generator_taylor_expansion(layer, order=3, num_workers=2)
+        for s_dict, p_dict in zip(t_seq, t_par):
+            self.assertEqual(set(s_dict), set(p_dict))
 
     def test_local_stim_errorgen_label_pickle_fidelity(self):
         h = _LSE('H', (stim.PauliString('XIIX'),), pauli_str_reps=('XIIX',))

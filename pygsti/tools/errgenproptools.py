@@ -5930,7 +5930,6 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
             for current_order in range(2, order + 1):
                 order_scale = 1 / factorial(current_order)
                 current_power = _commuting_product(errorgen_dict, previous_power, identity,
-                                                   truncation_threshold=truncation_threshold,
                                                    num_workers=num_workers, pool=order_pool)
                 taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
                                                          if order_scale * abs(rate) > truncation_threshold}
@@ -5940,22 +5939,26 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
 
 
 class _CommutingProductSliceWorker:
-    """Worker task evaluating a bilinear slice of commuting product (picklable under spawn)."""
-    def __init__(self, full_other, identity, threshold):
+    """
+    Worker task evaluating a bilinear slice of a commuting product (picklable under spawn).
+
+    The partial sum is returned *untruncated* (keyed by `_hashable_string_rep`), exactly as the
+    serial path computes it: truncating a slice's partial sums before they are merged would drop
+    terms whose full sums (over all slices) are above the threshold, and would make the result
+    differ from the serial one.
+    """
+    def __init__(self, full_other, identity):
         self.full_other = full_other
         self.identity = identity
-        self.threshold = threshold
 
     def __call__(self, sub_dict):
         with _cyclic_gc_paused():
             part = _raw_commuting_product(sub_dict, self.full_other, self.identity)
-            if self.threshold > 0:
-                return {k._hashable_string_rep: v for k, v in part.items() if abs(v) > self.threshold}
             return {k._hashable_string_rep: v for k, v in part.items()}
 
 
 def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
-                       identity: str, truncation_threshold: float = 1e-14,
+                       identity: str,
                        num_workers: Union[int, str, None] = None,
                        pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> dict[_LSE, complex]:
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
@@ -5974,7 +5977,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     weights = [3.0 if k.type_idx in (2, 3) else 1.0 for k, _ in items]
     chunks = [dict(b) for b in _lpt_partition(items, weights, workers)]
 
-    worker = _CommutingProductSliceWorker(full, identity, truncation_threshold)
+    worker = _CommutingProductSliceWorker(full, identity)
     if pool is not None:
         chunk_results = pool.map(worker, chunks)
     else:
@@ -5986,8 +5989,8 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         for k, v in cr.items():
             merged_str[k] = merged_str.get(k, 0.0) + v
 
-    survivors = _truncated(merged_str, truncation_threshold)
-    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
+    # Like the serial path, return the product untruncated (callers truncate the copies they keep).
+    return {_lse_from_string_rep(k, n_q): v for k, v in merged_str.items()}
 
 
 def _raw_commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
@@ -6310,7 +6313,7 @@ def _should_parallelize_alpha(
         b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b")
         if a is not None and b is not None:
             beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
-            tau_alpha_s = (a + b * n_qubits) * 1e-6
+            tau_alpha_s = _alpha_tau_us(a, b, n_qubits) * 1e-6
             t_ipc_s = _ACTIVE_PARALLEL_THRESHOLDS.get("t_ipc_s")
             if t_ipc_s is None:
                 t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
@@ -6323,6 +6326,104 @@ def _should_parallelize_alpha(
     return w >= threshold_km
 
 
+# Number of qubits separating the two problem sizes at which the sensitivity throughput is
+# measured, to fit its (linear) qubit-count scaling.
+_ALPHA_CALIBRATION_QUBIT_SPAN = 16
+
+
+def _calibration_tableau_and_errorgens(n: int, num_errorgens: int = 400):
+    """
+    A stabilizer state on exactly `n` qubits (Bell pairs on adjacent qubits, plus a Hadamard on the
+    last qubit when `n` is odd) and a reproducible random set of weight-1 and weight-2 elementary error
+    generators across the H, S, C and A sectors, for profiling the sensitivity calculation.
+    """
+    lines = []
+    for i in range(0, n - 1, 2):
+        lines.append(f"H {i}\nCX {i} {i+1}")
+    if n % 2 == 1:
+        lines.append(f"H {n - 1}")
+    tableau = stim.Tableau.from_circuit(stim.Circuit("\n".join(lines)))
+    assert len(tableau) == n
+
+    rng = _np.random.default_rng(1234)
+    pauli_letters = ["X", "Y", "Z"]
+    types = ["H", "S", "C", "A"]
+    gens = []
+    for _ in range(num_errorgens):
+        eg_type = str(rng.choice(types))
+        weight = int(rng.choice([1, 2])) if n > 1 else 1
+        targets = [int(x) for x in rng.choice(n, size=weight, replace=False)]
+
+        p1 = ["_"] * n
+        for t in targets:
+            p1[t] = str(rng.choice(pauli_letters))
+        p1_stim = stim.PauliString("".join(p1))
+
+        if eg_type in ("H", "S"):
+            gens.append(_LSE(eg_type, [p1_stim]))
+        else:
+            p2 = ["_"] * n
+            for t in targets:
+                p2[t] = str(rng.choice(pauli_letters))
+            p2_stim = stim.PauliString("".join(p2))
+            if p1_stim == p2_stim:
+                alt = "Y" if p1[targets[0]] != "Y" else "Z"
+                p2[targets[0]] = alt
+                p2_stim = stim.PauliString("".join(p2))
+            gens.append(_LSE(eg_type, [p1_stim, p2_stim]))
+    return tableau, gens
+
+
+def _measure_alpha_throughput_us(n: int, repeats: int = 3) -> float:
+    """
+    Measure the single-threaded time in microseconds per (error generator, outcome) cell of the
+    sensitivity calculation `bulk_alpha` on `n` qubits. The per-call overhead is cancelled by
+    differencing the times of a full and a half-size generator set (best of `repeats` each).
+    """
+    tableau, all_gens = _calibration_tableau_and_errorgens(n)
+    num_outcomes = 4
+    bitstrings = ["0" * n] * num_outcomes
+    g1 = all_gens[: len(all_gens) // 2]
+    g2 = all_gens
+
+    _raw_bulk_alpha(g1[:10], tableau, bitstrings[:1])  # warm-up
+
+    def best_time(gens):
+        best = float("inf")
+        for _ in range(repeats):
+            t0 = _time.perf_counter()
+            _raw_bulk_alpha(gens, tableau, bitstrings)
+            best = min(best, _time.perf_counter() - t0)
+        return best
+
+    t1, t2 = best_time(g1), best_time(g2)
+    delta_w = (len(g2) - len(g1)) * num_outcomes
+    return max(_MIN_ALPHA_TAU_US, ((t2 - t1) / max(1, delta_w)) * 1e6)
+
+
+# Smallest sensitivity throughput (microseconds per cell) the model will report or use; also the floor
+# applied to measurements.
+_MIN_ALPHA_TAU_US = 0.1
+
+
+def _alpha_tau_us(a: float, b: float, n_qubits: int) -> float:
+    """The fitted sensitivity throughput a + b*n (microseconds per cell), floored at `_MIN_ALPHA_TAU_US`
+    since the line is a local fit that can extrapolate to non-positive values at other qubit counts."""
+    return max(_MIN_ALPHA_TAU_US, a + b * n_qubits)
+
+
+def _fit_alpha_scaling(n_lo: int, tau_lo_us: float, n_hi: int, tau_hi_us: float) -> tuple[float, float]:
+    """
+    Fit the linear throughput model tau(n) = a + b*n (microseconds per cell) through measurements
+    at two qubit counts. The slope is clamped to be non-negative (measurement noise could otherwise
+    make the throughput appear to improve with size), in which case the model is the constant mean.
+    """
+    b = (tau_hi_us - tau_lo_us) / (n_hi - n_lo)
+    if b < 0:
+        return 0.5 * (tau_lo_us + tau_hi_us), 0.0
+    return tau_lo_us - b * n_lo, b
+
+
 def optimize_errorgen_propagation_parallelization(
     num_qubits: Optional[int] = None,
     model: Optional[Any] = None,
@@ -6332,8 +6433,18 @@ def optimize_errorgen_propagation_parallelization(
     set_as_default: bool = True,
 ) -> dict[str, Any]:
     r"""
-    Empirically calibrate single-threaded throughput parameters and IPC dispatch latency
-    on the target machine, updating active parallelization thresholds.
+    Empirically calibrate the single-threaded throughput of the sensitivity calculation and the
+    IPC dispatch latency on the target machine, updating the active parallelization threshold for
+    `bulk_alpha` and `bulk_alpha_pauli`.
+
+    The sensitivity throughput is measured at the target qubit count and at a larger one
+    (`_ALPHA_CALIBRATION_QUBIT_SPAN` qubits more), and a linear model
+    :math:`\tau_\alpha(n) = a + b n` (microseconds per generator-outcome cell, with `b` clamped to
+    be non-negative) is fit through the two measurements. Since the throughput is not exactly linear in
+    the qubit count, this is a local fit, most accurate for problems near the calibrated size. The
+    calibrated parallelization threshold
+    is then :math:`K M \geq \beta T_{IPC} / \tau_\alpha(n)` for K generators and M outcomes,
+    where :math:`\beta` is the safety factor stored in `_ACTIVE_PARALLEL_THRESHOLDS` (10 by default).
 
     Parameters
     ----------
@@ -6345,7 +6456,9 @@ def optimize_errorgen_propagation_parallelization(
     circuit : Circuit, optional
         Optional circuit to use for profiling.
     num_workers : int, str, or None, optional
-        Worker count specification (defaults to "auto").
+        Worker count specification (defaults to "auto"). If this resolves to a single worker the
+        IPC latency is not recorded (there is nothing to dispatch to), and is instead measured
+        when it is first needed.
     start_method : str, optional
         Multiprocessing start method ('fork', 'spawn', 'forkserver').
     set_as_default : bool, optional (default True)
@@ -6358,13 +6471,17 @@ def optimize_errorgen_propagation_parallelization(
         Dictionary containing the measured parameters:
         {'num_qubits': int, 'tau_alpha_us': float, 'alpha_a': float, 'alpha_b': float,
          't_ipc_s': float, 'num_workers': int, 'threshold_KM': int, 'calibration_ms': float}
+        where `tau_alpha_us` is the fitted throughput at `num_qubits`, a + b * num_qubits (floored at 0.1 microseconds).
 
     Note
     ----
+    **Scope:** the calibration affects only the parallelize-or-not decision for `bulk_alpha` and
+    `bulk_alpha_pauli`. The decisions for the Magnus expansion, commuting products and layer
+    propagation always use the built-in threshold table (or your manual configuration).
+
     **Empirical Nature and Disclaimer:**
-    The analytical scaling model used by this optimizer to estimate single-threaded
-    throughput (\tau_\alpha(n) = a + b * n) is derived from empirical benchmarks on
-    specific test hardware. Actual single-threaded throughput and IPC dispatch overhead
+    The linear scaling model is fit to measurements at only two problem sizes, and the IPC latency
+    is measured with trivial tasks. Actual single-threaded throughput and IPC dispatch overhead
     may vary substantially across different CPU architectures (e.g. x86 AVX-512 vs.
     ARM NEON), operating systems, and memory bus topologies.
 
@@ -6394,65 +6511,12 @@ def optimize_errorgen_propagation_parallelization(
     else:
         raise ValueError("Must provide at least one of 'num_qubits', 'circuit', or 'model'.")
 
-    circ_lines = []
-    for i in range(0, max(1, n - 1), 2):
-        circ_lines.append(f"H {i}\nCX {i} {i+1}")
-    circ_str = "\n".join(circ_lines) if circ_lines else "H 0"
-    tableau = stim.Tableau.from_circuit(stim.Circuit(circ_str))
+    n_hi = n + _ALPHA_CALIBRATION_QUBIT_SPAN
+    a, b = _fit_alpha_scaling(n, _measure_alpha_throughput_us(n), n_hi, _measure_alpha_throughput_us(n_hi))
+    tau_us = _alpha_tau_us(a, b, n)
 
-    # Generate a reproducible random test set of elementary error generators across H, S, C, A
-    rng = _np.random.default_rng(1234)
-    pauli_letters = ["X", "Y", "Z"]
-    types = ["H", "S", "C", "A"]
-    num_test_gens = 400
-    all_gens = []
-
-    for _ in range(num_test_gens):
-        eg_type = str(rng.choice(types))
-        weight = int(rng.choice([1, 2])) if n > 1 else 1
-        targets = [int(x) for x in rng.choice(n, size=weight, replace=False)]
-
-        p1 = ["_"] * n
-        for t in targets:
-            p1[t] = str(rng.choice(pauli_letters))
-        p1_stim = stim.PauliString("".join(p1))
-
-        if eg_type in ("H", "S"):
-            all_gens.append(_LSE(eg_type, [p1_stim]))
-        else:
-            p2 = ["_"] * n
-            for t in targets:
-                p2[t] = str(rng.choice(pauli_letters))
-            p2_stim = stim.PauliString("".join(p2))
-            if p1_stim == p2_stim:
-                alt = "Y" if p1[targets[0]] != "Y" else "Z"
-                p2[targets[0]] = alt
-                p2_stim = stim.PauliString("".join(p2))
-            all_gens.append(_LSE(eg_type, [p1_stim, p2_stim]))
-
-    M = 4
-    bitstrings = ["0" * n] * M
-
-    g1 = all_gens[: len(all_gens) // 2]
-    g2 = all_gens
-
-    # Warmup
-    _ = _raw_bulk_alpha(g1[:10], tableau, bitstrings[:1])
-
-    t0_meas = _time.perf_counter()
-    _ = _raw_bulk_alpha(g1, tableau, bitstrings)
-    t1 = _time.perf_counter() - t0_meas
-
-    t0_meas = _time.perf_counter()
-    _ = _raw_bulk_alpha(g2, tableau, bitstrings)
-    t2 = _time.perf_counter() - t0_meas
-
-    delta_w = (len(g2) - len(g1)) * M
-    tau_us = max(0.1, ((t2 - t1) / max(1, delta_w)) * 1e6)
-
-    a = tau_us
-    b = 0.0
-    threshold_km = int(_math.ceil((10.0 * t_ipc_s) / (tau_us * 1e-6)))
+    beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+    threshold_km = int(_math.ceil((beta * t_ipc_s) / (tau_us * 1e-6)))
 
     calibration_duration_ms = (_time.perf_counter() - t0_start) * 1000
 
@@ -6470,7 +6534,11 @@ def optimize_errorgen_propagation_parallelization(
     if set_as_default:
         _ACTIVE_PARALLEL_THRESHOLDS["alpha_a"] = a
         _ACTIVE_PARALLEL_THRESHOLDS["alpha_b"] = b
-        _ACTIVE_PARALLEL_THRESHOLDS["t_ipc_s"] = t_ipc_s
+        if workers > 1:
+            _ACTIVE_PARALLEL_THRESHOLDS["t_ipc_s"] = t_ipc_s
+        else:
+            # a single worker has no dispatch latency to measure; let it be measured when needed.
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
         _ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
 
     return results

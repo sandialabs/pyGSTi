@@ -278,8 +278,9 @@ class LocalStimErrorgenLabelTester(BaseCase):
 
     def test_unpickle_legacy_states(self):
         # Pickles written by older versions of LocalStimErrorgenLabel lack attributes added
-        # since. Emulate them by editing the instance __dict__ before pickling (the default
-        # reduce protocol pickles __dict__ verbatim) and check that __setstate__ migrates them.
+        # since. Emulate them by pickling an edited copy of the instance __dict__ through the
+        # default reduce protocol of older versions (`__new__` plus a __dict__ state)
+        # and check that __setstate__ migrates them.
         # Use a propagated label so that the stored pre-propagation initial_label differs from
         # the label itself and its preservation can be checked.
         original = _LSE('A', [stim.PauliString('XI'), stim.PauliString('YI')])
@@ -288,11 +289,15 @@ class LocalStimErrorgenLabelTester(BaseCase):
         self.assertEqual(propagated.initial_label, original.to_local_eel())
         fresh_state = dict(propagated.__dict__)
 
+        class LegacyPickle:
+            def __init__(self, state):
+                self.state = state
+
+            def __reduce__(self):
+                return (object.__new__, (_LSE,), self.state)
+
         def roundtrip(state):
-            legacy = copy.copy(propagated)
-            legacy.__dict__.clear()
-            legacy.__dict__.update(state)
-            return pickle.loads(pickle.dumps(legacy))
+            return pickle.loads(pickle.dumps(LegacyPickle(state)))
 
         # (1) state written before `type_idx` existed.
         state = dict(fresh_state)
@@ -330,6 +335,39 @@ class LocalStimErrorgenLabelTester(BaseCase):
         restored = roundtrip(state)
         self.assertEqual(restored.support_mask, propagated.support_mask)
         self.assertIn('_support_mask', restored.__dict__)
+
+    def test_pickle_roundtrip_preserves_label_attributes(self):
+        # The compact pickle format serializes only plain strings and rebuilds the stim.PauliStrings.
+        original = _LSE('A', [stim.PauliString('XI'), stim.PauliString('YI')], circuit_time=2.5, label='foo')
+        propagated, _ = original.propagate_error_gen_tableau(stim.Tableau.from_named_gate('H') + stim.Tableau(1), 1.0)
+        labels = [_LSE('H', [stim.PauliString('XIIX')]), _LSE('S', [stim.PauliString('_YZ')]),
+                  _LSE('C', [stim.PauliString('XII'), stim.PauliString('IIZ')], circuit_time=1, label='bar'),
+                  original, propagated]
+        for lbl in labels:
+            for other in (pickle.loads(pickle.dumps(lbl, protocol=pickle.HIGHEST_PROTOCOL)),
+                          pickle.loads(pickle.dumps(lbl, protocol=2)), copy.copy(lbl), copy.deepcopy(lbl)):
+                self.assertEqual(other, lbl)
+                self.assertEqual(hash(other), hash(lbl))
+                self.assertEqual(other.errorgen_type, lbl.errorgen_type)
+                self.assertEqual(other.type_idx, lbl.type_idx)
+                self.assertEqual(other.basis_element_labels, lbl.basis_element_labels)
+                self.assertEqual(other.circuit_time, lbl.circuit_time)
+                self.assertEqual(other.label, lbl.label)
+                self.assertEqual(other._hashable_basis_element_labels, lbl._hashable_basis_element_labels)
+                self.assertEqual(other._hashable_string_rep, lbl._hashable_string_rep)
+                self.assertEqual(other.initial_label, lbl.initial_label)
+                self.assertEqual(other.support_mask, lbl.support_mask)
+                self.assertIsInstance(other.basis_element_labels[0], stim.PauliString)
+        # the stored pre-propagation label is preserved without being forced to materialize on plain labels
+        plain = _LSE('H', [stim.PauliString('XI')])
+        self.assertIsNone(pickle.loads(pickle.dumps(plain))._initial_label)
+        self.assertEqual(pickle.loads(pickle.dumps(propagated))._initial_label, propagated._initial_label)
+        # the cached support mask is not stored in the pickle: it is rebuilt on demand and class-level default is kept
+        propagated.support_mask
+        self.assertNotIn('_support_mask', pickle.loads(pickle.dumps(propagated)).__dict__)
+        # the compact format is much smaller than pickling the attribute dictionary
+        big = _LSE('C', [stim.PauliString('X' * 100), stim.PauliString('Z' * 100)])
+        self.assertLess(len(pickle.dumps(big)), len(pickle.dumps(big.__dict__)))
 
     def test_support_mask(self):
         from pygsti.errorgenpropagation import localstimerrorgen as _lse_mod
