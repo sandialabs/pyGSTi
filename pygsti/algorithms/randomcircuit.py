@@ -895,7 +895,8 @@ def _sample_maximum_matching(graph, edges, rand_state):
     return matching
 
 
-def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qubit_labels=None, rand_state=None):
+def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qubit_labels=None, rand_state=None,
+                                                    gate_args_lists=None):
     """
     Samples a random circuit with a specified width, depth and two-qubit gate density.
 
@@ -942,6 +943,13 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     rand_state : numpy.random.RandomState, optional
         A random number generator, for reproducible sampling.
 
+    gate_args_lists : dict, optional
+        A dictionary mapping a gate name to a list of argument tuples. Whenever a gate with
+        that name is placed, as a one- or two-qubit gate, its arguments are a uniformly
+        random entry of that list. A parametrized gate of `pspec` (such as `Gzr`) that this
+        dictionary doesn't name comes back without arguments, and a circuit holding one
+        can't be simulated.
+
     Returns
     -------
     Circuit
@@ -963,6 +971,8 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()
+    if gate_args_lists is None:
+        gate_args_lists = {}
     if qubit_labels is not None:
         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
         qubits = list(qubit_labels[:])  # copy this list
@@ -1044,11 +1054,19 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
         for edge in selected_edges_for_layer:
             possibleops = ops_on_qubits[edge]
             gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            if gate_label.name in gate_args_lists:
+                possibleargs = gate_args_lists[gate_label.name]
+                args = possibleargs[rand_state.randint(0, len(possibleargs))]
+                gate_label = _lbl.Label(gate_label.name, edge, args=args)
             sampled_layer.append(gate_label)
 
         for q in unusedqubits:
             possibleops = ops_on_qubits[(q,)]
             gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            if gate_label.name in gate_args_lists:
+                possibleargs = gate_args_lists[gate_label.name]
+                args = possibleargs[rand_state.randint(0, len(possibleargs))]
+                gate_label = _lbl.Label(gate_label.name, q, args=args)
             sampled_layer.append(gate_label)
 
         circuit.insert_layer_inplace(sampled_layer, i)

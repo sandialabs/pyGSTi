@@ -1,6 +1,7 @@
 import copy
 import math
 import os
+import warnings
 
 import numpy as np
 
@@ -174,6 +175,23 @@ class DFEProtocolTest(BaseCase):
         ds = pygsti.data.simulate_data(self.noisy, design.all_circuits_needing_data, 100, sample_error='none')
         results = _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds))
         self.assertAlmostEqual(results.fidelities[1], 0.9, delta=1e-7)
+
+    def test_dataframe_warns_on_mixed_line_labels(self):
+        c_2q = Circuit([[('Gxpi2', 'Q0'), ('Gypi2', 'Q1')], [('Gcphase', 'Q0', 'Q1')]])
+        self.assertEqual(c_2q.line_labels, ('Q0', 'Q1'))
+        for circuits in ([c_2q, self.c_a], [self.c_a, c_2q]):
+            design = self.make_design(2, circuits=circuits, seed=0)
+            results = _dfe.DFE().run(self.make_data(design, self.ideal, 10, seed=1))
+            with self.assertWarnsRegex(UserWarning, "differ from the design's qubit_labels"):
+                df = results.to_dataframe()
+            self.assertEqual(len(df), 2)
+
+        design = self.make_design(2, seed=0)
+        results = _dfe.DFE().run(self.make_data(design, self.ideal, 10, seed=1))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            results.to_dataframe()
+        self.assertFalse([w for w in caught if "differ from the design's qubit_labels" in str(w.message)])
 
     def test_rejects_pinned_designs(self):
         with self.assertRaises(ValueError):

@@ -2,7 +2,7 @@
 DFE Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,6 +11,7 @@ DFE Protocol objects
 #***************************************************************************************************
 
 import numbers as _numbers
+import warnings as _warnings
 
 import numpy as _np
 
@@ -30,7 +31,9 @@ class DFEDesign(_vb.BenchmarkingDesign):
 
     The design's `qubit_labels` are the first circuit's `line_labels`. The :class:`DFE`
     protocol handles circuits on different qubits, but other machinery inherited from
-    BenchmarkingDesign may assume that every circuit shares those labels.
+    BenchmarkingDesign may assume that every circuit shares those labels. Building a
+    dataframe from results on such a design warns, because its `Qubits` entry shows
+    `qubit_labels` for every target.
 
     Whether any circuit was sampled with a mask is recorded in the boolean attribute
     `has_fixed_identity_locations`.
@@ -202,6 +205,38 @@ class DFEDesign(_vb.BenchmarkingDesign):
                              qubit_labels=self._mapped_qubit_labels(mapper))
         ret.seed = getattr(self, 'seed', None)
         return ret
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes nested :class:`NamedDict` dictionaries describing this design.
+
+        Warns when some targets' line labels differ from the design's `qubit_labels`,
+        since the `Qubits` entry then shows `qubit_labels` for every target.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            The dictionary that becomes the innermost level of the nested dictionaries.
+
+        Returns
+        -------
+        NamedDict
+        """
+        design_labels = tuple(self.qubit_labels)
+        mixed = []
+        for circuit_list in self.circuit_lists:
+            for c in circuit_list:
+                labels = tuple(c.line_labels)
+                if labels != design_labels and labels not in mixed:
+                    mixed.append(labels)
+        if mixed:
+            _warnings.warn(
+                f"Some targets' line labels {mixed} differ from the design's qubit_labels "
+                f"{design_labels}, which are the first target's line labels. The `Qubits` entry "
+                "of a dataframe or nested dict built from these results labels every target "
+                "with the design's qubit_labels. The fidelities themselves are correct, one "
+                "per target in target order.", UserWarning)
+        return super().setup_nameddict(final_dict)
 
 
 class DFE(_vb.SummaryStatistics):

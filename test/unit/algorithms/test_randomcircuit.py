@@ -3,6 +3,7 @@ from unittest import mock
 import networkx
 import numpy as np
 
+import pygsti
 from pygsti.baseobjs import Label as L
 from pygsti.processors import QubitProcessorSpec as QPS
 from ..util import BaseCase
@@ -155,6 +156,27 @@ class FixedFeatureValueCircuitTest(BaseCase):
         self.oneway = QPS(4, ['Gi', 'Gxpi2', 'Gypi2', 'Gcnot'], availability={'Gcnot': self.oneway_pairs},
                           qubit_labels=QS)
         self.f = _rc.create_random_circuit_with_fixed_feature_values
+
+    def test_gate_args_lists(self):
+        pspec = QPS(4, ['Gczr', 'Gxpi2', 'Gzr'], availability={'Gczr': self.oneway_pairs}, qubit_labels=QS)
+        args = {'Gzr': [('0.1',), ('0.2',)], 'Gczr': [('0.3',)]}
+        seen_zr, n_czr = set(), 0
+        for seed in range(10):
+            c = self.f(pspec, 4, 4, 0.5, rand_state=np.random.RandomState(seed), gate_args_lists=args)
+            for layer in c:
+                for lbl in layer.components:
+                    if lbl.name == 'Gzr':
+                        self.assertIn(tuple(lbl.args), args['Gzr'])
+                        seen_zr.add(tuple(lbl.args))
+                    elif lbl.name == 'Gczr':
+                        self.assertEqual(tuple(lbl.args), ('0.3',))
+                        n_czr += 1
+                    elif lbl.name == 'Gxpi2':
+                        self.assertEqual(len(lbl.args), 0)
+            if seed == 0:
+                pygsti.models.create_crosstalk_free_model(pspec).probabilities(c)
+        self.assertEqual(seen_zr, set(args['Gzr']))
+        self.assertGreater(n_czr, 0)
 
     def test_full_density_fits_on_even_line(self):
         for pspec in (self.line, self.oneway):
