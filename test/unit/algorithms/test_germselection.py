@@ -512,3 +512,44 @@ def count_ops(circuits):
     for circuit in circuits:
         num_ops+= circuit.num_gates
     return num_ops
+
+
+class PerfectTwirlEigenspaceGroupingTester(BaseCase):
+    """``_super_op_for_perfect_twirl`` must not depend on the eigensolver's ordering.
+
+    The test matrix is a real normal matrix whose eigenphases form a chain
+    theta, theta + 0.6*eps, theta + 1.2*eps: neighbours are within eps of each
+    other but the ends are not. Different LAPACK builds return eigenvalues in
+    different orders, so the twirl is recomputed with the Schur factors permuted
+    and must stay real and unchanged.
+    """
+
+    def setUp(self):
+        self.eps = 1e-6
+        theta = 0.3
+        blocks = [np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])
+                  for t in (theta, theta + 0.6 * self.eps, theta + 1.2 * self.eps)]
+        rotations = np.zeros((6, 6))
+        for k, block in enumerate(blocks):
+            rotations[2 * k:2 * k + 2, 2 * k:2 * k + 2] = block
+        Q, _ = np.linalg.qr(np.random.default_rng(0).standard_normal((6, 6)))
+        self.wrt = Q @ rotations @ Q.T
+
+    def test_twirl_is_independent_of_eigenvalue_order(self):
+        from unittest import mock
+        reference = germsel._super_op_for_perfect_twirl(self.wrt, self.eps, np.float64)
+        # A perfect twirl is a projection.
+        self.assertArraysAlmostEqual(reference @ reference, reference)
+
+        real_schur = germsel._sla.schur
+        rng = np.random.default_rng(1)
+        for _ in range(50):
+            perm = rng.permutation(self.wrt.shape[0])
+
+            def permuted_schur(a, output='complex', perm=perm):
+                T, Z = real_schur(a, output=output)
+                return T[np.ix_(perm, perm)], Z[:, perm]
+
+            with mock.patch.object(germsel._sla, 'schur', permuted_schur):
+                twirl = germsel._super_op_for_perfect_twirl(self.wrt, self.eps, np.float64)
+            self.assertArraysAlmostEqual(twirl, reference)
