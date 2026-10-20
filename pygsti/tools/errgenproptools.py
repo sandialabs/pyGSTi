@@ -5881,7 +5881,11 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding rates
-        are below this value.
+        are below this value. The intermediate powers of the generator from which the higher orders
+        are built are truncated at this threshold too. In a parallel evaluation (`num_workers` or `pool`)
+        the workers drop partial sums below the threshold divided by their number of tasks, so the
+        result can differ from the serial one by up to about the threshold, and terms whose magnitude is
+        close to the threshold may be kept by one and dropped by the other.
 
     num_workers : int, str, or None, optional
         Target worker count for parallel evaluation across commuting product slices.
@@ -5917,12 +5921,22 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         # instead of re-composing the tail of each k-tuple of generators (which repeats the same
         # compositions for every leading generator). L and L^(k-1) commute, so the product is
         # formed by `_commuting_product` from anticommutators, L o L^(k-1) = ½{L, L^(k-1)} (see its
-        # docstring). The powers are kept untruncated between orders (only the returned copies
-        # are truncated), which is what makes [L, L^(k-1)] = 0 exact. Only the square gets the
-        # unordered-pair halving of `_commuting_product`; forming even powers from two equal
-        # factors instead (L^4 = ½{L^2, L^2}) would extend it, but costs ½|L^2|^2 pairs against
-        # |L||L^3| and was measured at 0.8-0.9x on inputs with few generators and 2.3x slower on
-        # a 75-generator input, so every power is L o L^(k-1).
+        # docstring). Only the square gets the unordered-pair halving of `_commuting_product`;
+        # forming even powers from two equal factors instead (L^4 = ½{L^2, L^2}) would extend it,
+        # but costs ½|L^2|^2 pairs against |L||L^3| and was measured at 0.8-0.9x on inputs with few
+        # generators and 2.3x slower on a 75-generator input, so every power is L o L^(k-1).
+        #
+        # The powers are truncated at `truncation_threshold` between orders (as are the returned,
+        # 1/k!-scaled copies). Strictly, the truncated power L^(k-1) - R (R the dropped terms, each
+        # of magnitude <= the threshold) no longer commutes with L, so the ½{L, .} form of the product
+        # is applied to a slightly non-commuting input, and the dropped terms R change the next power
+        # by terms of size ~ c * ||L||_1 * threshold per label, c a small combinatorial coefficient.
+        # That can only matter if ||L||_1 is of order one or larger, where the Taylor series converges
+        # too slowly for low orders to be useful anyway. Measured on 4- and 8-qubit propagated
+        # generators (orders 2-4, ||L||_1 from 0.03 to 12), truncating the powers moved no reported
+        # term by more than 3% of the threshold. The dropped terms are mostly cancellation residues
+        # (over half of all terms of L^3 on 8 qubits), so truncating them substantially reduces the
+        # size of the products at the following orders and the cost of materializing them.
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
         # A single (lazily started) pool is shared by the products of every order.
@@ -5930,6 +5944,7 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
             for current_order in range(2, order + 1):
                 order_scale = 1 / factorial(current_order)
                 current_power = _commuting_product(errorgen_dict, previous_power, identity,
+                                                   truncation_threshold=truncation_threshold,
                                                    num_workers=num_workers, pool=order_pool)
                 taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
                                                          if order_scale * abs(rate) > truncation_threshold}
@@ -5942,25 +5957,45 @@ class _CommutingProductSliceWorker:
     """
     Worker task evaluating a bilinear slice of a commuting product (picklable under spawn).
 
-    The partial sum is returned *untruncated* (keyed by `_hashable_string_rep`), exactly as the
-    serial path computes it: truncating a slice's partial sums before they are merged would drop
-    terms whose full sums (over all slices) are above the threshold, and would make the result
-    differ from the serial one.
+    The partial sum is returned (keyed by `_hashable_string_rep`) with entries of magnitude at most
+    `chunk_threshold` dropped, which reduces the data sent back to the main process. The partial sums
+    of the slices are later added, so an entry that is small in one slice may belong to a label whose
+    total is large (and, conversely, dropped entries may have cancelled part of a larger one). The
+    caller therefore passes `chunk_threshold = threshold / n_slices`: if a label's total exceeds the
+    threshold then at least one slice's entry exceeds `threshold / n_slices` and is kept, so the label
+    is never lost entirely, and the total of the dropped entries of any label is below `threshold`.
+    This does not make the merged value exactly equal to the serial one: it can differ by up to about
+    `(n_slices - 1) / n_slices * threshold`, which can move a value across the threshold.
     """
-    def __init__(self, full_other, identity):
+    def __init__(self, full_other, identity, chunk_threshold):
         self.full_other = full_other
         self.identity = identity
+        self.chunk_threshold = chunk_threshold
 
     def __call__(self, sub_dict):
         with _cyclic_gc_paused():
             part = _raw_commuting_product(sub_dict, self.full_other, self.identity)
+            thr = self.chunk_threshold
+            if thr > 0:
+                return {k._hashable_string_rep: v for k, v in part.items() if abs(v) > thr}
             return {k._hashable_string_rep: v for k, v in part.items()}
 
 
 def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
-                       identity: str,
+                       identity: str, truncation_threshold: float = 1e-14,
                        num_workers: Union[int, str, None] = None,
                        pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> dict[_LSE, complex]:
+    """
+    The composition L o M of two commuting error generators (see `_raw_commuting_product`), with
+    terms of magnitude at most `truncation_threshold` removed from the result.
+
+    The serial and parallel evaluations both truncate, but are not guaranteed to agree exactly. In
+    the parallel evaluation each worker drops the entries of its partial sum of magnitude at most
+    `truncation_threshold / n_chunks` (to limit inter-process communication) and the merged sum is
+    truncated at `truncation_threshold` before any labels are built. The merged values can differ from
+    the serial ones by up to about `truncation_threshold`, and a label whose value is close to the
+    threshold may be kept by one evaluation and dropped by the other.
+    """
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
@@ -5968,7 +6003,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     n2 = len(errorgen_dict_2)
     n_q = len(identity)
     if workers == 1 or num_workers is None and pool is None or not _should_parallelize_commuting_product(n_q, n1, n2, num_workers=workers):
-        return _raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity)
+        return _truncated(_raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity), truncation_threshold)
 
     # Parallel bilinear slicing with term-type load balancing
     target = errorgen_dict_1 if n1 <= n2 else errorgen_dict_2
@@ -5977,7 +6012,8 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     weights = [3.0 if k.type_idx in (2, 3) else 1.0 for k, _ in items]
     chunks = [dict(b) for b in _lpt_partition(items, weights, workers)]
 
-    worker = _CommutingProductSliceWorker(full, identity)
+    # each chunk drops entries below its share of the threshold (see `_CommutingProductSliceWorker`)
+    worker = _CommutingProductSliceWorker(full, identity, truncation_threshold / len(chunks))
     if pool is not None:
         chunk_results = pool.map(worker, chunks)
     else:
@@ -5989,8 +6025,9 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         for k, v in cr.items():
             merged_str[k] = merged_str.get(k, 0.0) + v
 
-    # Like the serial path, return the product untruncated (callers truncate the copies they keep).
-    return {_lse_from_string_rep(k, n_q): v for k, v in merged_str.items()}
+    # truncate before materializing labels, which dominates the cost of the merge
+    survivors = _truncated(merged_str, truncation_threshold)
+    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 
 def _raw_commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],

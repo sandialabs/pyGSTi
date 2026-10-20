@@ -1615,32 +1615,63 @@ class ApproxStabilizerMethodTester(BaseCase):
         t_par = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=2)
         self.assertEqual(len(t_seq), len(t_par))
         for s_dict, p_dict in zip(t_seq, t_par):
-            self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
-            for k in s_dict:
-                self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+            # (serial and parallel truncation of the powers agree to within about the threshold)
+            for k in set(s_dict) | set(p_dict):
+                self.assertAlmostEqual(s_dict.get(k, 0), p_dict.get(k, 0), places=12)
 
-    def test_commuting_product_parallel_matches_serial_truncation(self):
-        # The parallel commuting product must keep exactly the terms the serial one does: partial sums
-        # must not be truncated in the workers (or after merging), which the serial path never does.
+    def test_commuting_product_parallel_truncation_is_consistent_with_serial(self):
+        # Both evaluations truncate at the threshold. They are not exactly equal: workers drop partial sums
+        # below threshold / n_chunks, so merged values can differ from the serial ones by up to ~threshold,
+        # and labels whose value is within that band of the threshold may be kept by only one evaluation.
+        thr = 1e-14
         layer = self.propagated_errorgen_layer
-        tiny = {lbl: 1e-9 * rate / abs(rate) for lbl, rate in layer.items()}  # products ~1e-18, below the 1e-14 threshold
         self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
         _eprop.configure_errorgen_propagation_parallelization(force_parallel=['commuting_product'])
-        for rates in (layer, tiny):
-            seq = _eprop._commuting_product(rates, rates, 'IIII', num_workers=1)
+        raw = _eprop._raw_commuting_product(layer, layer, 'IIII')
+        self.assertTrue(any(abs(v) <= thr for v in raw.values()))  # the fixture produces terms to truncate
+        for workers in (2, 3):
+            seq = _eprop._commuting_product(layer, layer, 'IIII', truncation_threshold=thr, num_workers=1)
             with _PoolDispatchSpy() as spy:
-                par = _eprop._commuting_product(rates, rates, 'IIII', num_workers=2)
+                par = _eprop._commuting_product(layer, layer, 'IIII', truncation_threshold=thr, num_workers=workers)
             self.assertIn('_CommutingProductSliceWorker', spy.dispatched)  # the parallel branch ran
-            self.assertEqual(set(seq), set(par))
-            for k in seq:  # (relative comparison: summation order differs, and `tiny` terms are ~1e-18)
-                self.assertLessEqual(abs(seq[k] - par[k]), 1e-9 * abs(seq[k]) + 1e-30)
-        self.assertTrue(any(abs(v) <= 1e-14 for v in par.values()))  # terms below the threshold were retained
+            for result in (seq, par):
+                self.assertTrue(all(abs(v) > thr for v in result.values()))  # truncated at the threshold
+            # serial truncation is exactly that of the raw product
+            self.assertEqual(set(seq), {k for k, v in raw.items() if abs(v) > thr})
+            for k in set(seq) & set(par):
+                self.assertLessEqual(abs(seq[k] - par[k]), thr + 1e-9 * abs(seq[k]))
+            for k in set(seq) ^ set(par):  # a label kept by only one evaluation must be near the threshold
+                self.assertLessEqual(abs(raw[k]), 2 * thr)
 
-        # and the Taylor expansion built from it agrees with the serial one, term for term
-        t_seq = _eprop.error_generator_taylor_expansion(layer, order=3, num_workers=1)
-        t_par = _eprop.error_generator_taylor_expansion(layer, order=3, num_workers=2)
-        for s_dict, p_dict in zip(t_seq, t_par):
-            self.assertEqual(set(s_dict), set(p_dict))
+        # a product whose terms are all below the threshold is empty in both evaluations
+        tiny = {lbl: 1e-9 * rate / abs(rate) for lbl, rate in layer.items()}  # products ~1e-18
+        self.assertEqual(_eprop._commuting_product(tiny, tiny, 'IIII', num_workers=1), {})
+        self.assertEqual(_eprop._commuting_product(tiny, tiny, 'IIII', num_workers=2), {})
+
+        # a label whose total is above the threshold is never lost entirely: with every chunk's entry
+        # at most threshold / n_chunks, nothing is sent, so the worker threshold is what bounds this
+        worker = _eprop._CommutingProductSliceWorker(layer, 'IIII', 0.0)
+        everything = worker(layer)
+        thr_worker = _eprop._CommutingProductSliceWorker(layer, 'IIII', thr / 3)
+        kept = thr_worker(layer)
+        self.assertEqual(set(kept), {k for k, v in everything.items() if abs(v) > thr / 3})
+        self.assertLess(len(kept), len(everything))
+
+    def test_taylor_expansion_with_truncated_powers_matches_untruncated_powers(self):
+        # The powers used to build the higher orders are truncated at the threshold. Compare with the
+        # reported terms computed from untruncated powers, at several overall scales of the generator.
+        thr = 1e-14
+        for scale in (1.0, 30.0):
+            rates = {lbl: scale * rate for lbl, rate in self.propagated_errorgen_layer.items()}
+            taylor = _eprop.error_generator_taylor_expansion(rates, order=4, truncation_threshold=thr)
+            power = rates
+            for k in range(2, 5):
+                power = _eprop._raw_commuting_product(rates, power, 'IIII')  # untruncated powers
+                reference = {lbl: rate / factorial(k) for lbl, rate in power.items() if abs(rate) / factorial(k) > thr}
+                got = taylor[k - 1]
+                for lbl in set(reference) | set(got):
+                    self.assertLessEqual(abs(reference.get(lbl, 0) - got.get(lbl, 0)), 0.1 * thr + 1e-12 * abs(reference.get(lbl, 0)))
+                self.assertTrue(all(abs(v) > thr for v in got.values()))
 
     def test_local_stim_errorgen_label_pickle_fidelity(self):
         h = _LSE('H', (stim.PauliString('XIIX'),), pauli_str_reps=('XIIX',))
