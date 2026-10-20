@@ -534,6 +534,61 @@ class MLSubpackageTester(unittest.TestCase):
         config = model.get_config()
         self.assertEqual(config['encoding_length'], 10)
 
+    def test_customdense_kernel_init_is_per_errorgen(self):
+        # Keras' fan-based initializers (e.g. the default 'glorot_uniform') fold the leading
+        # `num_errorgens` axis of CustomDense's (num_errorgens, input_dim, units) kernel into
+        # fan_in and fan_out, which made the initial weights ~sqrt(num_errorgens) too small.
+        # Each error generator's kernel must instead get the distribution of a standalone
+        # (input_dim, units) kernel.
+        input_dim, units = 21, 30
+        glorot_std = np.sqrt(2 / (input_dim + units))  # std of glorot_uniform for (input_dim, units)
+        for num_errorgens in (1, 96):
+            layer = customlayers.CustomDense(units, num_errorgens)
+            layer.build((None, num_errorgens, input_dim))
+            kernel = layer.kernel.numpy()
+            self.assertEqual(kernel.shape, (num_errorgens, input_dim, units))
+            self.assertAlmostEqual(kernel.std() / glorot_std, 1.0, delta=0.1)
+
+        # Non-fan-based initializers (e.g. the tiny RandomUniform QPANNs use for output layers)
+        # are left unchanged.
+        layer = customlayers.CustomDense(1, 96, kernel_initializer=keras.initializers.RandomUniform(-1e-4, 1e-4))
+        layer.build((None, 96, input_dim))
+        self.assertLessEqual(np.abs(layer.kernel.numpy()).max(), 1e-4)
+        self.assertGreater(np.abs(layer.kernel.numpy()).max(), 5e-5)
+
+        # A user-specified seed is carried through the correction.
+        kernels = []
+        for _ in range(2):
+            layer = customlayers.CustomDense(units, 96, kernel_initializer=keras.initializers.GlorotUniform(seed=3))
+            layer.build((None, 96, input_dim))
+            kernels.append(layer.kernel.numpy())
+        np.testing.assert_array_equal(kernels[0], kernels[1])
+
+    def test_qpann_initial_rates_depend_on_inputs(self):
+        # Regression test: with the too-small default kernel initialization (see
+        # test_customdense_kernel_init_is_per_errorgen), the input signal vanished through the
+        # default 5 hidden layers, so a freshly initialized QPANN predicted (almost) the same
+        # rates for every circuit layer, and the hidden layers barely trained.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        modelled_error_generators = errgentools.up_to_weight_k_error_gens(2, 2, ['H'])
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+        L = pygsti.baseobjs.Label
+        layers = tf.constant(np.array([encoder.layer_encoding(layer) for layer in
+                                       [[L('Gxpi2', 0)], [L('Gypi2', 0), L('Gxpi2', 1)],
+                                        [L('Gcphase', (0, 1))], [L('Gypi2', 1)]]], np.float32))
+        tf.keras.utils.set_random_seed(1)
+        model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper)
+        model.build()
+        rates = model.dense_layer(layers).numpy().reshape(len(layers), -1)
+        # Relative spread of each generator's rate across the four layers (~3e-2 with the
+        # correct initialization; ~3e-5 with the old one).
+        relative_spread = (rates.std(0) / np.abs(rates).mean(0)).mean()
+        self.assertGreater(relative_spread, 3e-3)
+
     def test_customdense_forward(self):
         # Regression test for a Keras-3 incompatibility: `CustomDense` used to subclass
         # `keras.layers.Dense`, whose `kernel` attribute is a read-only `@property` under
