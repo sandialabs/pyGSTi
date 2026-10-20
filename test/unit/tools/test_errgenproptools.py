@@ -12,6 +12,8 @@ from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_cptp_errorgen_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
+import pickle
+from unittest import mock
 from ..util import BaseCase
 from itertools import product, chain
 from math import factorial
@@ -555,6 +557,37 @@ class ErrgenCompositionCommutationTester(BaseCase):
         
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
 
+    def test_magnus_expansion_parallel(self):
+        seq = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=None)
+        par = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=2)
+        self.assertEqual(set(seq.keys()), set(par.keys()))
+        for k in seq.keys():
+            self.assertAlmostEqual(seq[k], par[k], places=12)
+
+    def test_magnus_expansion_parallel_order3(self):
+        pspec = QubitProcessorSpec(4, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(0, 1), (1, 2), (2, 3), (3, 0)]})
+        rates = {'Gxpi2': _all_sector_rate_subset(1, 1, seed=100), 'Gypi2': _all_sector_rate_subset(1, 1, seed=101),
+                 'Gcphase': _all_sector_rate_subset(2, 1, seed=200)}
+        model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
+        circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4, ], rand_state=12345)
+        propagator = ErrorGeneratorPropagator(model.copy())
+        layers = propagator.propagate_errorgens(circuit)
+
+        seq = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=None)
+        par = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=2)
+        self.assertEqual(set(seq.keys()), set(par.keys()))
+        for k in seq.keys():
+            self.assertAlmostEqual(seq[k], par[k], places=12)
+
+    def test_zassenhaus_formula_parallel(self):
+        seq = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=None)
+        par = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=2)
+        self.assertEqual(len(seq), len(par))
+        for s_dict, p_dict in zip(seq, par):
+            self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
+            for k in s_dict.keys():
+                self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+
     def test_magnus_expansion_all_sectors(self):
         # The model of setUp has H errors only, so magnus_expansion's commutator terms exercise
         # a single type-pair branch there and the third-order term is ~1e-12. This model has
@@ -814,10 +847,13 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         self.circuit_alt = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-        max_strengths = {1: {'S': 0.0005, 'H': 0.0001},
-                         2: {'S': 0.0005, 'H': 0.0001}}
-        error_rates_dict = sample_error_rates_dict(pspec, max_strengths, seed=12345)
-        self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)
+        # Updated test fixture populating all four Lindblad sectors ('H', 'S', 'C', 'A') with a sparse structure
+        rates = {
+            'Gxpi2': _all_sector_rate_subset(1, 1, seed=100),
+            'Gypi2': _all_sector_rate_subset(1, 1, seed=101),
+            'Gcphase': _all_sector_rate_subset(2, 1, seed=200),
+        }
+        self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
         self.error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         self.propagated_errorgen_layer = self.error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
         self.circuit_tableau = self.circuit.convert_to_stim_tableau()
@@ -1081,6 +1117,314 @@ class ApproxStabilizerMethodTester(BaseCase):
                     print(f'{_eprop.bulk_alpha_pauli(errorgen_labels, ckt_tableau, [pauli])=}')
                     print(f'{_compute_alphas_pauli(errorgen_labels, ckt_tableau, pauli)=}')
                     raise ValueError('Bulk and individually computed alpha_pauli values are different.')
+
+    def test_bulk_alpha_parallel(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        bitstrings = ['0000', '0001', '1010', '1111']
+        seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
+        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_bulk_alpha_pauli_parallel(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY')]
+        seq = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=None)
+        par = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_should_parallelize_alpha(self):
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 100, 1, num_workers=1))
+        self.assertTrue(_eprop._should_parallelize_alpha(100, 10000, 16, num_workers=4))
+
+    def test_should_parallelize_alpha_dynamic_fallback_on_missing_param(self):
+        # Set dynamic_calibrated=True but omit alpha_a / alpha_b
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
+
+        # For n_qubits=4, scale='small' threshold is 1200
+        small_thresh = _eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha']
+        self.assertFalse(_eprop._should_parallelize_alpha(4, small_thresh - 100, 1, num_workers=2))
+        self.assertTrue(_eprop._should_parallelize_alpha(4, small_thresh + 100, 1, num_workers=2))
+
+        # Reset to defaults
+        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+
+    def test_configure_errorgen_propagation_parallelization(self):
+        # Override min_km_alpha to high value
+        _eprop.configure_errorgen_propagation_parallelization(min_km_alpha=50000)
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 1000, 4, num_workers=4))
+
+        # Force serial
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=True)
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 100000, 16, num_workers=4))
+
+        # Force parallel
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=False, force_parallel=True)
+        self.assertTrue(_eprop._should_parallelize_alpha(100, 10, 1, num_workers=4))
+
+        # Reset to defaults
+        res = _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+        self.assertEqual(res['status'], 'reset_to_defaults')
+
+    def test_optimize_errorgen_propagation_parallelization(self):
+        # Missing all three inputs raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.optimize_errorgen_propagation_parallelization()
+
+        with self.assertRaises(ValueError):
+            _eprop.optimize_errorgen_propagation_parallelization(num_qubits=0)
+
+        # Invalid argument types raise TypeError
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(model="not_a_model")
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(circuit="not_a_circuit")
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(num_qubits="not_an_int")
+
+        # Call with explicit circuit
+        res_circ = _eprop.optimize_errorgen_propagation_parallelization(circuit=self.circuit, num_workers=2, set_as_default=False)
+        self.assertIsInstance(res_circ, dict)
+        self.assertEqual(res_circ['num_qubits'], self.circuit.num_lines)
+
+        res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=2, set_as_default=True)
+        self.assertIsInstance(res, dict)
+        self.assertIn('tau_alpha_us', res)
+        self.assertIn('threshold_KM', res)
+        # Clean up
+        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+
+    def test_estimate_magnus_peak_memory(self):
+        # Order 1 < Order 2 < Order 3 for multi-layer circuits
+        mem_o1 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=1)
+        mem_o2 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=2)
+        mem_o3 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=3)
+        self.assertGreater(mem_o2, mem_o1)
+        self.assertGreater(mem_o3, mem_o2)
+
+        # Sequential mode (workers=1) has lower memory footprint than parallel (workers=2)
+        mem_seq = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=1, magnus_order=2)
+        self.assertLess(mem_seq, mem_o2)
+
+        # Invalid worker count raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=0)
+
+        # Invalid magnus_order raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=4)
+
+    def test_measure_lse_entry_size(self):
+        s1 = _eprop.measure_lse_entry_size(1)
+        s4 = _eprop.measure_lse_entry_size(4)
+        s16 = _eprop.measure_lse_entry_size(16)
+        s64 = _eprop.measure_lse_entry_size(64)
+        self.assertGreater(s4, s1)
+        self.assertGreater(s16, s4)
+        self.assertGreater(s64, s16)
+
+    def test_estimate_taylor_peak_memory(self):
+        mem_o1 = _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=2)
+        mem_o2 = _eprop.estimate_taylor_peak_memory(4, 20, order=2, num_workers=2)
+        mem_o3 = _eprop.estimate_taylor_peak_memory(4, 20, order=3, num_workers=2)
+        self.assertGreater(mem_o2, mem_o1)
+        self.assertGreater(mem_o3, mem_o2)
+
+        with self.assertRaises(ValueError):
+            _eprop.estimate_taylor_peak_memory(4, 20, order=0)
+        with self.assertRaises(ValueError):
+            _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=0)
+
+    def test_magnus_expansion_empty_first_layer(self):
+        # Empty first layer should correctly infer n_q from subsequent layer
+        res = _eprop.magnus_expansion([{}, self.propagated_errorgen_layer], magnus_order=2)
+        self.assertIsInstance(res, dict)
+        self.assertGreater(len(res), 0)
+
+    def test_should_parallelize_magnus_qubit_validation(self):
+        # n_qubits must be provided and >= 1
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=None)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=0)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=-2)
+
+        # Valid n_qubits returns bool
+        res = _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=4)
+        self.assertIsInstance(res, bool)
+
+    def test_magnus_expansion_all_empty_layers(self):
+        # All empty layers should short-circuit and return empty dicts without error
+        res_m2 = _eprop.magnus_expansion([{}, {}], magnus_order=2)
+        self.assertEqual(res_m2, {})
+        res_m3 = _eprop.magnus_expansion([{}, {}], magnus_order=3)
+        self.assertEqual(res_m3, {})
+        res_s2 = _eprop._second_order_magnus_term([{}, {}], identity=None)
+        self.assertEqual(res_s2, {})
+        res_s3_2, res_s3_3 = _eprop._second_and_third_order_magnus_terms([{}, {}], identity=None)
+        self.assertEqual(res_s3_2, {})
+        self.assertEqual(res_s3_3, {})
+
+    def test_approximate_stabilizer_probabilities_parallel(self):
+        seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)
+        par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+        self.assertAlmostEqual(np.sum(par), 1.0)
+
+    def test_bulk_alpha_single_outcome_column_splitting(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        bitstrings = ['0000']  # M = 1 forces 1D column (generator) splitting
+        seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
+        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        self.assertEqual(par.shape, (1, len(errorgens)))
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_approximate_stabilizer_probabilities_bitstrings(self):
+        # Full distribution
+        probs_full = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, order=2, num_workers=2
+        )
+        self.assertEqual(len(probs_full), 16)
+
+        # Specific bitstrings subset
+        subset = ['0000', '0101', '1111']
+        probs_sub = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, subset, 2, num_workers=2
+        )
+        self.assertEqual(len(probs_sub), 3)
+        self.assertAlmostEqual(probs_sub[0], probs_full[0], places=12)
+        self.assertAlmostEqual(probs_sub[1], probs_full[5], places=12)
+        self.assertAlmostEqual(probs_sub[2], probs_full[15], places=12)
+
+    def test_tableau_fidelities_and_stabilizer_probabilities(self):
+        tableau = self.circuit_tableau
+        
+        # Empty bitstrings returns empty array
+        self.assertEqual(len(_eprop.stabilizer_probabilities(tableau, [])), 0)
+
+        # Mismatched candidate qubit count raises ValueError
+        with self.assertRaises(ValueError):
+            bad_cand = stim.Tableau(len(tableau) + 1)
+            _eprop.tableau_fidelities(tableau, [bad_cand])
+
+    def test_approximate_stabilizer_probabilities_positional_and_underflow(self):
+        # Positional bitstrings argument: (errorgen_dict, circuit, bitstrings, order)
+        subset = ['0000', '0101']
+        probs_pos = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, subset, 2
+        )
+        probs_kw = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, bitstrings=subset, order=2
+        )
+        self.assertArraysAlmostEqual(probs_pos, probs_kw)
+
+        # Underflow check: mock random_support returning > 2148
+        with mock.patch("pygsti.tools.errgenproptools.random_support", return_value=2200):
+            with self.assertRaises(RuntimeError):
+                _eprop.approximate_stabilizer_probabilities(
+                    self.propagated_errorgen_layer, self.circuit, subset, 1
+                )
+
+    def test_should_parallelize_commuting_product(self):
+        # Validation
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(None, 10, 10)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(0, 10, 10)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_commuting_product(4, 10, 10, num_workers=0)
+
+        # 1 worker -> False
+        self.assertFalse(_eprop._should_parallelize_commuting_product(4, 100, 100, num_workers=1))
+
+        # Under default threshold (1000 for small)
+        self.assertFalse(_eprop._should_parallelize_commuting_product(4, 10, 10, num_workers=2))
+        # Over threshold
+        self.assertTrue(_eprop._should_parallelize_commuting_product(4, 40, 40, num_workers=2))
+
+        # Configuration overrides
+        try:
+            _eprop.configure_errorgen_propagation_parallelization(min_terms_commuting_product=5000)
+            self.assertFalse(_eprop._should_parallelize_commuting_product(4, 40, 40, num_workers=2))
+
+            _eprop.configure_errorgen_propagation_parallelization(force_serial=["commuting_product"])
+            self.assertFalse(_eprop._should_parallelize_commuting_product(4, 100, 100, num_workers=2))
+
+            _eprop.configure_errorgen_propagation_parallelization(force_serial=False, force_parallel=["commuting_product"])
+            self.assertTrue(_eprop._should_parallelize_commuting_product(4, 2, 2, num_workers=2))
+        finally:
+            _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+
+    def test_generate_balanced_magnus_pairs(self):
+        # Empty or single layer -> empty tasks
+        self.assertEqual(_eprop._generate_balanced_magnus_pairs([], 4), ([], []))
+        self.assertEqual(_eprop._generate_balanced_magnus_pairs([{}], 4), ([], []))
+
+        # Check order-preserving splitting
+        l0 = {f"k{i}": 0.1 for i in range(100)}
+        l1 = {f"k{i}": 0.1 for i in range(2000)}
+
+        # With 16 workers, l1*l0 = 200,000, if alpha is small, it splits l1
+        tasks, weights = _eprop._generate_balanced_magnus_pairs([l0, l1], num_workers=16, alpha=0.3)
+        self.assertGreater(len(tasks), 1)
+        # Check that operand order is strictly preserved: l1 is layer 1 (first arg), l0 is layer 0 (second arg)
+        for t in tasks:
+            sub_l1, intact_l0 = t
+            self.assertIs(intact_l0, l0)
+            self.assertTrue(set(sub_l1.keys()).issubset(set(l1.keys())))
+
+        # If earlier layer l0 is larger than later layer l1:
+        tasks_rev, _ = _eprop._generate_balanced_magnus_pairs([l1, l0], num_workers=16, alpha=0.3)
+        self.assertGreater(len(tasks_rev), 1)
+        for t in tasks_rev:
+            intact_l0, sub_l1 = t
+            self.assertIs(intact_l0, l0)
+            self.assertTrue(set(sub_l1.keys()).issubset(set(l1.keys())))
+
+    def test_approximate_stabilizer_pauli_expectations_bulk(self):
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY'), 'XIII']
+        bulk_exp = _eprop.approximate_stabilizer_pauli_expectations(
+            self.propagated_errorgen_layer, self.circuit, paulis, order=2, num_workers=2
+        )
+        self.assertEqual(len(bulk_exp), len(paulis))
+        for i, p in enumerate(paulis):
+            single_exp = _eprop.approximate_stabilizer_pauli_expectation(
+                self.propagated_errorgen_layer, self.circuit, p, order=2
+            )
+            self.assertAlmostEqual(bulk_exp[i], single_exp, places=12)
+
+    def test_error_generator_taylor_expansion_parallel(self):
+        prod_seq = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=1)
+        prod_par = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=2)
+        for k in set(prod_seq.keys()) | set(prod_par.keys()):
+            self.assertAlmostEqual(prod_seq.get(k, 0), prod_par.get(k, 0), places=12)
+
+        t_seq = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=1)
+        t_par = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=2)
+        self.assertEqual(len(t_seq), len(t_par))
+        for s_dict, p_dict in zip(t_seq, t_par):
+            self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
+            for k in s_dict:
+                self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+
+    def test_local_stim_errorgen_label_pickle_fidelity(self):
+        h = _LSE('H', (stim.PauliString('XIIX'),), pauli_str_reps=('XIIX',))
+        s = _LSE('S', (stim.PauliString('YIIY'),), pauli_str_reps=('YIIY',))
+        c = _LSE('C', (stim.PauliString('XIII'), stim.PauliString('IIZI')), pauli_str_reps=('XIII', 'IIZI'))
+        a = _LSE('A', (stim.PauliString('YIII'), stim.PauliString('IIZI')), pauli_str_reps=('YIII', 'IIZI'))
+        for lbl in (h, s, c, a):
+            data = pickle.dumps(lbl, protocol=pickle.HIGHEST_PROTOCOL)
+            rec = pickle.loads(data)
+            self.assertEqual(rec, lbl)
+            self.assertEqual(hash(rec), hash(lbl))
+            self.assertEqual(rec.errorgen_type, lbl.errorgen_type)
+            self.assertEqual(rec.basis_element_labels, lbl.basis_element_labels)
+            self.assertEqual(rec._hashable_basis_element_labels, lbl._hashable_basis_element_labels)
 
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll
