@@ -37,7 +37,13 @@ except ImportError:
         pass
 
     class TermRep:
-        """ The base class for rank-1 term representation classes """
+        """
+        The base class for rank-1 term representation classes.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         pass
 
     class PolynomialRep(dict):
@@ -377,6 +383,10 @@ class StockTermRep(TermRep):
     don't need to define term-rep types unless they're doing something that is non-standard.
 
     TODO: rest of StockTermRep docstring
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+        in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
     """
     # just a container for other reps (polys, states, effects, and gates)
 
@@ -429,4 +439,4 @@ class StockTermRep(TermRep):
                             self.pre_ops, self.post_ops)
 
 
-StockTermDirectRep = StockTermRep
+StockTermDirectRep = StockTermRep  # deprecated along with StockTermRep (remove in 0.12, see #916)

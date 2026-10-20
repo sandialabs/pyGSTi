@@ -23,7 +23,14 @@ from pygsti.baseobjs import polynomial as _polynomial
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):
-    """ Get the standard cache file names for a module """
+    """
+    Get the standard cache file names for a module.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (precomputed term
+        polynomial caches); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
+    """
     # No more "H+S terms" parametype
     # if param_type == "H+S terms":
     #     cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
@@ -43,6 +50,11 @@ def _write_calccache(calc_cache, key_fn, val_fn, comm=None):
     """
     Write `caclcache`, a dictionary of compact polys, to disk in two files,
     one for the keys and one for the values.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (precomputed term
+        polynomial caches); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     This function can be called by multiple ranks and passed `comm` to
     synchronize collecting and writing a single set of cache files.
@@ -140,6 +152,11 @@ def _load_calccache(key_fn, val_fn):
     """
     The complement to _write_calccache, this function loads a cache
     dictionary from key and value filenames.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (precomputed term
+        polynomial caches); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     Parameters
     ----------

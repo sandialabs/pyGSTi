@@ -13,6 +13,8 @@ The EmbeddedPureState class and supporting functionality.
 
 import numpy as _np
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import term as _term
@@ -31,7 +33,7 @@ class EmbeddedPureState(_State):
     A state vector that is a rank-1 density matrix.
 
     This is essentially a pure state that evolves according to one of the
-    density matrix evolution types ("denstiymx", "svterm", and "cterm").  It is
+    density matrix evolution type ("densitymx").  It is
     parameterized by a contained pure-state State which evolves according to a
     state vector evolution type ("statevec" or "stabilizer").
 
@@ -49,8 +51,7 @@ class EmbeddedPureState(_State):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         Note that the evotype of `pure_state_vec` must be compatible with this value.
         For example, if `pure_state_vec` has an evotype of `"statevec"` then allowed
-        values are `"densitymx"` and `"svterm"`,  or  if `"stabilizer"` then the only
-        allowed value is `"cterm"`.
+        value is `"densitymx"`.
 
     dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for this state vector - that is, for the *density matrix*
@@ -112,9 +113,14 @@ class EmbeddedPureState(_State):
         dmVec_std = _ot.state_to_dmvec(self.pure_state.to_dense("Hilbert"))
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this state vector.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state

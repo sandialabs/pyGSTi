@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import numpy as _np
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.pgtypes import SpaceT
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
@@ -278,9 +280,14 @@ class POVMEffect(_modelmember.ModelMember):
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this effect vector.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -323,9 +330,14 @@ class POVMEffect(_modelmember.ModelMember):
         raise NotImplementedError("taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_polynomial_vars=100):
         """
         Get terms with magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Get the terms (from a Taylor expansion of this state vector) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
@@ -418,9 +430,14 @@ class POVMEffect(_modelmember.ModelMember):
         first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
         return [t[1] for t in sorted_terms], first_order_indices
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this state vector that have magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
