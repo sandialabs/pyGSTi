@@ -63,7 +63,7 @@ All primary propagation and sensitivity functions accept two optional arguments 
 - `num_workers`: 
   - `None` (default): Runs strictly sequentially on the main thread.
   - `int`: An explicit number of worker processes to spawn (e.g., `num_workers=4`).
-  - `"auto"`: Automatically queries physical hardware cores, reserving one core on $\ge 4$-core systems for the operating system and master thread while strictly respecting container cgroup quotas.
+  - `"auto"`: Uses all of the physical cores available to the process, respecting hyper-threading, CPU affinity restrictions (e.g. `taskset` or a Slurm allocation) and container cgroup CPU quotas.
 - `pool`: An optional existing multiprocessing pool (`SharedWorkerPool` or `multiprocessing.Pool`) to reuse across calls. When `pool` is provided, `num_workers` is inferred directly from the pool.
 
 Functions supporting parallel execution include:

@@ -208,6 +208,7 @@ def available_cpu_count() -> int:
 def determine_num_workers(
     num_workers: Union[int, str, None] = "auto",
     max_limit: Optional[int] = None,
+    reserve_cores: int = 0,
 ) -> int:
     """
     Resolve the number of worker processes to allocate for a multiprocessing operation.
@@ -219,18 +220,24 @@ def determine_num_workers(
         - int : Exact requested worker count, clamped by `max_limit` if provided.
         - "auto" : The number of cores usable by this process, as given by `available_cpu_count`
           (which accounts for SMT / hyper-threading, the CPU affinity mask, and Linux cgroup CPU
-          quotas). On systems with >= 4 usable cores, one core is reserved for the main
-          orchestration process to prevent core oversubscription and CFS throttling during
-          streaming IPC reduction.
+          quotas), less `reserve_cores`.
     max_limit : int, optional
-        Maximum upper bound on workers to return. Applied last, after the reservation of a core
-        for the main process.
+        Maximum upper bound on workers to return. This caps the final worker count, so it is applied
+        after `reserve_cores` has been deducted.
+    reserve_cores : int, optional (default 0)
+        Number of usable cores to leave free for the calling process, deducted from the cores
+        available to an `"auto"` request (the result is always at least 1). Callers whose main process
+        does substantial work while the workers run (e.g. merging results as they stream in) may want
+        to leave a core for it. Ignored unless `num_workers` is `"auto"`.
 
     Returns
     -------
     int
         An integer >= 1 specifying the number of worker processes to use.
     """
+    if not isinstance(reserve_cores, (int, _np.integer)) or reserve_cores < 0:
+        raise ValueError(f"reserve_cores must be an integer >= 0, got {reserve_cores!r}.")
+
     if num_workers is None:
         return 1
 
@@ -244,12 +251,10 @@ def determine_num_workers(
 
     if isinstance(num_workers, str):
         if num_workers.lower() == "auto":
-            n = available_cpu_count()
-            if n >= 4:
-                n -= 1
+            n = max(1, available_cpu_count() - int(reserve_cores))
             if max_limit is not None and max_limit > 0:
                 n = min(n, int(max_limit))
-            return max(1, n)
+            return n
 
     raise ValueError(f"Invalid num_workers specification: {num_workers!r}. Expected int, None, or 'auto'.")
 

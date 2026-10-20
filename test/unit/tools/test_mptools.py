@@ -122,14 +122,14 @@ class MPToolsTester(BaseCase):
         # ignored whenever psutil was installed)
         with self._patched_hardware(64, 32, affinity=8):
             self.assertEqual(mpt.available_cpu_count(), 4)
-            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+            self.assertEqual(mpt.determine_num_workers("auto"), 4)
         with self._patched_hardware(64, 32, affinity=2):
             self.assertEqual(mpt.available_cpu_count(), 1)
             self.assertEqual(mpt.determine_num_workers("auto"), 1)
         # a cgroup quota below the affinity limit applies
         with self._patched_hardware(64, 32), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=4):
             self.assertEqual(mpt.available_cpu_count(), 4)
-            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+            self.assertEqual(mpt.determine_num_workers("auto"), 4)
         # ... but never raises the count
         with self._patched_hardware(8, 8), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=64):
             self.assertEqual(mpt.available_cpu_count(), 8)
@@ -155,18 +155,36 @@ class MPToolsTester(BaseCase):
                     mock.patch.object(mpt._os, 'cpu_count', return_value=7):
                 self.assertEqual(mpt._allowed_logical_cpu_count(), 7)
 
-    def test_determine_num_workers_applies_max_limit_after_reserving_a_core(self):
+    def test_determine_num_workers_auto_uses_all_available_cores_by_default(self):
+        for cores in (1, 2, 3, 4, 16):
+            with self._patched_hardware(cores, cores):
+                self.assertEqual(mpt.determine_num_workers("auto"), cores)  # no core is reserved by default
+
+    def test_determine_num_workers_reserve_cores(self):
         with self._patched_hardware(16, 16):
-            self.assertEqual(mpt.determine_num_workers("auto"), 15)
-            self.assertEqual(mpt.determine_num_workers("auto", max_limit=4), 4)  # was 3
-            self.assertEqual(mpt.determine_num_workers("auto", max_limit=100), 15)
+            self.assertEqual(mpt.determine_num_workers("auto", reserve_cores=1), 15)
+            self.assertEqual(mpt.determine_num_workers("auto", reserve_cores=4), 12)
+            self.assertEqual(mpt.determine_num_workers("auto", reserve_cores=15), 1)
+            self.assertEqual(mpt.determine_num_workers("auto", reserve_cores=100), 1)  # always at least one worker
+        with self._patched_hardware(2, 2):
+            self.assertEqual(mpt.determine_num_workers("auto", reserve_cores=1), 1)
+        # applies only to "auto"
+        with self._patched_hardware(16, 16):
+            self.assertEqual(mpt.determine_num_workers(8, reserve_cores=4), 8)
+            self.assertEqual(mpt.determine_num_workers(None, reserve_cores=4), 1)
+        for bad in (-1, 1.5, "1", None):
+            with self.assertRaises(ValueError):
+                mpt.determine_num_workers("auto", reserve_cores=bad)
+
+    def test_determine_num_workers_max_limit_caps_the_final_count(self):
+        with self._patched_hardware(16, 16):
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=4), 4)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=100), 16)
             self.assertEqual(mpt.determine_num_workers("auto", max_limit=1), 1)
-        with self._patched_hardware(3, 3):  # no core is reserved below 4 cores
-            self.assertEqual(mpt.determine_num_workers("auto"), 3)
-        with self._patched_hardware(4, 4):
-            self.assertEqual(mpt.determine_num_workers("auto"), 3)
-        with self._patched_hardware(1, 1):
-            self.assertEqual(mpt.determine_num_workers("auto"), 1)
+            # max_limit caps the count left after reserving cores (it does not deduct them again)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=4, reserve_cores=1), 4)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=100, reserve_cores=1), 15)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=15, reserve_cores=4), 12)
 
     def _write_cgroup_tree(self, files):
         root = tempfile.mkdtemp()
