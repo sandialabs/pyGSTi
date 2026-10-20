@@ -11,6 +11,7 @@ from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import copy
 import math
 import sys
 import warnings
@@ -617,6 +618,66 @@ class ErrgenCompositionCommutationTester(BaseCase):
         self.assertEqual(set(seq.keys()), set(par.keys()))
         for k in seq.keys():
             self.assertAlmostEqual(seq[k], par[k], places=12)
+
+    def test_in_place_magnus_merge_functions(self):
+        # Reference implementations that copy (the previous behaviour)
+        def ref_merge(d1, d2):
+            res = dict(d1)
+            for k, v in d2.items():
+                res[k] = res.get(k, 0.0) + v
+            return res
+
+        def ref_indexed_merge(d1, d2):
+            res = {k: dict(v) for k, v in d1.items()}
+            for pk, rates in d2.items():
+                sub = res.setdefault(pk, {})
+                for lbl, r in rates.items():
+                    sub[lbl] = sub.get(lbl, 0.0) + r
+            return res
+
+        a = {'HXI': 1.0, 'SZZ': 2.0}
+        b = {'HXI': 0.5, 'CXIYZ': -3.0}
+        c = {'SZZ': 1.0, 'AXIZY': 4.0}
+        expected = ref_merge(ref_merge(a, b), c)
+        a_in, b_in, c_in = dict(a), dict(b), dict(c)
+        out = _eprop._merge_string_dictionaries(_eprop._merge_string_dictionaries(a_in, b_in), c_in)
+        self.assertEqual(out, expected)
+        self.assertIs(out, a_in)             # updated in place and returned
+        self.assertEqual(b_in, b)            # the second argument is never modified
+        self.assertEqual(c_in, c)
+
+        d1 = {(1, 0): {'HXI': 1.0}, (2, 0): {'SZZ': 2.0}}
+        d2 = {(1, 0): {'HXI': 0.5, 'CXIYZ': 1.0}, (3, 1): {'AXIZY': 4.0}}  # a repeated pair (sliced) and a new one
+        d3 = {(2, 0): {'SZZ': -1.0}, (3, 1): {'AXIZY': 1.0, 'HYI': 2.0}}
+        expected = ref_indexed_merge(ref_indexed_merge(d1, d2), d3)
+        d1_in, d2_in, d3_in = copy.deepcopy(d1), copy.deepcopy(d2), copy.deepcopy(d3)
+        out = _eprop._merge_pair_indexed_string_dictionaries(
+            _eprop._merge_pair_indexed_string_dictionaries(d1_in, d2_in), d3_in)
+        self.assertEqual(out, expected)
+        self.assertIs(out, d1_in)
+        self.assertEqual(d3_in, d3)  # the second argument is never modified
+        self.assertEqual(d2_in[(1, 0)], d2[(1, 0)])
+        # A per-pair dictionary of the second argument that is new to the total is stored in it by reference, so
+        # it is then updated by later merges: this is why a result must not be reused after being merged in.
+        self.assertIs(d1_in[(3, 1)], d2_in[(3, 1)])
+
+    def test_magnus_evaluators_return_fresh_objects(self):
+        # The in-place merges (and `parallel_pair_reduce`'s documented contract) need every evaluator call
+        # to return a new object that shares no inner dictionaries with a previous result or with its input.
+        layers = [l for l in self.propagated_errorgen_layers if l][:3]
+        identity = 'IIII'
+        tasks, _ = _eprop._generate_balanced_magnus_pairs(layers, 2, include_indices=False)
+        tasks3, _ = _eprop._generate_balanced_magnus_pairs(layers, 2, include_indices=True)
+        pairs = [(_eprop._MagnusPairEvaluator(identity, 1e-14), tasks[0]),
+                 (_eprop._MagnusPhase1PairEvaluator(identity, 1e-14), tasks3[0]),
+                 (_eprop._MagnusPhase2Evaluator(identity, 1e-14), (layers[0], layers[1], 1.0))]
+        for evaluator, task in pairs:
+            r1, r2 = evaluator(task), evaluator(task)
+            self.assertIsNot(r1, r2)
+            self.assertEqual(r1, r2)
+            if isinstance(next(iter(r1.values()), None), dict):  # phase 1: {(i, k): {label: rate}}
+                for key in r1:
+                    self.assertIsNot(r1[key], r2[key])
 
     def test_second_order_magnus_decision_uses_all_layers(self):
         # Regression: the parallelization decision previously averaged only the first two layers,

@@ -1002,12 +1002,15 @@ def _lse_from_string_rep(rep: str, n: int) -> _LSE:
 
 
 def _merge_string_dictionaries(d1: dict[str, float], d2: dict[str, float]) -> dict[str, float]:
-    """Binary reduction merging string rate dictionaries by summing overlapping rates."""
-    res = d1.copy()
-    get = res.get
+    """
+    Binary reduction merging string rate dictionaries by summing overlapping rates. Updates and
+    returns `d1` in place (avoiding a copy of the whole running total at every step of a reduction),
+    so `d1` must not be referenced elsewhere; `d2` is not modified.
+    """
+    get = d1.get
     for k, v in d2.items():
-        res[k] = get(k, 0.0) + v
-    return res
+        d1[k] = get(k, 0.0) + v
+    return d1
 
 
 class _MagnusPairEvaluator:
@@ -1059,18 +1062,21 @@ class _MagnusPhase2Evaluator:
 
 
 def _merge_pair_indexed_string_dictionaries(d1: dict, d2: dict) -> dict:
-    """Binary reduction merging (i, k) layer-pair indexed string rate dictionaries additively."""
-    res = d1.copy()
+    """
+    Binary reduction merging (i, k) layer-pair indexed string rate dictionaries additively. Updates and
+    returns `d1` in place (including its per-pair dictionaries), so `d1` must not be referenced
+    elsewhere. The per-pair dictionaries of `d2` that are new to `d1` are stored in it by reference, so
+    `d2` must not be used (or modified) afterwards either.
+    """
     for pair_key, rates in d2.items():
-        if pair_key in res:
-            sub = res[pair_key].copy()
+        sub = d1.get(pair_key)
+        if sub is None:
+            d1[pair_key] = rates
+        else:
             get = sub.get
             for lbl, rate in rates.items():
                 sub[lbl] = get(lbl, 0.0) + rate
-            res[pair_key] = sub
-        else:
-            res[pair_key] = rates.copy()
-    return res
+    return d1
 
 
 def _generate_balanced_magnus_pairs(

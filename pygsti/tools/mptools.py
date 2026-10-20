@@ -758,7 +758,10 @@ def parallel_pair_reduce(
     pair_items : sequence of (item1, item2)
         List or sequence of pair tuples to evaluate.
     reduce_fn : callable
-        Binary reduction function `reduce_fn(accum, new_val) -> updated_accum`.
+        Binary reduction function `reduce_fn(accum, new_val) -> updated_accum`. It may update and
+        return `accum` in place (and may keep references to parts of `new_val`), which avoids copying
+        the running total at every step; this requires `pair_eval_fn` to return a new object on every
+        call, since results are passed to `reduce_fn` as the first or second argument.
     num_workers : int, str, or None, optional
         Target worker count (defaults to "auto").
     pool : Pool or SharedWorkerPool, optional
