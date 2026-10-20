@@ -150,15 +150,16 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     def from_effects(members: dict[str, MemberSpec], basis: _BasisLike, gate_parameterization: str = 'CPTPLND',
                      povm_errormap: _op.LinearOperator | str = 'CPTPLND', atol: float = 1e-6) -> Instrument:
         r"""
-        Construct a parameterized instrument from measurement effects (and optional
-        post-measurement gates).
+        Construct a parameterized instrument from measurement effects and optional
+        post-measurement unitaries.
 
         Each member is built in the canonical *measure-then-gate* form
 
             I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),
 
         a soft measurement of the POVM effect `E_k` followed by the
-        post-measurement (CP)TP gate `G_k`.  The effects `{E_k}` are gathered
+        post-measurement gate `G_k`, whose value at zero error is the unitary
+        channel of the supplied `U_k`.  The effects `{E_k}` are gathered
         into a single shared :class:`ComposedPOVM` whose CP-constrained error map
         keeps every `E_k` positive and makes them sum to the identity. Each
         gate `G_k` is parameterized independently.
@@ -167,6 +168,28 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         preservation, and a CP-constrained `gate_parameterization` makes each
         member completely positive.  An `n`-outcome instrument needs only `n`
         effects and `n` gates.
+
+        For Lindblad gate parameterizations the supplied unitaries and effects
+        become a *frozen static base*, onto which zero-initialized error maps are
+        composed: the instrument they describe is the chart's zero-error point,
+        and all noise lives in the Lindblad parameters.  For all practical
+        purposes the ideal post-measurement conditional gate is unitary, so the
+        gates must be unitary; a noisy frozen base would bound what a fit can
+        reach.
+
+        .. warning::
+            The supplied effects `E_k` also bound which effects a fit can reach.
+            Every reachable effect is `M^dagger(E_k)` for one shared error map
+            `M`, and `M^dagger` is linear and unital, so for every parameter value
+
+            * each effect's spectrum stays inside `[lambda_min(E_k), lambda_max(E_k)]`, and
+            * any linear relation `sum_k c_k E_k = c I` among the supplied effects persists.
+
+            Pass the ideal effects: an ideal projective measurement keeps every
+            interval at its full extent, and its nonzero effects are linearly
+            independent.  More than `d` commuting effects (e.g. three outcomes on
+            a qubit) are linearly dependent, so no fit can break that dependence;
+            likewise, an effect proportional to the identity can never move.
 
         Parameters
         ----------
@@ -178,9 +201,9 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             Hermitian matrix, or a :class:`POVMEffect`. The effects must comprise
             a physically meaningful POVM.
 
-            Each `gate` may be a `d**2 x d**2` superoperator, a `d x d` unitary,
-            a :class:`LinearOperator`, or None. The last of these is equivalent
-            to setting `gate` to the identity matrix. Each gate must be TP.
+            Each `gate` is a `d x d` unitary, None (the identity), or a
+            `d**2 x d**2` superoperator or :class:`LinearOperator` that is a
+            unitary channel.  A non-unitary gate raises ValueError.
 
         basis : _BasisLike
             The basis in which dense arrays are represented.
@@ -197,7 +220,7 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             used as the shared error map of the effects' :class:`ComposedPOVM`.
 
         atol : float, optional
-            Absolute tolerance for the per-gate TP check and the completeness check.
+            Absolute tolerance for the per-gate unitarity check and the completeness check.
 
         Returns
         -------
@@ -206,9 +229,9 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         from pygsti.modelmembers.instruments._construction import (
             _normalize_effects_and_gates, _parameterized_instrument
         )
-        basis, superkets, superops = _normalize_effects_and_gates(members, basis, atol)
+        basis, superkets, unitaries = _normalize_effects_and_gates(members, basis, atol)
         member_ops = _parameterized_instrument(
-            basis, superkets, superops, gate_parameterization, povm_errormap
+            basis, superkets, unitaries, gate_parameterization, povm_errormap
         )
         return Instrument(member_ops)
 
@@ -220,27 +243,34 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             error_tol: float = 1e-6, trunc_tol: float = 1e-7
         ) -> Instrument:
         r"""
-        Construct a parameterized instrument from arbitrary dense CPTR member superops.
+        Construct a parameterized instrument from dense CPTR member superops, each of
+        which has a single Kraus operator.
 
-        Every completely-positive instrument member factors as a measurement effect
-        followed by a post-measurement CPTP gate,
+        Such a member factors exactly as a measurement effect followed by a
+        post-measurement unitary,
 
-            I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),   E_k = I_k^dagger(I),
+            I_k(rho) = U_k E_k^{1/2} rho E_k^{1/2} U_k^dagger,   E_k = I_k^dagger(I),
 
-        and this constructor recovers that decomposition directly from each dense
-        superop. The effect is the Heisenberg-dual applied to the identity; the gate
-        is the CPTP completion `G_k = Q_k + P_k` with `Q_k = I_k . pinv(rootconj(E_k))`
-        and `P_k` a conjugation by the projector onto `ker(E_k)`.  The effects are
-        gathered into a single shared :class:`ComposedPOVM` and each gate is
-        parameterized independently, so an `n`-outcome instrument needs only `n`
-        effects and `n` gates regardless of any member's Kraus rank.
+        and the instrument is built as :meth:`from_effects` builds it from the pairs
+        `(E_k, U_k)`.  The effect is the Heisenberg dual applied to the identity; the
+        unitary is the polar factor of the member's Kraus operator, completed toward
+        the identity on inputs the member does not determine (see
+        :func:`~pygsti.modelmembers.instruments.unitaryfactors.infer_unitary_factors`).
+        Ideal instruments, including projective measurements and measure-and-reset,
+        have one Kraus operator per member.
+
+        A member with more than one Kraus operator -- a noisy one, such as a member of
+        a fitted instrument -- has no unitary factorization and raises ValueError.  To
+        seed from such an instrument, call ``infer_unitary_factors`` directly: it keeps
+        every effect, approximates each member by its nearest one-Kraus counterpart,
+        reports the residuals, and returns pairs for :meth:`from_effects`.
 
         Parameters
         ----------
         op_arrays : dict[str, np.ndarray]
             Maps each outcome label to a dense `d**2 x d**2` CPTR superoperator in
-            `basis`.  Each must be completely positive, and together they must sum
-            to a trace-preserving channel (`sum_k E_k == I`).
+            `basis`.  Each must be completely positive with one Kraus operator, and
+            together they must sum to a trace-preserving channel (`sum_k E_k == I`).
 
         basis : BasisLike
             The basis in which the superoperators are represented.
@@ -252,32 +282,27 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             See :meth:`from_effects`.
 
         error_tol : float, optional
-            Tolerance for the per-member complete-positivity check (negative Choi
-            eigenvalues below `-error_tol` raise an error).
+            Negative Choi eigenvalues below `-error_tol` raise, as does a member whose
+            unitary factorization misses it by more than `error_tol` (Frobenius norm of
+            the standard-basis superoperator difference).
 
         trunc_tol : float, optional
-            Cutoff below which an effect eigenvalue is treated as zero when forming
-            the `ker(E_k)` projector that completes each gate.
+            A member whose Choi eigenvalues are all at most `trunc_tol` is treated as
+            zero; its unitary is the identity.
 
         Returns
         -------
         Instrument
         """
         from pygsti.modelmembers.instruments._construction import (
-            _decompose_cptr, _check_effects_complete,
-            _parameterized_instrument
+            _unitary_members_from_cptr, _check_effects_complete, _parameterized_instrument
         )
         dim = next(iter(op_arrays.values())).shape[0]
         basis = _Basis.cast(basis, dim)
-        superkets = dict()
-        superops  = dict()
-        for lbl, I_k in op_arrays.items():
-            E_k, G_k = _decompose_cptr(I_k, basis, error_tol, trunc_tol)
-            superkets[lbl] = E_k 
-            superops[lbl]  = G_k
+        superkets, unitaries = _unitary_members_from_cptr(op_arrays, basis, error_tol, trunc_tol)
         _check_effects_complete(superkets, basis, error_tol)
         member_ops = _parameterized_instrument(
-            basis, superkets, superops, gate_parameterization, povm_errormap
+            basis, superkets, unitaries, gate_parameterization, povm_errormap
         )
         return Instrument(member_ops)
 
