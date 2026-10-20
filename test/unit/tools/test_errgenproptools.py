@@ -17,7 +17,7 @@ import sys
 import warnings
 import pickle
 from unittest import mock
-from ..util import BaseCase
+from ..util import BaseCase, PoolDispatchSpy as _PoolDispatchSpy, forced_parallel, parallel_path_exercised
 from itertools import product, chain
 from math import factorial
 import random
@@ -37,32 +37,6 @@ def _mock_taylor_expansion():
         return real(errorgen_dict, order, truncation_threshold)
     return mock.patch.object(_eprop, 'error_generator_taylor_expansion', side_effect=serial)
 
-
-class _PoolDispatchSpy:
-    """
-    Context manager recording the names of callables dispatched to an *active* worker pool
-    through `SharedWorkerPool.map` / `imap_unordered`, i.e. whether a parallel code path ran.
-    """
-    def __enter__(self):
-        from pygsti.tools import mptools as _mpt
-        self.dispatched = []
-        self._patches = []
-        for name in ('map', 'imap_unordered'):
-            orig = getattr(_mpt.SharedWorkerPool, name)
-            def wrapper(pool_self, func, *args, _orig=orig, **kwargs):
-                result = _orig(pool_self, func, *args, **kwargs)  # (lazy pools start inside this call)
-                if pool_self.is_started:
-                    self.dispatched.append(getattr(func, '__name__', type(func).__name__))
-                return result
-            p = mock.patch.object(_mpt.SharedWorkerPool, name, wrapper)
-            p.start()
-            self._patches.append(p)
-        return self
-
-    def __exit__(self, *exc):
-        for p in self._patches:
-            p.stop()
-        return False
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -599,7 +573,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
 
     def test_magnus_expansion_parallel(self):
         seq = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=None)
-        par = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=2)
+        with parallel_path_exercised(self, ['magnus'], ['_MagnusPairEvaluator']):
+            par = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=2)
         self.assertEqual(set(seq.keys()), set(par.keys()))
         for k in seq.keys():
             self.assertAlmostEqual(seq[k], par[k], places=12)
@@ -614,7 +589,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
         layers = propagator.propagate_errorgens(circuit)
 
         seq = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=None)
-        par = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=2)
+        with parallel_path_exercised(self, ['magnus'], ['_MagnusPhase1PairEvaluator', '_MagnusPhase2Evaluator']):
+            par = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=2)
         self.assertEqual(set(seq.keys()), set(par.keys()))
         for k in seq.keys():
             self.assertAlmostEqual(seq[k], par[k], places=12)
@@ -690,7 +666,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
 
     def test_zassenhaus_formula_parallel(self):
         seq = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=None)
-        par = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=2)
+        with parallel_path_exercised(self, ['magnus'], ['_MagnusPairEvaluator']):
+            par = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=2)
         self.assertEqual(len(seq), len(par))
         for s_dict, p_dict in zip(seq, par):
             self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
@@ -1232,7 +1209,8 @@ class ApproxStabilizerMethodTester(BaseCase):
         errorgens = list(self.propagated_errorgen_layer.keys())
         bitstrings = ['0000', '0001', '1010', '1111']
         seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
-        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        with parallel_path_exercised(self, ['alpha'], ['_grid_task_worker']):
+            par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
         self.assertArraysAlmostEqual(par, seq)
 
     def test_bulk_alpha_pauli_parallel(self):
@@ -1240,7 +1218,8 @@ class ApproxStabilizerMethodTester(BaseCase):
         errorgens = list(self.propagated_errorgen_layer.keys())
         paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY')]
         seq = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=None)
-        par = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=2)
+        with parallel_path_exercised(self, ['alpha'], ['_grid_task_worker']):
+            par = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=2)
         self.assertArraysAlmostEqual(par, seq)
 
     def test_should_parallelize_alpha(self):
@@ -1248,20 +1227,22 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertTrue(_eprop._should_parallelize_alpha(100, 10000, 16, num_workers=4))
 
     def test_should_parallelize_alpha_dynamic_fallback_on_missing_param(self):
+        # This test modifies module-level calibration state: always restore the defaults, even on failure.
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
+
         # Set dynamic_calibrated=True but omit alpha_a / alpha_b
         _eprop._ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
         _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
         _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
 
-        # For n_qubits=4, scale='small' threshold is 1200
-        small_thresh = _eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha']
+        # Falls back to the default table: for n_qubits=4 ('small' scale) the threshold is 1000
+        small_thresh = _eprop.DEFAULT_PARALLEL_THRESHOLDS['small']['min_km_alpha']
+        self.assertEqual(small_thresh, 1000)
         self.assertFalse(_eprop._should_parallelize_alpha(4, small_thresh - 100, 1, num_workers=2))
         self.assertTrue(_eprop._should_parallelize_alpha(4, small_thresh + 100, 1, num_workers=2))
 
-        # Reset to defaults
-        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
-
     def test_configure_errorgen_propagation_parallelization(self):
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
         # Override min_km_alpha to high value
         _eprop.configure_errorgen_propagation_parallelization(min_km_alpha=50000)
         self.assertFalse(_eprop._should_parallelize_alpha(100, 1000, 4, num_workers=4))
@@ -1277,6 +1258,18 @@ class ApproxStabilizerMethodTester(BaseCase):
         # Reset to defaults
         res = _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
         self.assertEqual(res['status'], 'reset_to_defaults')
+
+    def test_public_parallelization_constants_are_read_only(self):
+        table = _eprop.DEFAULT_PARALLEL_THRESHOLDS
+        self.assertEqual(set(table), {'small', 'medium', 'large'})
+        with self.assertRaises(TypeError):
+            table['small'] = {}
+        with self.assertRaises(TypeError):
+            table['small']['min_km_alpha'] = -1
+        self.assertIsInstance(_eprop.EGPROP_PREWARM_PACKAGES, tuple)
+        self.assertIn('stim', _eprop.EGPROP_PREWARM_PACKAGES)
+        # every tier defines the same cutoffs
+        self.assertEqual(len({frozenset(t) for t in table.values()}), 1)
 
     def test_configure_parallelization_validation(self):
         configure = _eprop.configure_errorgen_propagation_parallelization
@@ -1315,9 +1308,10 @@ class ApproxStabilizerMethodTester(BaseCase):
         # reset_to_defaults returns a deep copy: mutating it does not alter the defaults.
         res = configure(reset_to_defaults=True)
         res['defaults']['small']['min_km_alpha'] = -1
-        self.assertNotEqual(_eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha'], -1)
+        self.assertNotEqual(_eprop.DEFAULT_PARALLEL_THRESHOLDS['small']['min_km_alpha'], -1)
 
     def test_optimize_errorgen_propagation_parallelization(self):
+        self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
         # Missing all three inputs raises ValueError
         with self.assertRaises(ValueError):
             _eprop.optimize_errorgen_propagation_parallelization()
@@ -1405,7 +1399,7 @@ class ApproxStabilizerMethodTester(BaseCase):
         # reset clears all of the calibration state, restoring the table-based decision
         configure(reset_to_defaults=True)
         self.assertEqual(set(_eprop._ACTIVE_PARALLEL_THRESHOLDS), {'safety_factor'})
-        table_km = _eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha']
+        table_km = _eprop.DEFAULT_PARALLEL_THRESHOLDS['small']['min_km_alpha']
         self.assertFalse(_eprop._should_parallelize_alpha(n, table_km - 1, 1, num_workers=2))
         self.assertTrue(_eprop._should_parallelize_alpha(n, table_km, 1, num_workers=2))
 
@@ -1539,7 +1533,9 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_approximate_stabilizer_probabilities_parallel(self):
         seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)
-        par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)
+        with parallel_path_exercised(self, ['alpha'], ['_grid_task_worker']):
+            par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1,
+                                                              num_workers=2)
         self.assertArraysAlmostEqual(par, seq)
         self.assertAlmostEqual(np.sum(par), 1.0)
 
@@ -1548,22 +1544,25 @@ class ApproxStabilizerMethodTester(BaseCase):
         errorgens = list(self.propagated_errorgen_layer.keys())
         bitstrings = ['0000']  # M = 1 forces 1D column (generator) splitting
         seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
-        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        with parallel_path_exercised(self, ['alpha'], ['_grid_task_worker']):
+            par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
         self.assertEqual(par.shape, (1, len(errorgens)))
         self.assertArraysAlmostEqual(par, seq)
 
     def test_approximate_stabilizer_probabilities_bitstrings(self):
         # Full distribution
-        probs_full = _eprop.approximate_stabilizer_probabilities(
-            self.propagated_errorgen_layer, self.circuit, order=2, num_workers=2
-        )
+        with parallel_path_exercised(self, ['alpha', 'commuting_product'], ['_grid_task_worker', '_CommutingProductSliceWorker']):
+            probs_full = _eprop.approximate_stabilizer_probabilities(
+                self.propagated_errorgen_layer, self.circuit, order=2, num_workers=2
+            )
         self.assertEqual(len(probs_full), 16)
 
         # Specific bitstrings subset
         subset = ['0000', '0101', '1111']
-        probs_sub = _eprop.approximate_stabilizer_probabilities(
-            self.propagated_errorgen_layer, self.circuit, subset, 2, num_workers=2
-        )
+        with parallel_path_exercised(self, ['alpha', 'commuting_product'], ['_grid_task_worker', '_CommutingProductSliceWorker']):
+            probs_sub = _eprop.approximate_stabilizer_probabilities(
+                self.propagated_errorgen_layer, self.circuit, subset, 2, num_workers=2
+            )
         self.assertEqual(len(probs_sub), 3)
         self.assertAlmostEqual(probs_sub[0], probs_full[0], places=12)
         self.assertAlmostEqual(probs_sub[1], probs_full[5], places=12)
@@ -1656,9 +1655,10 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_approximate_stabilizer_pauli_expectations_bulk(self):
         paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY'), 'XIII']
-        bulk_exp = _eprop.approximate_stabilizer_pauli_expectations(
-            self.propagated_errorgen_layer, self.circuit, paulis, order=2, num_workers=2
-        )
+        with parallel_path_exercised(self, ['alpha', 'commuting_product'], ['_grid_task_worker', '_CommutingProductSliceWorker']):
+            bulk_exp = _eprop.approximate_stabilizer_pauli_expectations(
+                self.propagated_errorgen_layer, self.circuit, paulis, order=2, num_workers=2
+            )
         self.assertEqual(len(bulk_exp), len(paulis))
         for i, p in enumerate(paulis):
             single_exp = _eprop.approximate_stabilizer_pauli_expectation(
@@ -1668,12 +1668,14 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_error_generator_taylor_expansion_parallel(self):
         prod_seq = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=1)
-        prod_par = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=2)
+        with parallel_path_exercised(self, ['commuting_product'], ['_CommutingProductSliceWorker']):
+            prod_par = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=2)
         for k in set(prod_seq.keys()) | set(prod_par.keys()):
             self.assertAlmostEqual(prod_seq.get(k, 0), prod_par.get(k, 0), places=12)
 
         t_seq = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=1)
-        t_par = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=2)
+        with parallel_path_exercised(self, ['commuting_product'], ['_CommutingProductSliceWorker']):
+            t_par = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=2)
         self.assertEqual(len(t_seq), len(t_par))
         for s_dict, p_dict in zip(t_seq, t_par):
             # (serial and parallel truncation of the powers agree to within about the threshold)

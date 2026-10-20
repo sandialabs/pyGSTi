@@ -269,7 +269,7 @@ When evaluating outcome probabilities or Pauli expectation values across multipl
 # Vectorized evaluation of multiple Pauli expectations
 pauli_list = ["XXXX", "YYYY", "ZZZZ", "ZIII"]
 bulk_expectations = eprop.approximate_stabilizer_pauli_expectations(
-    effective_generator, c, paulis=pauli_list, order=2, num_workers=2
+    propagated_errorgen_layer_second_order, c, paulis=pauli_list, order=2, num_workers=2
 )
 for p, val in zip(pauli_list, bulk_expectations):
     print(f"< {p} > = {val:.6f}")

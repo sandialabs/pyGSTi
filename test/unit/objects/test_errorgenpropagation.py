@@ -1,4 +1,4 @@
-from ..util import BaseCase
+from ..util import BaseCase, parallel_path_exercised
 from pygsti.circuits import Circuit
 from pygsti.algorithms.randomcircuit import create_random_circuit, find_all_sets_of_compatible_two_q_gates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
@@ -103,7 +103,8 @@ class ErrorgenPropTester(BaseCase):
     def test_propagate_errorgens_parallel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         seq_layers = error_propagator.propagate_errorgens(self.circuit, include_spam=True, num_workers=None)
-        par_layers = error_propagator.propagate_errorgens(self.circuit, include_spam=True, num_workers=2)
+        with parallel_path_exercised(self, ['layer_prop'], ['_prop_layer_chunk_worker']):
+            par_layers = error_propagator.propagate_errorgens(self.circuit, include_spam=True, num_workers=2)
         self.assertEqual(len(par_layers), len(seq_layers))
         for s_l, p_l in zip(seq_layers, par_layers):
             self.assertEqual(set(s_l.keys()), set(p_l.keys()))
@@ -156,7 +157,8 @@ class ErrorgenPropTester(BaseCase):
     def test_propagate_errorgens_bch_parallel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         seq_bch = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, include_spam=True, num_workers=None)
-        par_bch = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, include_spam=True, num_workers=2)
+        with parallel_path_exercised(self, ['layer_prop'], ['_prop_layer_chunk_worker']):
+            par_bch = error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, include_spam=True, num_workers=2)
         self.assertEqual(set(seq_bch.keys()), set(par_bch.keys()))
         for k in seq_bch.keys():
             self.assertAlmostEqual(seq_bch[k], par_bch[k], places=12)

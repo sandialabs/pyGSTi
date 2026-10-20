@@ -116,7 +116,7 @@ def _should_parallelize_layer_prop(
     if min_depth is not None:
         return num_layers >= min_depth
 
-    cutoffs = _eprop._DEFAULT_THRESHOLD_TABLE[_eprop._qubit_scale_tier(n_qubits)]
+    cutoffs = _eprop.DEFAULT_PARALLEL_THRESHOLDS[_eprop._qubit_scale_tier(n_qubits)]
     return num_layers >= cutoffs['min_layer_prop_depth']
 
 
@@ -473,7 +473,7 @@ class ErrorGeneratorPropagator:
         # workload merits parallelism, so an all-serial run never starts any processes, while e.g.
         # a serial propagation followed by a parallel Magnus expansion starts the pool exactly once.
         # (The deprecated pairwise mode has no parallel stage beyond propagation.)
-        with _pool_scope(num_workers, pool, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as stage_pool:
+        with _pool_scope(num_workers, pool, prewarm_packages=_eprop.EGPROP_PREWARM_PACKAGES) as stage_pool:
             propagated_errorgen_layers = self.propagate_errorgens(
                 circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs,
                 pool=stage_pool
@@ -932,7 +932,7 @@ class ErrorGeneratorPropagator:
         if pool is not None:
             chunk_results = pool.map(_prop_layer_chunk_worker, chunks)
         else:
-            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as local_pool:
+            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop.EGPROP_PREWARM_PACKAGES) as local_pool:
                 chunk_results = local_pool.map(_prop_layer_chunk_worker, chunks)
 
         flat_results = [item for sub in chunk_results for item in sub]

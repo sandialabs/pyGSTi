@@ -56,6 +56,65 @@ def with_temp_path(fn):
     return inner
 
 
+class PoolDispatchSpy:
+    """
+    Context manager recording the names of the callables dispatched to an *active* worker pool
+    through `SharedWorkerPool.map` / `imap_unordered`, i.e. recording which parallel code paths ran
+    (as opposed to falling back to serial execution because a workload was below the thresholds).
+    """
+    def __enter__(self):
+        from unittest import mock
+        from pygsti.tools import mptools as _mpt
+        self.dispatched = []
+        self._patches = []
+        for name in ('map', 'imap_unordered'):
+            orig = getattr(_mpt.SharedWorkerPool, name)
+
+            def wrapper(pool_self, func, *args, _orig=orig, **kwargs):
+                result = _orig(pool_self, func, *args, **kwargs)  # (lazy pools start inside this call)
+                if pool_self.is_started:
+                    self.dispatched.append(getattr(func, '__name__', type(func).__name__))
+                return result
+            patch = mock.patch.object(_mpt.SharedWorkerPool, name, wrapper)
+            patch.start()
+            self._patches.append(patch)
+        return self
+
+    def __exit__(self, *exc):
+        for patch in self._patches:
+            patch.stop()
+        return False
+
+
+@contextmanager
+def forced_parallel(*operations):
+    """
+    Context manager forcing the named error generator propagation operations (any of 'alpha',
+    'magnus', 'layer_prop', 'commuting_product'; all of them if none are given) to take their
+    parallel code path regardless of workload size, restoring the default configuration on exit.
+    """
+    from pygsti.tools import errgenproptools as eprop
+    eprop.configure_errorgen_propagation_parallelization(force_parallel=list(operations) if operations else True)
+    try:
+        yield
+    finally:
+        eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+
+
+@contextmanager
+def parallel_path_exercised(testcase, operations, expected_dispatch):
+    """
+    Force the parallel path of `operations` (see `forced_parallel`) within the block, and afterwards
+    assert that work was really dispatched to worker processes through each of the callables named in
+    `expected_dispatch`. Guards parallel/serial equivalence tests against silently comparing serial
+    results with serial results.
+    """
+    with forced_parallel(*operations), PoolDispatchSpy() as spy:
+        yield spy
+    for name in expected_dispatch:
+        testcase.assertIn(name, spy.dispatched, f"the parallel path ({name}) did not run; dispatched: {spy.dispatched}")
+
+
 class BaseCase(unittest.TestCase):
     def assertArraysAlmostEqual(self, a, b, **kwargs):
         """Assert that two arrays are equal to within a certain precision.

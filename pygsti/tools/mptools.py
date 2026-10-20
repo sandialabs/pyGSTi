@@ -850,12 +850,15 @@ def parallel_pair_reduce(
 WORKER_PROCESS_BASELINE_BYTES = 125 * 1024 * 1024
 
 
-def get_available_system_memory() -> int:
+def get_available_system_memory() -> Optional[int]:
     """
     Query currently available system memory in bytes.
 
-    Uses psutil if installed, otherwise inspects OS-level indicators
-    (/proc/meminfo or sysconf on Linux, sysctl on macOS).
+    Uses psutil if it is installed (on any platform). Otherwise falls back to `/proc/meminfo` or
+    `sysconf` on Linux; on other platforms without psutil there is no fallback.
+
+    Note that this is the memory available to the whole machine: a lower memory limit imposed on a
+    container or batch job (e.g. a cgroup memory limit) is not taken into account.
 
     Returns
     -------

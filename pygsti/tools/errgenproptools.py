@@ -52,7 +52,8 @@ import math as _math
 from math import factorial
 import sys as _sys
 import time as _time
-from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, cast as _cast, TYPE_CHECKING
+from types import MappingProxyType as _MappingProxyType
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, Final, cast as _cast, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import multiprocessing.pool as _mppool
@@ -418,33 +419,36 @@ def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDi
 
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
-# Standard packages to pre-warm in worker processes for error generator propagation
-_EGPROP_PREWARM_PACKAGES = ("numpy", "stim", "pygsti.tools.fasterrgencalc")
+# Standard packages to pre-warm in worker processes for error generator propagation (read-only: pass
+# it as `prewarm_packages` when creating a `SharedWorkerPool` for these routines).
+EGPROP_PREWARM_PACKAGES: Final[tuple[str, ...]] = ("numpy", "stim", "pygsti.tools.fasterrgencalc")
 
-# Default multi-scale threshold table (sensible hardcoded absolute cutoffs across qubit scales)
-_DEFAULT_THRESHOLD_TABLE: dict[str, dict[str, int]] = {
-    'small': {   # n <= 16 qubits
+# Default multi-scale threshold table (sensible hardcoded absolute cutoffs across qubit scales). It is
+# read-only (a mapping of read-only mappings); use `configure_errorgen_propagation_parallelization` to
+# override individual cutoffs.
+DEFAULT_PARALLEL_THRESHOLDS: Final[_MappingProxyType] = _MappingProxyType({
+    'small': _MappingProxyType({   # n <= 16 qubits
         'min_km_alpha': 1000,
         'min_magnus_pairs': 4,
         'min_magnus_terms': 100,
         'min_layer_prop_depth': 16,
         'min_terms_commuting_product': 1000,
-    },
-    'medium': {  # 16 < n <= 64 qubits
+    }),
+    'medium': _MappingProxyType({  # 16 < n <= 64 qubits
         'min_km_alpha': 500,
         'min_magnus_pairs': 2,
         'min_magnus_terms': 50,
         'min_layer_prop_depth': 8,
         'min_terms_commuting_product': 500,
-    },
-    'large': {   # n > 64 qubits
+    }),
+    'large': _MappingProxyType({   # n > 64 qubits
         'min_km_alpha': 250,
         'min_magnus_pairs': 2,
         'min_magnus_terms': 50,
         'min_layer_prop_depth': 4,
         'min_terms_commuting_product': 250,
-    },
-}
+    }),
+})
 
 # Manual overrides configured via configure_errorgen_propagation_parallelization
 _MANUAL_PARALLEL_OVERRIDES: dict[str, Any] = {}
@@ -511,7 +515,8 @@ def configure_errorgen_propagation_parallelization(
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
             _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
-        return {"status": "reset_to_defaults", "defaults": _copy.deepcopy(_DEFAULT_THRESHOLD_TABLE)}
+        return {"status": "reset_to_defaults",
+                "defaults": {tier: dict(cutoffs) for tier, cutoffs in DEFAULT_PARALLEL_THRESHOLDS.items()}}
 
     # Validate the force settings against the combined (existing + requested) state before
     # mutating anything, so an invalid call leaves the configuration unchanged.
@@ -948,7 +953,7 @@ def _should_parallelize_magnus(
         return forced
 
     # Each manual override replaces only its own default-table cutoff.
-    cutoffs = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]
+    cutoffs = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]
     min_pairs = _MANUAL_PARALLEL_OVERRIDES.get("min_magnus_pairs", cutoffs['min_magnus_pairs'])
     min_terms = _MANUAL_PARALLEL_OVERRIDES.get("min_terms_per_magnus_pair", cutoffs['min_magnus_terms'])
     return n_pairs >= min_pairs and avg_terms_per_layer >= min_terms
@@ -985,7 +990,7 @@ def _should_parallelize_commuting_product(
     if "min_terms_commuting_product" in _MANUAL_PARALLEL_OVERRIDES:
         return w >= _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"]
 
-    threshold = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]['min_terms_commuting_product']
+    threshold = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]['min_terms_commuting_product']
     return w >= threshold
 
 
@@ -1350,7 +1355,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
     evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
     second_order_str_dict = _parallel_pair_reduce(
         evaluator, tasks, _merge_string_dictionaries, num_workers=workers, pool=pool,
-        prewarm_packages=_EGPROP_PREWARM_PACKAGES, pair_weights=task_weights, dynamic=True
+        prewarm_packages=EGPROP_PREWARM_PACKAGES, pair_weights=task_weights, dynamic=True
     )
     if second_order_str_dict is None:
         return {}
@@ -1563,7 +1568,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
     if pool is not None:
         second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(pool)
     else:
-        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=EGPROP_PREWARM_PACKAGES) as local_pool:
             second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(local_pool)
 
     om2_survivors = _truncated(second_order_comm_str_dict, truncation_threshold)
@@ -5294,7 +5299,7 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
     
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
-    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
         if order == 1:
             combined_taylor_dict = errorgen_dict
         else:
@@ -5361,7 +5366,7 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
     """
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
-    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
         if order == 1:
             combined_taylor_dict = errorgen_dict
         else:
@@ -5756,7 +5761,7 @@ def approximate_stabilizer_probabilities(
 
     # Compute the Taylor series expansion once for all bitstrings, sharing one (lazily started) pool
     # between the Taylor expansion and the sensitivity calculation.
-    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
         if order == 1:
             combined_taylor_dict = errorgen_dict
         else:
@@ -5833,7 +5838,7 @@ def approximate_stabilizer_pauli_expectations(
 
     # Compute the Taylor series expansion once for all Paulis, sharing one (lazily started) pool
     # between the Taylor expansion and the sensitivity calculation.
-    with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as stage_pool:
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
         if order == 1:
             combined_taylor_dict = errorgen_dict
         else:
@@ -5946,7 +5951,7 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
         # A single (lazily started) pool is shared by the products of every order.
-        with _pool_scope(num_workers, pool, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as order_pool:
+        with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as order_pool:
             for current_order in range(2, order + 1):
                 order_scale = 1 / factorial(current_order)
                 current_power = _commuting_product(errorgen_dict, previous_power, identity,
@@ -6023,7 +6028,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     if pool is not None:
         chunk_results = pool.map(worker, chunks)
     else:
-        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=EGPROP_PREWARM_PACKAGES) as local_pool:
             chunk_results = local_pool.map(worker, chunks)
 
     merged_str = {}
@@ -6365,7 +6370,7 @@ def _should_parallelize_alpha(
         # If any locally-run parameter is missing, immediately fallback to the simpler table
 
     # Default fallback: multi-scale cutoff table
-    threshold_km = _DEFAULT_THRESHOLD_TABLE[_qubit_scale_tier(n_qubits)]['min_km_alpha']
+    threshold_km = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]['min_km_alpha']
     return w >= threshold_km
 
 

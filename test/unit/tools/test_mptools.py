@@ -503,9 +503,37 @@ class MPToolsTester(BaseCase):
                 self.assertEqual(pids_1, pool_pids)
 
     def test_get_available_system_memory(self):
+        # None is a legitimate answer on a platform without psutil or a /proc fallback
         avail = mpt.get_available_system_memory()
-        self.assertIsInstance(avail, int)
-        self.assertGreater(avail, 0)
+        if avail is None:
+            self.assertFalse(sys.platform.startswith("linux"))
+        else:
+            self.assertIsInstance(avail, int)
+            self.assertGreater(avail, 0)
+
+    def test_get_available_system_memory_backends(self):
+        fake_psutil = mock.Mock()
+        fake_psutil.virtual_memory.return_value.available = 12345
+        with mock.patch.dict(sys.modules, {'psutil': fake_psutil}):
+            self.assertEqual(mpt.get_available_system_memory(), 12345)
+        # without psutil: the Linux /proc fallback ...
+        with mock.patch.dict(sys.modules, {'psutil': None}):
+            avail = mpt.get_available_system_memory()
+            if sys.platform.startswith("linux"):
+                self.assertIsInstance(avail, int)
+                self.assertGreater(avail, 0)
+            # ... and no fallback at all on other platforms
+            with mock.patch.object(mpt._sys, 'platform', 'darwin'):
+                self.assertIsNone(mpt.get_available_system_memory())
+
+    def test_warn_if_insufficient_memory_when_memory_is_unknown(self):
+        with mock.patch.object(mpt, 'get_available_system_memory', return_value=None):
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter("always")
+                mpt.warn_if_insufficient_memory(10**9, task_name="test_unknown")
+        self.assertEqual(len(recorded), 1)
+        self.assertTrue(issubclass(recorded[0].category, InsufficientMemoryWarning))
+        self.assertIn("Unable to resolve available system memory", str(recorded[0].message))
 
     def test_warn_if_insufficient_memory(self):
         avail = mpt.get_available_system_memory()

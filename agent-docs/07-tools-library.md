@@ -18,7 +18,7 @@ Read top-down (top = depends on nothing below it):
 
 - **Primitives**: linear algebra (`matrixtools.py`), basis manipulation (`basistools.py`), GF(2) arithmetic (`matrixmod2.py`), simple list/slice helpers (`listtools.py`, `slicetools.py`, `typeddict.py`, `nameddict.py`).
 - **Quantum operator tools**: channel/operator conversions (`optools.py`), gate construction (`gatetools.py`), standard-gate definitions (`internalgates.py`), Jamiolkowski isomorphism (`jamiolkowski.py`).
-- **Error generators / Lindblad**: `lindbladtools.py`, `errgenproptools.py` (~9k lines — huge), `errgenpolytools.py`.
+- **Error generators / Lindblad**: `lindbladtools.py`, `errgenproptools.py` (~6.7k lines — huge), `errgenpolytools.py`.
 - **Statistical**: `likelihoodfns.py`, `chi2fns.py` (these wrap or duplicate logic in `objectivefns/` — see misplacement table).
 - **Convex / SDP** (cvxpy-optional): `sdptools.py`, parts of `optools.py` and `jamiolkowski.py`.
 - **Experiment-design helpers**: `edesigntools.py` (misplaced).
@@ -58,7 +58,7 @@ If you're writing new utilities, **add an `__all__`** to your file, even if the 
 | Linear algebra / matrix ops | [matrixtools.py](../pygsti/tools/matrixtools.py), [matrixmod2.py](../pygsti/tools/matrixmod2.py) | `matrixtools.py` is the BLAS-wrapper / gram-matrix / `expm`-tolerance backbone. |
 | Basis manipulation | [basistools.py](../pygsti/tools/basistools.py) | Pauli / Gell-Mann / std conversions. |
 | Quantum operators & gates | [optools.py](../pygsti/tools/optools.py), [gatetools.py](../pygsti/tools/gatetools.py), [internalgates.py](../pygsti/tools/internalgates.py) | `optools.py` (~2.8k lines) is the channel-rep conversion library: std ↔ superop ↔ Choi, CP/TP checks. |
-| Error generators / Lindblad | [errgenproptools.py](../pygsti/tools/errgenproptools.py) (~9k lines), [lindbladtools.py](../pygsti/tools/lindbladtools.py) | `errgenproptools.py` is the BCH / matrix-exponential / error-generator-propagation backbone. Requires `stim` for some functions. |
+| Error generators / Lindblad | [errgenproptools.py](../pygsti/tools/errgenproptools.py) (~6.7k lines), [lindbladtools.py](../pygsti/tools/lindbladtools.py) | `errgenproptools.py` is the BCH / matrix-exponential / error-generator-propagation backbone. Requires `stim` for some functions. |
 | Statistical fit functions | [likelihoodfns.py](../pygsti/tools/likelihoodfns.py), [chi2fns.py](../pygsti/tools/chi2fns.py) | Misplaced (see above). Prefer the class-based interfaces in `objectivefns/`. |
 | Convex / SDP (cvxpy-optional) | [sdptools.py](../pygsti/tools/sdptools.py), parts of [jamiolkowski.py](../pygsti/tools/jamiolkowski.py), parts of [optools.py](../pygsti/tools/optools.py) | All guarded by `try: import cvxpy`. |
 | Experiment design | [edesigntools.py](../pygsti/tools/edesigntools.py) | Fisher information; misplaced. |
@@ -117,7 +117,7 @@ All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and noth
 
 - **Cython kernels.** `fastcalc.so` and `fasterrgencalc.so` are compiled at install time. If they didn't build, some callers fall back to Python implementations (others fail loudly, depending on the call site). Because that dispatch is silent, a `tools/` performance surprise should start with checking whether the `.so` actually loaded.
 
-- **`errgenproptools.py` is huge (~9k lines).** Don't refactor it casually. It's the math backbone for error-generator propagation work; subtle changes have correctness implications.
+- **`errgenproptools.py` is huge (~6.7k lines).** Don't refactor it casually. It's the math backbone for error-generator propagation work; subtle changes have correctness implications.
 
 ## Architectural debt
 

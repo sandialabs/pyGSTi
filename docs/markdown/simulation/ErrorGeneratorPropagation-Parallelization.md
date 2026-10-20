@@ -69,7 +69,7 @@ All primary propagation and sensitivity functions accept two optional arguments 
 Functions supporting parallel execution include:
 - `ErrorGeneratorPropagator.propagate_errorgens` and `propagate_errorgens_bch`: Parallelizes circuit layer propagation across workers.
 - `errgenproptools.magnus_expansion` and `zassenhaus_formula`: Parallelizes pairwise layer commutators and outer accumulated commutators.
-- `errgenproptools.error_generator_taylor_expansion` and `_commuting_product`: Parallelizes operator powers and compositions.
+- `errgenproptools.error_generator_taylor_expansion`: Parallelizes the products used to build the powers of the error generator.
 - `errgenproptools.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations`: Parallelizes computations across outcomes/observables while reusing intermediate results.
 - `errgenproptools.bulk_alpha` and `bulk_alpha_pauli`: Parallelizes across outcomes/observables and error generators.
 
@@ -77,11 +77,11 @@ Functions supporting parallel execution include:
 
 In multi-stage workflows (such as propagating layers, computing a second- or third-order Magnus expansion, and calculating multiple outcome probabilities), spinning up and tearing down a multiprocessing pool for each function call introduces substantial process-creation overhead.
 
-To eliminate this overhead, pyGSTi provides `SharedWorkerPool`. When initialized as a context manager, workers are spawned once and optionally pre-warmed with essential modules. These modules can be manually specified, but those relevant for error generator propagation are given by `eprop._EGPROP_PREWARM_PACKAGES` (`stim`, `numpy`, and pyGSTi Cython extensions):
+To eliminate this overhead, pyGSTi provides `SharedWorkerPool`. When initialized as a context manager, workers are spawned once and optionally pre-warmed with essential modules. These modules can be manually specified, but those relevant for error generator propagation are given by `eprop.EGPROP_PREWARM_PACKAGES` (`stim`, `numpy`, and pyGSTi Cython extensions):
 
 ```{code-cell} ipython3
 # Reusing a single pre-warmed worker pool across sequential pipeline stages:
-with SharedWorkerPool(num_workers="auto", prewarm_packages=_EGPROP_PREWARM_PACKAGES) as pool:
+with SharedWorkerPool(num_workers="auto", prewarm_packages=eprop.EGPROP_PREWARM_PACKAGES) as pool:
     # 1. Parallel circuit layer propagation
     propagated_layers = errorgen_propagator.propagate_errorgens(c, pool=pool)
 
@@ -111,7 +111,7 @@ A `SharedWorkerPool` must be used inside its `with` block. By default its worker
 
 Multiprocessing incurs inter-process communication (IPC) overhead. If a circuit has only a few error generators or shallow depth, dispatching tasks across processes can be slower than executing sequentially on a single core.
 
-By default, pyGSTi uses an internal multi-scale cutoff table (`_DEFAULT_THRESHOLD_TABLE`) based on system size (e.g. minimum number of layer pairs or generator-outcome product $K \times M$) to determine whether parallelization should be engaged.
+By default, pyGSTi uses an internal multi-scale cutoff table (`DEFAULT_PARALLEL_THRESHOLDS`) based on system size (e.g. minimum number of layer pairs or generator-outcome product $K \times M$) to determine whether parallelization should be engaged.
 
 If you wish to customize these threshold criteria or force parallel/serial modes for benchmarking, you can use `configure_errorgen_propagation_parallelization`:
 
@@ -157,8 +157,8 @@ eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
 High-order Magnus expansions and Taylor series compositions on dense multiqubit circuits can generate large dictionaries of elementary error generators. To protect against out-of-memory (OOM) errors pyGSTi provides analytical peak memory estimators:
 
-- `eprop.estimate_magnus_peak_memory(n_qubits, num_layers, avg_terms_per_layer, num_workers, magnus_order)`
-- `eprop.estimate_taylor_peak_memory(n_qubits, num_terms, order, num_workers)`
+- `eprop.estimate_magnus_peak_memory(n_qubits, n_layers, avg_errorgens_per_layer, num_workers, magnus_order)`
+- `eprop.estimate_taylor_peak_memory(n_qubits, num_errorgens, order, num_workers)`
 - `eprop.estimate_bulk_alpha_peak_memory(n_qubits, n_errorgens, n_outcomes, num_workers)`
 - `pygsti.errorgenpropagation.errorpropagator.estimate_propagation_peak_memory(n_qubits, n_layers, avg_errorgens_per_layer, num_workers)`
 
@@ -168,7 +168,7 @@ For layer propagation, Taylor expansions and sensitivity (`bulk_alpha`) calculat
 
 ```{code-cell} ipython3
 # Estimate memory footprint for a 50-layer, 4-qubit Magnus expansion:
-est_bytes = eprop.estimate_magnus_peak_memory(n_qubits=4, num_layers=50, avg_terms_per_layer=25, num_workers=4, magnus_order=2)
+est_bytes = eprop.estimate_magnus_peak_memory(n_qubits=4, n_layers=50, avg_errorgens_per_layer=25, num_workers=4, magnus_order=2)
 print(f"Estimated peak memory: {est_bytes / (1024**2):.2f} MiB")
 
 # Check against system memory safely:
