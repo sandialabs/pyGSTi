@@ -37,6 +37,7 @@ from .mpitools import resolve_mpiexec, compute_blas_threads, write_mpi_runner_ar
 from .mptools import (
     starmap_with_kwargs,
     determine_num_workers,
+    available_cpu_count,
     compute_2d_worker_grid,
     SharedWorkerPool,
     parallel_2d_grid_map,

@@ -11,6 +11,7 @@ Functions for working with Python multiprocessing (more than just map)
 #***************************************************************************************************
 
 import contextlib as _contextlib
+import functools as _functools
 import itertools as _itertools
 import math as _math
 import multiprocessing as _mp
@@ -75,6 +76,135 @@ def _noop_ipc_ping(x):
 # Worker Count & Hardware / Container Resolution
 # ===================================================================================================
 
+@_functools.lru_cache(maxsize=1)
+def _logical_to_physical_cpu_ratio() -> float:
+    """
+    The (hardware-determined, hence cached) ratio of logical CPUs to physical cores, e.g. 2 on a
+    machine with two-way SMT / hyper-threading, or 1 if it is unknown (psutil unavailable).
+    """
+    try:
+        import psutil
+        logical, physical = psutil.cpu_count(logical=True), psutil.cpu_count(logical=False)
+        if logical and physical and logical >= physical:
+            return logical / physical
+    except Exception:
+        pass
+    return 1.0
+
+
+def _allowed_logical_cpu_count() -> int:
+    """
+    The number of logical CPUs this process is permitted to run on: its CPU affinity mask (as set
+    by `taskset`, Slurm, `numactl`, `docker --cpuset-cpus`, ...) where the platform exposes it, or
+    else the total number of logical CPUs.
+    """
+    n = None
+    if hasattr(_os, "process_cpu_count"):  # Python >= 3.13, respects the affinity mask
+        try:
+            n = _os.process_cpu_count()
+        except Exception:
+            n = None
+    if not n and hasattr(_os, "sched_getaffinity"):  # Linux
+        try:
+            n = len(_os.sched_getaffinity(0))
+        except Exception:
+            n = None
+    if not n:  # Windows (and Linux) via psutil
+        try:
+            import psutil
+            n = len(psutil.Process().cpu_affinity())
+        except Exception:
+            n = None
+    return max(1, int(n or _os.cpu_count() or 1))
+
+
+def _cgroup_cpu_quota(cgroup_root: str = "/sys/fs/cgroup", proc_cgroup_file: str = "/proc/self/cgroup") -> Optional[int]:
+    """
+    The whole number of CPUs this process is limited to by Linux cgroup CPU quotas (as set by
+    `docker --cpus`, Kubernetes CPU limits, systemd or Slurm), or None if no quota applies or the
+    platform has no cgroups.
+
+    The cgroup the process belongs to is read from `proc_cgroup_file`, and the smallest quota
+    found on that cgroup and each of its ancestors is used, since a limit on any ancestor applies.
+    cgroups v2 (`cpu.max`) and v1 (`cpu.cfs_quota_us` / `cpu.cfs_period_us`) are both supported.
+    A quota of less than one CPU is rounded up to one.
+    """
+    try:
+        with open(proc_cgroup_file, "r") as f:
+            entries = [line.rstrip("\n").split(":", 2) for line in f if line.count(":") >= 2]
+    except OSError:
+        return None
+
+    def ancestors(path):  # '/a/b/c' -> ['/a/b/c', '/a/b', '/a', '']
+        parts = [p for p in path.split("/") if p]
+        return ["/" + "/".join(parts[:i]) if i else "" for i in range(len(parts), -1, -1)]
+
+    def read(path):
+        try:
+            with open(path, "r") as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    limits = []
+    for _, controllers, path in entries:
+        names = controllers.split(",")
+        if controllers == "":  # cgroups v2 (unified hierarchy)
+            for anc in ancestors(path):
+                text = read(f"{cgroup_root}{anc}/cpu.max")
+                if text:
+                    parts = text.split()
+                    if len(parts) >= 2 and parts[0] != "max":
+                        try:
+                            quota, period = float(parts[0]), float(parts[1])
+                            if quota > 0 and period > 0:
+                                limits.append(quota / period)
+                        except ValueError:
+                            pass
+        elif "cpu" in names:  # cgroups v1
+            for mount in ("cpu", "cpu,cpuacct", "cpuacct,cpu"):
+                for anc in ancestors(path):
+                    quota_text = read(f"{cgroup_root}/{mount}{anc}/cpu.cfs_quota_us")
+                    period_text = read(f"{cgroup_root}/{mount}{anc}/cpu.cfs_period_us")
+                    if quota_text and period_text:
+                        try:
+                            quota, period = float(quota_text), float(period_text)
+                            if quota > 0 and period > 0:  # a quota of -1 means unlimited
+                                limits.append(quota / period)
+                        except ValueError:
+                            pass
+    if not limits:
+        return None
+    return max(1, int(_math.floor(min(limits))))
+
+
+def available_cpu_count() -> int:
+    """
+    The number of physical CPU cores that this process can actually use.
+
+    Three separate limits are combined, since each is imposed by different tools:
+
+    1. the hardware: SMT / hyper-threading logical CPUs are not counted separately from the
+       physical core they share (assuming a uniform number of logical CPUs per core, as reported by
+       `psutil`; without `psutil` all logical CPUs are counted);
+    2. the CPU affinity mask: the subset of CPUs the operating system permits this process to run
+       on (`taskset`, Slurm allocations, `numactl`, `docker --cpuset-cpus`);
+    3. the cgroup CPU quota (Linux): the amount of CPU time the process may use (`docker --cpus`,
+       Kubernetes CPU limits).
+
+    Returns
+    -------
+    int
+        The number of usable physical cores (>= 1).
+    """
+    n = max(1, int(_allowed_logical_cpu_count() / _logical_to_physical_cpu_ratio()))
+    if _sys.platform.startswith("linux"):
+        quota = _cgroup_cpu_quota()
+        if quota is not None:
+            n = min(n, quota)
+    return n
+
+
 def determine_num_workers(
     num_workers: Union[int, str, None] = "auto",
     max_limit: Optional[int] = None,
@@ -87,14 +217,14 @@ def determine_num_workers(
     num_workers : int, str, or None, optional
         - None : Returns 1 (strictly sequential execution without multiprocessing).
         - int : Exact requested worker count, clamped by `max_limit` if provided.
-        - "auto" : Automatically infers physical CPU cores (excluding SMT / hyperthreading
-          logical threads) via `psutil.cpu_count(logical=False)` with a fallback to
-          `os.cpu_count()`. On Linux, inspects cgroups v2 (`/sys/fs/cgroup/cpu.max`) and
-          cgroups v1 (`cpu.cfs_quota_us`) to determine container CPU quota.
-          On systems with >= 4 cores, reserves 1 core for the main orchestration process
-          to prevent core oversubscription and CFS throttling during streaming IPC reduction.
+        - "auto" : The number of cores usable by this process, as given by `available_cpu_count`
+          (which accounts for SMT / hyper-threading, the CPU affinity mask, and Linux cgroup CPU
+          quotas). On systems with >= 4 usable cores, one core is reserved for the main
+          orchestration process to prevent core oversubscription and CFS throttling during
+          streaming IPC reduction.
     max_limit : int, optional
-        Maximum upper bound on workers to return.
+        Maximum upper bound on workers to return. Applied last, after the reservation of a core
+        for the main process.
 
     Returns
     -------
@@ -114,60 +244,12 @@ def determine_num_workers(
 
     if isinstance(num_workers, str):
         if num_workers.lower() == "auto":
-            n_phys = None
-            try:
-                import psutil
-                n_phys = psutil.cpu_count(logical=False)
-            except Exception:
-                pass
-
-            if n_phys is None or n_phys < 1:
-                if hasattr(_os, "sched_getaffinity"):
-                    try:
-                        n_phys = len(_os.sched_getaffinity(0))
-                    except Exception:
-                        pass
-                if n_phys is None or n_phys < 1:
-                    n_phys = _os.cpu_count() or 1
-
-            # On Linux containers, clamp by cgroup quota if enforced
-            if _sys.platform.startswith("linux"):
-                # cgroups v2
-                cgroup_v2 = "/sys/fs/cgroup/cpu.max"
-                if _os.path.exists(cgroup_v2):
-                    try:
-                        with open(cgroup_v2, "r") as f:
-                            parts = f.read().strip().split()
-                            if len(parts) >= 2 and parts[0] != "max":
-                                quota = float(parts[0])
-                                period = float(parts[1])
-                                if period > 0:
-                                    cgroup_cores = _math.floor(quota / period)
-                                    if cgroup_cores > 0:
-                                        n_phys = min(n_phys, cgroup_cores)
-                    except Exception:
-                        pass
-
-                # cgroups v1
-                quota_v1 = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
-                period_v1 = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
-                if _os.path.exists(quota_v1) and _os.path.exists(period_v1):
-                    try:
-                        with open(quota_v1, "r") as f_q, open(period_v1, "r") as f_p:
-                            quota = float(f_q.read().strip())
-                            period = float(f_p.read().strip())
-                            if quota > 0 and period > 0:
-                                cgroup_cores = _math.floor(quota / period)
-                                if cgroup_cores > 0:
-                                    n_phys = min(n_phys, cgroup_cores)
-                    except Exception:
-                        pass
-
+            n = available_cpu_count()
+            if n >= 4:
+                n -= 1
             if max_limit is not None and max_limit > 0:
-                n_phys = min(n_phys, int(max_limit))
-            if n_phys >= 4:
-                return max(1, int(n_phys) - 1)
-            return max(1, int(n_phys))
+                n = min(n, int(max_limit))
+            return max(1, n)
 
     raise ValueError(f"Invalid num_workers specification: {num_workers!r}. Expected int, None, or 'auto'.")
 

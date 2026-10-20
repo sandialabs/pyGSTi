@@ -1,8 +1,11 @@
+import contextlib
 import math
 import multiprocessing as mp
 import multiprocessing.pool as _mppool
 import os
+import shutil
 import sys
+import tempfile
 import time
 import unittest
 import unittest.mock as mock
@@ -87,45 +90,142 @@ class MPToolsTester(BaseCase):
         with self.assertRaises(ValueError):
             mpt.determine_num_workers("invalid_option")
 
+    # ----- worker-count resolution (affinity, SMT, cgroup quotas) -----
+    # These tests substitute a fake `psutil` through `sys.modules` (so they behave identically whether
+    # or not the optional psutil is installed), fake the affinity mask, and read cgroup files from
+    # temporary directory trees.
+
+    def _fake_psutil(self, logical, physical, affinity=None):
+        logical_count, physical_count = logical, physical
+        fake = mock.Mock()
+        fake.cpu_count.side_effect = lambda logical=True: logical_count if logical else physical_count
+        fake.Process.return_value.cpu_affinity.return_value = list(range(affinity)) if affinity else []
+        return fake
+
+    def _patched_hardware(self, logical, physical, affinity=None, psutil_available=True):
+        """Context manager faking the machine: SMT layout, affinity mask size, and psutil availability."""
+        stack = contextlib.ExitStack()
+        mpt._logical_to_physical_cpu_ratio.cache_clear()
+        stack.callback(mpt._logical_to_physical_cpu_ratio.cache_clear)
+        stack.enter_context(mock.patch.dict(sys.modules, {'psutil': self._fake_psutil(logical, physical)
+                                                          if psutil_available else None}))
+        allowed = affinity if affinity is not None else logical
+        stack.enter_context(mock.patch.object(mpt._os, 'process_cpu_count', create=True, return_value=allowed))
+        stack.enter_context(mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=None))
+        return stack
+
+    def test_available_cpu_count_respects_smt_affinity_and_cgroup_quota(self):
+        # 64 logical CPUs with two-way SMT = 32 physical cores
+        with self._patched_hardware(64, 32):
+            self.assertEqual(mpt.available_cpu_count(), 32)
+        # a Slurm-style allocation of 4 CPUs on that machine: affinity limits the result (this used to be
+        # ignored whenever psutil was installed)
+        with self._patched_hardware(64, 32, affinity=8):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+        with self._patched_hardware(64, 32, affinity=2):
+            self.assertEqual(mpt.available_cpu_count(), 1)
+            self.assertEqual(mpt.determine_num_workers("auto"), 1)
+        # a cgroup quota below the affinity limit applies
+        with self._patched_hardware(64, 32), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=4):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+        # ... but never raises the count
+        with self._patched_hardware(8, 8), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=64):
+            self.assertEqual(mpt.available_cpu_count(), 8)
+        # without psutil there is no SMT information: every logical CPU counts, and the affinity mask still applies
+        with self._patched_hardware(16, 8, psutil_available=False):
+            self.assertEqual(mpt.available_cpu_count(), 16)
+        with self._patched_hardware(16, 8, affinity=4, psutil_available=False):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+
+    def test_available_cpu_count_affinity_fallbacks(self):
+        # falls back from os.process_cpu_count to sched_getaffinity, then psutil's affinity, then os.cpu_count
+        with self._patched_hardware(16, 16):
+            with mock.patch.object(mpt._os, 'process_cpu_count', create=True, return_value=None), \
+                    mock.patch.object(mpt._os, 'sched_getaffinity', create=True, return_value={0, 1, 2}):
+                self.assertEqual(mpt._allowed_logical_cpu_count(), 3)
+            with mock.patch.object(mpt._os, 'process_cpu_count', create=True, side_effect=OSError), \
+                    mock.patch.object(mpt._os, 'sched_getaffinity', create=True, side_effect=OSError), \
+                    mock.patch.dict(sys.modules, {'psutil': self._fake_psutil(16, 16, affinity=5)}):
+                self.assertEqual(mpt._allowed_logical_cpu_count(), 5)
+            with mock.patch.object(mpt._os, 'process_cpu_count', create=True, return_value=None), \
+                    mock.patch.object(mpt._os, 'sched_getaffinity', create=True, return_value=set()), \
+                    mock.patch.dict(sys.modules, {'psutil': None}), \
+                    mock.patch.object(mpt._os, 'cpu_count', return_value=7):
+                self.assertEqual(mpt._allowed_logical_cpu_count(), 7)
+
+    def test_determine_num_workers_applies_max_limit_after_reserving_a_core(self):
+        with self._patched_hardware(16, 16):
+            self.assertEqual(mpt.determine_num_workers("auto"), 15)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=4), 4)  # was 3
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=100), 15)
+            self.assertEqual(mpt.determine_num_workers("auto", max_limit=1), 1)
+        with self._patched_hardware(3, 3):  # no core is reserved below 4 cores
+            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+        with self._patched_hardware(4, 4):
+            self.assertEqual(mpt.determine_num_workers("auto"), 3)
+        with self._patched_hardware(1, 1):
+            self.assertEqual(mpt.determine_num_workers("auto"), 1)
+
+    def _write_cgroup_tree(self, files):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        for rel, text in files.items():
+            path = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(text)
+        return root
+
+    def _quota(self, files, proc_cgroup):
+        root = self._write_cgroup_tree(files)
+        proc = os.path.join(root, "proc_self_cgroup")
+        with open(proc, "w") as f:
+            f.write(proc_cgroup)
+        return mpt._cgroup_cpu_quota(cgroup_root=root, proc_cgroup_file=proc)
+
+    def test_cgroup_cpu_quota_v2(self):
+        # a container: the process sits at the root of its cgroup namespace
+        self.assertEqual(self._quota({"cpu.max": "400000 100000\n"}, "0::/\n"), 4)
+        self.assertIsNone(self._quota({"cpu.max": "max 100000\n"}, "0::/\n"))
+        self.assertEqual(self._quota({"cpu.max": "250000 100000\n"}, "0::/\n"), 2)       # fractional quotas round down
+        self.assertEqual(self._quota({"cpu.max": "50000 100000\n"}, "0::/\n"), 1)        # but never below one CPU
+        # a nested cgroup (bare-metal Slurm/systemd): the quota of the process's own cgroup applies ...
+        files = {"cpu.max": "max 100000", "job_1/cpu.max": "max 100000", "job_1/step_0/cpu.max": "200000 100000"}
+        self.assertEqual(self._quota(files, "0::/job_1/step_0\n"), 2)
+        # ... as does the (smaller) quota of an ancestor, even though the cgroup itself is unlimited
+        files = {"cpu.max": "max 100000", "job_1/cpu.max": "300000 100000", "job_1/step_0/cpu.max": "max 100000"}
+        self.assertEqual(self._quota(files, "0::/job_1/step_0\n"), 3)
+        # the smallest of the quotas along the path wins
+        files = {"job_1/cpu.max": "300000 100000", "job_1/step_0/cpu.max": "800000 100000"}
+        self.assertEqual(self._quota(files, "0::/job_1/step_0\n"), 3)
+        # unreadable / malformed files are ignored, and a missing /proc file means no information
+        self.assertIsNone(self._quota({"cpu.max": "garbage"}, "0::/\n"))
+        self.assertIsNone(self._quota({}, "0::/\n"))
+        self.assertIsNone(mpt._cgroup_cpu_quota(cgroup_root="/nonexistent", proc_cgroup_file="/nonexistent/proc"))
+
+    def test_cgroup_cpu_quota_v1(self):
+        proc = "12:cpu,cpuacct:/docker/abc\n11:memory:/docker/abc\n"
+        files = {"cpu/cpu.cfs_quota_us": "200000", "cpu/cpu.cfs_period_us": "100000"}
+        self.assertEqual(self._quota(files, "4:cpu,cpuacct:/\n"), 2)
+        files = {"cpu/docker/abc/cpu.cfs_quota_us": "300000", "cpu/docker/abc/cpu.cfs_period_us": "100000"}
+        self.assertEqual(self._quota(files, proc), 3)
+        files = {"cpu,cpuacct/docker/abc/cpu.cfs_quota_us": "100000", "cpu,cpuacct/docker/abc/cpu.cfs_period_us": "100000"}
+        self.assertEqual(self._quota(files, proc), 1)
+        # -1 means unlimited
+        files = {"cpu/cpu.cfs_quota_us": "-1", "cpu/cpu.cfs_period_us": "100000"}
+        self.assertIsNone(self._quota(files, "4:cpu,cpuacct:/\n"))
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
-    def test_determine_num_workers_cgroup_v2_clamping(self):
-        original_exists = os.path.exists
-
-        def mock_exists(path):
-            if path == "/sys/fs/cgroup/cpu.max":
-                return True
-            return original_exists(path)
-
-        mock_file = mock.mock_open(read_data="400000 100000\n")
-        with mock.patch("os.path.exists", side_effect=mock_exists), \
-             mock.patch("builtins.open", mock_file), \
-             mock.patch("psutil.cpu_count", return_value=64):
-            workers = mpt.determine_num_workers("auto")
-            self.assertEqual(workers, 3)
-
-    @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
-    def test_determine_num_workers_cgroup_v1_clamping(self):
-        original_exists = os.path.exists
-
-        def mock_exists(path):
-            if path in ("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"):
-                return True
-            if path == "/sys/fs/cgroup/cpu.max":
-                return False
-            return original_exists(path)
-
-        def mock_file_reader(path, *args, **kwargs):
-            if path == "/sys/fs/cgroup/cpu/cpu.cfs_quota_us":
-                return mock.mock_open(read_data="200000\n")()
-            elif path == "/sys/fs/cgroup/cpu/cpu.cfs_period_us":
-                return mock.mock_open(read_data="100000\n")()
-            return open(path, *args, **kwargs)
-
-        with mock.patch("os.path.exists", side_effect=mock_exists), \
-             mock.patch("builtins.open", side_effect=mock_file_reader), \
-             mock.patch("psutil.cpu_count", return_value=32):
-            workers = mpt.determine_num_workers("auto")
-            self.assertEqual(workers, 2)
+    def test_determine_num_workers_uses_cgroup_quota(self):
+        with self._patched_hardware(64, 64), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=2):
+            self.assertEqual(mpt.available_cpu_count(), 2)
+            self.assertEqual(mpt.determine_num_workers("auto"), 2)
+        # on the real system the helper must not fail and respects the real affinity mask
+        mpt._logical_to_physical_cpu_ratio.cache_clear()
+        self.assertGreaterEqual(mpt.available_cpu_count(), 1)
+        self.assertLessEqual(mpt.available_cpu_count(), mpt._allowed_logical_cpu_count())
 
     def test_measure_multiprocessing_ipc_latency(self):
         ipc_s = mpt.measure_multiprocessing_ipc_latency(num_workers=2)
