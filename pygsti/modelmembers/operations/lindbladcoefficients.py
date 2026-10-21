@@ -8,6 +8,7 @@ import warnings as _warnings
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools.graphs import sparsechol as _sparsechol
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -676,6 +677,95 @@ class _OtherCholesky(_BlockParameterization):
         return _Polynomial(polyTerms, mpv)
 
 
+class _SparseCholesky(_BlockParameterization):
+    """Exact quadratic map from a fill-free Cholesky factor to selected S/C/A rates."""
+    name = 'cholesky'
+
+    def num_params(self, blk):
+        return len(blk._factor_rows)
+
+    def params_to_block_data(self, blk, v):
+        if _np.shape(v) != (blk.num_params,):
+            raise ValueError("Expected %d sparse Cholesky parameters." % blk.num_params)
+        terms, left, right, scale = blk._quadratic_terms
+        blk.block_data[:] = _np.bincount(terms, weights=scale * v[left] * v[right],
+                                        minlength=len(blk._eeg_labels))
+
+    def block_data_to_params(self, blk, ttol):
+        K = blk.kossakowski_matrix()
+        n = len(K)
+        if n == 0:
+            return _np.empty(0, 'd')
+        # A diagonal shift, unlike spectral clipping, preserves the prescribed zeros.
+        emin = _np.linalg.eigvalsh(K)[0]
+        if emin < ttol:
+            raise ValueError("Sparse Lindblad coefficients are not positive semidefinite.")
+        if emin < 0:
+            K = K - emin * _np.eye(n)
+        K = K[_np.ix_(blk.cholesky_structure.perm, blk.cholesky_structure.perm)]
+        L = _np.zeros_like(K)
+        tol = 1e-12 * max(_np.linalg.norm(K, ord=_np.inf), _np.finfo(float).tiny)
+        for j in range(n):
+            pivot = (K[j, j] - L[j, :j] @ L[j, :j].conj()).real
+            residual = K[j + 1:, j] - L[j + 1:, :j] @ L[j, :j].conj()
+            if pivot < -tol:
+                raise ValueError("Sparse Lindblad coefficients are not positive semidefinite.")
+            if pivot <= tol and _np.all(_np.abs(residual) <= tol):
+                continue  # A zero pivot in a PSD matrix has a zero residual column.
+            if pivot <= 0:
+                raise ValueError("Cannot factor sparse Lindblad coefficients at a zero pivot.")
+            L[j, j] = _np.sqrt(pivot)
+            L[j + 1:, j] = residual / L[j, j]
+        entries = L[blk._factor_rows, blk._factor_cols]
+        v = _np.where(blk._factor_imag, entries.imag, entries.real)
+        # Check the sparse factor, including singular inputs, before returning parameters.
+        sparse_L = _np.zeros_like(L)
+        _np.add.at(sparse_L, (blk._factor_rows, blk._factor_cols), v * blk._factor_scales)
+        if _np.linalg.norm(sparse_L @ sparse_L.conj().T - K, ord=_np.inf) > 100 * tol:
+            raise ValueError("Sparse Cholesky reconstruction failed for these coefficients.")
+        return v
+
+    def block_data_jacobian(self, blk, v):
+        terms, left, right, scale = blk._quadratic_terms
+        J = _np.zeros((len(blk._eeg_labels), len(v)))
+        _np.add.at(J, (terms, left), scale * v[right])
+        _np.add.at(J, (terms, right), scale * v[left])
+        return J
+
+    def param_labels(self, blk):
+        perm = blk.cholesky_structure.perm
+        return ["%s[(%s,%s) sparse non-H Cholesky element]" %
+                ('Im' if imag else 'Re', blk._bel_labels[perm[r]], blk._bel_labels[perm[c]])
+                for r, c, imag in zip(blk._factor_rows, blk._factor_cols, blk._factor_imag)]
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        nP = blk.num_params
+        out = _np.zeros(superops.shape[1:] + (nP, nP), dtype=superops.dtype)
+        terms, left, right, scale = blk._quadratic_terms
+        for t, p, q, s in zip(terms, left, right, scale):
+            out[:, :, p, q] += s * superops[t]
+            out[:, :, q, p] += s * superops[t]
+        return out
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        torch = _import_torch()
+        terms, left, right, scale = blk._quadratic_terms
+        return (len(blk._eeg_labels),
+                *(torch.tensor(a, dtype=torch.long, device=device) for a in (terms, left, right)),
+                torch.tensor(scale, dtype=real_dtype, device=device))
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        n, terms, left, right, scale = sd
+        return t_param.new_zeros(n).scatter_add(0, terms, scale * t_param[left] * t_param[right])
+
+    def _coefficient_polynomial(self, blk, index, pio, mpv):
+        terms, left, right, scale = blk._quadratic_terms
+        selected = terms == index
+        return _Polynomial({(pio + int(p), pio + int(q)): s
+                            for p, q, s in zip(left[selected], right[selected], scale[selected])}, mpv)
+
+
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
     Class for storing and managing the parameters associated with particular subblocks of error-generator
@@ -708,7 +798,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         block_type : str
             String specifying the type of error generator parameters contained within this block. Allowed
             values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
-            and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
+            'other' (for Pauli stochastic, Pauli correlation and active error generators), and
+            'other_sparse' (a selected, chordal set of S/C/A elementary error generators).
         
         basis : `Basis`
             `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
@@ -728,6 +819,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             - For 'ham': 'elements'
             - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
             - For 'other': 'elements', 'cholesky'
+            - For 'other_sparse': 'elements', 'cholesky' (exact sparse CPTP)
 
             Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
             which when used in the right combination are utilized in the construction of GLND and CPTPLND
@@ -745,7 +837,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         error_generator_labels : list or tuple of `LocalElementaryErrorgenLabel`, optional (default None)
             Keyword-only.  Only supported by block types whose `block_data` is keyed directly by elementary
-            error generators (e.g. 'other_unconstrained'); mutually exclusive with `basis_element_labels`.
+            error generators ('other_unconstrained' and 'other_sparse'); mutually exclusive with `basis_element_labels`.
             When given, the block manages exactly the listed elementary error generators, enabling reduced /
             flexible parameterizations.  Must be `None` for the other (basis-element-keyed) block types.
         """
@@ -1639,11 +1731,103 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
         return labels
 
 
+class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
+    """Selected S/C/A coefficients with an exact, fill-free CPTP parameterization.
+
+    C and A must select the same edges, or A must be absent (real factors). Every edge
+    endpoint needs an S coefficient. Nonchordal patterns are rejected rather than filled.
+    Only the ``cholesky`` mode constrains positivity; ``static`` and ``elements`` allow
+    conversion to a fixed or unconstrained block on the same support.
+    """
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _EEGVectorElements, 'cholesky': _SparseCholesky}
+
+    def _init_labels(self, basis, basis_element_labels, error_generator_labels):
+        super()._init_labels(basis, basis_element_labels, error_generator_labels)
+        _lt._check_basis_factor(basis)
+        labels = self._eeg_labels
+        if len(set(labels)) != len(labels):
+            raise ValueError("Sparse Lindblad blocks require distinct elementary error generators.")
+        directions = [lbl.basis_element_labels[0] for lbl in labels if lbl.errorgen_type == 'S'
+                      and len(lbl.basis_element_labels) == 1]
+        self._bel_labels = tuple(directions)
+        pos = {bel: i for i, bel in enumerate(directions)}
+        if any(bel not in basis.labels[1:] for bel in directions):
+            raise ValueError("Sparse Lindblad directions must be nonidentity elements of the basis.")
+        edges = {'C': set(), 'A': set()}
+        self._coefficient_pairs = []
+        for lbl in labels:
+            bels = lbl.basis_element_labels
+            if len(bels) != (1 if lbl.errorgen_type == 'S' else 2) or any(b not in pos for b in bels):
+                raise ValueError("Every sparse C/A endpoint must have an S coefficient, with valid label arity.")
+            i, j = (pos[bels[0]], pos[bels[-1]])
+            self._coefficient_pairs.append((i, j))
+            if lbl.errorgen_type != 'S':
+                edge = tuple(sorted((i, j)))
+                if i == j or edge in edges[lbl.errorgen_type]:
+                    raise ValueError("Sparse C/A pairs must have distinct endpoints and no reversed duplicates.")
+                edges[lbl.errorgen_type].add(edge)
+        if edges['A'] and edges['A'] != edges['C']:
+            raise ValueError("Sparse Cholesky requires matching C/A supports, or no A coefficients.")
+        n = len(directions)
+        pairs = list(edges['C'])
+        rows, cols = _np.array(pairs, dtype=int).reshape(-1, 2).T
+        pattern = _sps.coo_array((_np.ones(len(pairs)), (rows, cols)), shape=(n, n))
+        ordering = _sparsechol.perfect_elimination_ordering(pattern)
+        if ordering is None:
+            raise ValueError("Sparse Cholesky requires chordal Kossakowski support; this pattern needs fill.")
+        self.cholesky_structure = st = _sparsechol.CholeskyStructure(pattern, ordering=ordering)
+
+        # One real diagonal parameter, then real (and optionally imaginary) strict-lower
+        # entries in CSC order. These arrays describe a linear map from parameters to L.
+        m = len(st.rows)
+        complex_factor = bool(edges['A'])
+        self._factor_rows = _np.concatenate((_np.arange(n), st.rows, st.rows if complex_factor else [])).astype(int)
+        self._factor_cols = _np.concatenate((_np.arange(n), st.cols, st.cols if complex_factor else [])).astype(int)
+        self._factor_imag = _np.arange(n + m * (2 if complex_factor else 1)) >= n + m
+        self._factor_scales = _np.where(self._factor_imag, 1j, 1.)
+
+        # Expand just the requested coefficients of L L^dag into quadratic monomials.
+        # Forward evaluation and derivatives then need neither dense K nor dense dL/dp.
+        factor = [{} for _ in range(n)]
+        for p, (r, c, scale) in enumerate(zip(self._factor_rows, self._factor_cols, self._factor_scales)):
+            factor[st.perm[r]].setdefault(c, []).append((p, scale))
+        terms, left, right, scales = [], [], [], []
+        for t, (lbl, (i, j)) in enumerate(zip(labels, self._coefficient_pairs)):
+            polynomial = {}
+            for c in factor[i].keys() & factor[j].keys():
+                for p, sp in factor[i][c]:
+                    for q, sq in factor[j][c]:
+                        z = sp * sq.conjugate()
+                        s = -z.imag if lbl.errorgen_type == 'A' else z.real
+                        key = tuple(sorted((p, q)))
+                        polynomial[key] = polynomial.get(key, 0.) + s
+            for (p, q), s in sorted(polynomial.items()):
+                if s:
+                    terms.append(t); left.append(p); right.append(q); scales.append(s)
+        self._quadratic_terms = (_np.array(terms, dtype=int), _np.array(left, dtype=int),
+                                 _np.array(right, dtype=int), _np.array(scales, dtype=float))
+
+    def kossakowski_matrix(self):
+        """Return the Hermitian coefficient matrix in ``basis_element_labels`` order.
+
+        Its diagonal contains S, and each oriented off-diagonal entry is C - i A.
+        This dense reconstruction is for inspection and inversion, not forward evaluation.
+        """
+        K = _np.zeros((len(self._bel_labels), len(self._bel_labels)), complex)
+        for lbl, (i, j), value in zip(self._eeg_labels, self._coefficient_pairs, self.block_data):
+            z = -1j * value if lbl.errorgen_type == 'A' else value
+            K[i, j] += z
+            if i != j:
+                K[j, i] += z.conjugate()
+        return K
+
+
 LindbladCoefficientBlock._BLOCK_TYPES = {
     'ham': _HamCoeffBlock,
     'other_diagonal': _OtherDiagonalCoeffBlock,
     'other': _OtherCoeffBlock,
     'other_unconstrained': _OtherUnconstrainedCoeffBlock,
+    'other_sparse': _OtherSparseCoeffBlock,
 }
 
 
