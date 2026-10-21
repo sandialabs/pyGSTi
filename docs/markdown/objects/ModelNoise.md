@@ -481,6 +481,40 @@ Assign `noisy_gate` to an explicit model's `operations` dictionary as usual. Con
 
 The weight-two case admits a perfect elimination order. All weight-one directions form a clique. For each two-subsystem support, its weight-two directions and the weight-one directions on those two subsystems form another clique. Eliminate all weight-two directions first, then the weight-one directions. Every eliminated vertex's remaining neighbors form a clique, so factorization adds no fill. On three qubits, this leaves 648 real S/C/A parameters rather than the 1296 of a full Hermitian matrix on the same 36 stochastic directions.
 
-This constructor requires a chordal support graph and either matching C/A edge supports or no A sector (real Cholesky factors). For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Different C/A limits are accepted when they select the same edges. A-only off-diagonal support, differing C/A edge masks, and nonchordal patterns raise `ValueError`. In particular, larger weight limits do not guarantee chordality. The constructor does not introduce fill edges or mask an indefinite matrix back into the support.
+By default, the constructor chooses a fill-free chart for a chordal graph with matching C/A masks, or C-only real factors. For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Nonchordal patterns, independent C/A limits, and A-only off-diagonals automatically use completed Cholesky. Set `param_mode='cholesky'` to require the fill-free chart, or `param_mode='cholesky completion'` to request completion explicitly.
 
-The default operator basis is the canonical PP/GM tensor product for the state space. Qudits are supported; supply a compatible matrix basis such as `mx_basis='gm'` for a qutrit. The generator starts at zero, and includes singular PSD matrices. As with dense CPTPLND, the quadratic S/C/A derivatives vanish at zero factor parameters. `sample_errorgen_rates` remains available to draw physical initial rates, while this constructor supplies the parameterization that preserves zeros during optimization.
+The default operator basis is the canonical PP/GM tensor product for the state space. Qudits are supported; supply a compatible matrix basis such as `mx_basis='gm'` for a qutrit. The fill-free chart starts at zero and includes singular PSD matrices. As with dense CPTPLND, its quadratic S/C/A derivatives vanish at zero factor parameters. `sample_errorgen_rates` remains available to draw physical initial rates, while this constructor supplies the parameterization that preserves zeros during optimization.
+
+### Higher weights and independent C/A limits
+
+Completion makes factor entries at forbidden matrix components **dependent** on the free entries. Write $L=DT$, with positive diagonal $D$ and unit-lower-triangular $T$. For $i>j$, a forbidden complex entry is enforced by
+
+$$T_{ij}=-\sum_{a<j}T_{ia}\overline{T_{ja}}.$$
+
+If only the real or imaginary component is forbidden, apply the corresponding part of this equation. The resulting $K=DTT^\dagger D$ preserves the requested zeros. Symbolic fill entries do not add free coefficients or relax the weight limits, and completion does not divide by small pivots.
+
+Completion uses positive pivots: diagonal parameters are $\log D_{ii}$ and free off-diagonal parameters are the allowed components of $T_{ij}=L_{ij}/L_{ii}$. These row-normalized coordinates make diagonal congruences a shift of the log pivots with unchanged off-diagonal coordinates. The map covers the positive-definite interior; singular PSD matrices and exact zero noise are outside this chart. Numerical conditioning can still deteriorate near the boundary.
+
+`completion_normalization='column'` selects the alternative $L=TD$ chart. It uses pivot-dividing completion and can be better conditioned when approaching a rank-deficient matrix with nonzero diagonal entries. Row normalization is better suited to shrinking entire matrix rows and columns. Neither chart has uniformly good conditioning at every PSD boundary; both describe the same positive-definite coefficient class.
+
+Switch charts by constructing a generator with the desired normalization and transferring its elementary coefficients with `set_coefficients`. Raw parameter vectors have chart-specific meanings.
+
+The default completion initialization is a diagonal Kossakowski matrix with S rates of $10^{-6}$, zero C/A, and zero H. Supply `initial_stochastic_rate` to choose a different positive rate; an explicit zero raises `ValueError`. For example, use different C and A limits on three qubits:
+
+```{code-cell} ipython3
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
+
+interior_errorgen = LindbladErrorgen.from_weight_limited(
+    QubitSpace(3), dict(H=1, S=2, C=2, A=3),
+    initial_stochastic_rate=1e-4
+)
+interior_block = interior_errorgen.coefficient_blocks[-1]
+assert interior_block.num_params == 972
+assert interior_errorgen.num_params == 981  # 9 H + 972 S/C/A
+error_channel = ExpErrorgenOp(interior_errorgen)
+```
+
+Common S/C/A weight three on four or more qubits also selects completion automatically. Dense density-matrix simulation still constructs global superoperator data; coefficient sparsity does not remove that state-space cost. The full four-qubit weight-three coefficient block has 174 directions and 14562 real parameters.
+
+Completed blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. The resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.

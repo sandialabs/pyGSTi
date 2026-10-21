@@ -51,12 +51,13 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
 
     @classmethod
     def from_weight_limited(cls, state_space, max_weights=None, errorgen_types=('H', 'S', 'C', 'A'),
-                           elementary_errorgen_basis=None, mx_basis='pp', evotype='default'):
-        """Construct a zero-initialized, weight-limited CPTP Lindblad error generator.
+                           elementary_errorgen_basis=None, mx_basis='pp', evotype='default', *,
+                           param_mode='auto', initial_stochastic_rate=None, completion_normalization='row'):
+        """Construct a weight-limited CPTP Lindblad error generator.
 
         The selected elementary coefficients remain constrained throughout optimization.
-        The S/C/A block uses a fill-free sparse Cholesky parameterization, so every real
-        parameter vector gives a positive-semidefinite Kossakowski matrix. Exponentiate
+        The S/C/A block uses a fill-free or completed sparse Cholesky parameterization,
+        preserving positive semidefiniteness and the selected support. Exponentiate
         with :class:`ExpErrorgenOp` and compose after an ideal operation to model post-gate
         errors, e.g. ``ComposedOp([ideal_op, ExpErrorgenOp(errorgen)])``.
 
@@ -71,8 +72,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             S directions. For example, ``dict(H=1, S=2, C=2, A=2)`` gives weight-two
             S/C/A errors with one-body Hamiltonian errors.
         errorgen_types : iterable of {'H', 'S', 'C', 'A'}, optional
-            Included sectors. C/A require S. Complex factors require identical C/A edge
-            support; omit A for real factors (S+C), or omit C and A for S-only errors.
+            Included sectors. C/A require S. Independent C/A masks and A-only
+            off-diagonals use completion; omit C and A for S-only errors.
         elementary_errorgen_basis : Basis, str or None, optional
             Hermitian, traceless, trace-orthogonal, identity-first operator basis. None
             selects the canonical PP/GM product basis. Weight limits require a basis
@@ -81,20 +82,37 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Matrix representation basis, usually ``'pp'`` for qubits or ``'gm'`` for qudits.
         evotype : str or Evotype, optional
             Evolution type, as for the ordinary constructor.
+        param_mode : {'auto', 'cholesky', 'cholesky completion'}, optional
+            Parameterization of the S/C/A block. Auto chooses the fill-free chart for
+            chordal, matched C/A masks (or real-only C), and completion otherwise.
+            Completion covers the positive-definite interior using logarithmic factor
+            pivots and row-normalized off-diagonals. It does not support polynomial terms.
+        initial_stochastic_rate : float or None, optional
+            Initial S coefficient on each selected direction; C/A and H start at zero.
+            None means zero for the fill-free chart and 1e-6 for completion. Completion
+            requires a strictly positive rate; an explicit zero raises ValueError.
+        completion_normalization : {'row', 'column'}, optional
+            Row normalization uses L = D T and unit-diagonal completion without pivot
+            divisions. Column normalization uses L = T D and the pivot-dividing recurrence.
+            Row coordinates are invariant under diagonal congruence; column coordinates
+            can be better conditioned near other rank-deficient boundaries.
 
         Raises
         ------
         ValueError
-            If the selected graph is nonchordal, C/A component supports differ, or no
-            directions are selected. No fill edges or positivity repairs are introduced.
+            If the requested chart cannot represent the pattern or initialization,
+            or no directions are selected. Fill entries are dependent, not free errors.
 
         Notes
         -----
         S/C/A weight at most two always admits a perfect elimination order: remove all
         weight-two directions before the weight-one directions. Each weight-two support
         forms a clique attached to the central clique of weight-one directions. Higher
-        cutoffs need not be chordal. The parameterization includes singular PSD matrices
-        and the zero generator, where Cholesky derivatives vanish as in dense CPTPLND.
+        cutoffs need not be chordal and automatically use completion. The fill-free
+        parameterization includes singular PSD matrices and the zero generator, where
+        derivatives vanish as in dense CPTPLND. Completion instead uses positive pivots
+        and rejects singular inputs. Small overall noise is represented by shifting
+        all log pivots together, without changing normalized off-diagonal coordinates.
         """
         state_space = _statespace.StateSpace.cast(state_space)
         sectors = set(errorgen_types)
@@ -102,6 +120,14 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             raise ValueError("`errorgen_types` must contain only H, S, C, and A.")
         if sectors & set('CA') and 'S' not in sectors:
             raise ValueError("C/A sectors require S directions for a positive-semidefinite matrix.")
+        if param_mode not in ('auto', 'cholesky', 'cholesky completion'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'cholesky completion'.")
+        if completion_normalization not in ('row', 'column'):
+            raise ValueError("`completion_normalization` must be 'row' or 'column'.")
+        if initial_stochastic_rate is not None and (
+                not isinstance(initial_stochastic_rate, (int, float, _np.integer, _np.floating))
+                or not _np.isfinite(initial_stochastic_rate) or initial_stochastic_rate < 0):
+            raise ValueError("`initial_stochastic_rate` must be a finite nonnegative scalar.")
         limits = dict(max_weights or {})
         if not set(limits) <= set('HSCA') or any(
                 isinstance(w, (bool, _np.bool_)) or not isinstance(w, (int, _np.integer)) or w < 0
@@ -133,8 +159,16 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                     for sector in ('C', 'A'):
                         if sector in sectors and pair_weight <= limits.get(sector, _np.inf):
                             labels.append(_LocalElementaryErrorgenLabel(sector, (bels[i], bels[j])))
-            blocks.append(_LindbladCoefficientBlock('other_sparse', basis, param_mode='cholesky',
-                                                   error_generator_labels=labels))
+            block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
+                                             error_generator_labels=labels,
+                                             completion_normalization=completion_normalization)
+            completed = block._param_mode == 'cholesky completion'
+            rate = (1e-6 if completed else 0.) if initial_stochastic_rate is None else initial_stochastic_rate
+            if completed and rate == 0:
+                raise ValueError("Cholesky completion requires a positive initial_stochastic_rate; "
+                                 "zero noise is outside this interior chart.")
+            block.block_data[:] = [rate if lbl.errorgen_type == 'S' else 0. for lbl in labels]
+            blocks.append(block)
         if not blocks:
             raise ValueError("Select at least one Hamiltonian or stochastic direction.")
         return cls(blocks, basis, mx_basis, evotype, state_space)

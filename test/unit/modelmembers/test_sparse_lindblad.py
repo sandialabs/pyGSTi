@@ -256,10 +256,10 @@ def test_sparse_operation_torch_derivatives():
 
 
 @pytest.mark.parametrize('kwargs,match', [
-    (dict(max_weights=dict(C=1, A=2)), 'matching C/A'),
-    (dict(max_weights=dict(S=2, C=3, A=3), state_space=QubitSpace(4)), 'chordal'),
+    (dict(max_weights=dict(C=1, A=2), param_mode='cholesky'), 'matching C/A'),
+    (dict(max_weights=dict(S=2, C=3, A=3), state_space=QubitSpace(4), param_mode='cholesky'), 'chordal'),
     (dict(errorgen_types=('A',)), 'require S'),
-    (dict(errorgen_types=('S', 'A')), 'matching C/A'),
+    (dict(errorgen_types=('S', 'A'), param_mode='cholesky'), 'matching C/A'),
     (dict(errorgen_types=('Q',)), 'only H'),
     (dict(max_weights=dict(S=-1)), 'nonnegative integer'),
     (dict(max_weights=dict(S=1.5)), 'nonnegative integer'),
