@@ -438,3 +438,49 @@ cloudmodel = pygsti.models.create_cloud_crosstalk_model(
 )
 print(cloudmodel.num_params, "params because 1 H-type and a Hermitian 3x3 block of S-type coefficients")
 ```
+
+## Weight-limited CPTPLND post-gate errors
+
+`LindbladErrorgen.from_weight_limited` constructs a CPTP Lindblad error generator whose selected elementary-error support remains fixed when its parameters change. The stochastic directions index a Kossakowski matrix $K$, with $K_{ii}=S_i$ and $K_{ij}=C_{ij}-iA_{ij}$ for an oriented pair $(i,j)$. Its sparse Cholesky factor makes $K$ positive semidefinite for every parameter vector.
+
+Direction weight counts the subsystems on which the operator is nonidentity. A C/A pair's weight counts the **union** of its two supports. Thus `C(XII, IXX)` has weight three, even though each direction has weight at most two. Each C/A endpoint must also be an allowed S direction. Limits are specified independently by sector; an omitted limit leaves that sector unrestricted.
+
+For example, create independent post-gate errors with one-body Hamiltonian terms and S/C/A terms of weight at most two:
+
+```{code-cell} ipython3
+import numpy as np
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import (
+    LindbladErrorgen, ExpErrorgenOp, StaticUnitaryOp, ComposedOp
+)
+
+space = QubitSpace(3)
+errorgen = LindbladErrorgen.from_weight_limited(
+    space, max_weights=dict(H=1, S=2, C=2, A=2)
+)
+
+# The constructor starts at zero error. These are factor parameters, not rates:
+# S/C/A coefficients are quadratic in them; H coefficients are linear.
+rng = np.random.default_rng(1234)
+errorgen.from_vector(rng.normal(scale=0.01, size=errorgen.num_params))
+
+ideal_gate = StaticUnitaryOp(
+    np.kron(np.array([[0., 1.], [1., 0.]]), np.eye(4)), state_space=space
+)
+noisy_gate = ComposedOp([ideal_gate, ExpErrorgenOp(errorgen)])
+# ComposedOp lists factors in application order: exp(errorgen) @ ideal_gate.
+print(errorgen.num_params, "parameters")  # 657: 9 H + 648 sparse S/C/A
+
+sca_block = errorgen.coefficient_blocks[-1]
+K = sca_block.kossakowski_matrix()  # Optional dense inspection, in basis_element_labels order.
+print(K.shape)                     # (36, 36)
+assert np.linalg.eigvalsh(K)[0] >= -1e-12
+```
+
+Assign `noisy_gate` to an explicit model's `operations` dictionary as usual. Construct a separate error generator for each independently parameterized gate. Model copying and nice serialization retain the selected support and the factor parameterization.
+
+The weight-two case admits a perfect elimination order. All weight-one directions form a clique. For each two-subsystem support, its weight-two directions and the weight-one directions on those two subsystems form another clique. Eliminate all weight-two directions first, then the weight-one directions. Every eliminated vertex's remaining neighbors form a clique, so factorization adds no fill. On three qubits, this leaves 648 real S/C/A parameters rather than the 1296 of a full Hermitian matrix on the same 36 stochastic directions.
+
+This constructor requires a chordal support graph and either matching C/A edge supports or no A sector (real Cholesky factors). For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Different C/A limits are accepted when they select the same edges. A-only off-diagonal support, differing C/A edge masks, and nonchordal patterns raise `ValueError`. In particular, larger weight limits do not guarantee chordality. The constructor does not introduce fill edges or mask an indefinite matrix back into the support.
+
+The default operator basis is the canonical PP/GM tensor product for the state space. Qudits are supported; supply a compatible matrix basis such as `mx_basis='gm'` for a qutrit. The generator starts at zero, and includes singular PSD matrices. As with dense CPTPLND, the quadratic S/C/A derivatives vanish at zero factor parameters. `sample_errorgen_rates` remains available to draw physical initial rates, while this constructor supplies the parameterization that preserves zeros during optimization.
