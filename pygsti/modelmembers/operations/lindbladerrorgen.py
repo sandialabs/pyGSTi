@@ -36,6 +36,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import lindbladtools as _lt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from typing import Literal
@@ -47,6 +48,96 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
     """
     A class for representing noisy quantum operations using Lindblad error generators.
     """
+
+    @classmethod
+    def from_weight_limited(cls, state_space, max_weights=None, errorgen_types=('H', 'S', 'C', 'A'),
+                           elementary_errorgen_basis=None, mx_basis='pp', evotype='default'):
+        """Construct a zero-initialized, weight-limited CPTP Lindblad error generator.
+
+        The selected elementary coefficients remain constrained throughout optimization.
+        The S/C/A block uses a fill-free sparse Cholesky parameterization, so every real
+        parameter vector gives a positive-semidefinite Kossakowski matrix. Exponentiate
+        with :class:`ExpErrorgenOp` and compose after an ideal operation to model post-gate
+        errors, e.g. ``ComposedOp([ideal_op, ExpErrorgenOp(errorgen)])``.
+
+        Parameters
+        ----------
+        state_space : StateSpace or castable
+            A single tensor product of quantum subsystems (qubits or qudits).
+        max_weights : mapping, optional
+            Nonnegative integer limits keyed by H, S, C, A; omitted sectors have no limit.
+            Direction weight is the number of nonidentity subsystem factors. C/A pair
+            weight is the union of their supports, and both endpoints must be selected
+            S directions. For example, ``dict(H=1, S=2, C=2, A=2)`` gives weight-two
+            S/C/A errors with one-body Hamiltonian errors.
+        errorgen_types : iterable of {'H', 'S', 'C', 'A'}, optional
+            Included sectors. C/A require S. Complex factors require identical C/A edge
+            support; omit A for real factors (S+C), or omit C and A for S-only errors.
+        elementary_errorgen_basis : Basis, str or None, optional
+            Hermitian, traceless, trace-orthogonal, identity-first operator basis. None
+            selects the canonical PP/GM product basis. Weight limits require a basis
+            with one recognizable PP/GM-style factor per subsystem.
+        mx_basis : Basis or str, optional
+            Matrix representation basis, usually ``'pp'`` for qubits or ``'gm'`` for qudits.
+        evotype : str or Evotype, optional
+            Evolution type, as for the ordinary constructor.
+
+        Raises
+        ------
+        ValueError
+            If the selected graph is nonchordal, C/A component supports differ, or no
+            directions are selected. No fill edges or positivity repairs are introduced.
+
+        Notes
+        -----
+        S/C/A weight at most two always admits a perfect elimination order: remove all
+        weight-two directions before the weight-one directions. Each weight-two support
+        forms a clique attached to the central clique of weight-one directions. Higher
+        cutoffs need not be chordal. The parameterization includes singular PSD matrices
+        and the zero generator, where Cholesky derivatives vanish as in dense CPTPLND.
+        """
+        state_space = _statespace.StateSpace.cast(state_space)
+        sectors = set(errorgen_types)
+        if not sectors <= set('HSCA'):
+            raise ValueError("`errorgen_types` must contain only H, S, C, and A.")
+        if sectors & set('CA') and 'S' not in sectors:
+            raise ValueError("C/A sectors require S directions for a positive-semidefinite matrix.")
+        limits = dict(max_weights or {})
+        if not set(limits) <= set('HSCA') or any(
+                isinstance(w, (bool, _np.bool_)) or not isinstance(w, (int, _np.integer)) or w < 0
+                for w in limits.values()):
+            raise ValueError("`max_weights` must map H/S/C/A to nonnegative integer limits.")
+        basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
+        supports = _lt._direction_supports(basis, state_space)
+        if supports is None:
+            if limits:
+                raise ValueError("Weight limits require a basis with one PP/GM-style factor per subsystem.")
+            supports = _np.zeros((len(basis.labels) - 1, 0), dtype=bool)
+        weights = supports.sum(axis=1)
+        bels = tuple(basis.labels[1:])
+
+        def selected(sector):
+            return [i for i, weight in enumerate(weights)
+                    if sector in sectors and weight <= limits.get(sector, _np.inf)]
+
+        blocks = []
+        ham = selected('H')
+        if ham:
+            blocks.append(_LindbladCoefficientBlock('ham', basis, [bels[i] for i in ham], param_mode='elements'))
+        stochastic = selected('S')
+        if stochastic:
+            labels = [_LocalElementaryErrorgenLabel('S', (bels[i],)) for i in stochastic]
+            for a, i in enumerate(stochastic):
+                for j in stochastic[a + 1:]:
+                    pair_weight = _np.count_nonzero(supports[i] | supports[j])
+                    for sector in ('C', 'A'):
+                        if sector in sectors and pair_weight <= limits.get(sector, _np.inf):
+                            labels.append(_LocalElementaryErrorgenLabel(sector, (bels[i], bels[j])))
+            blocks.append(_LindbladCoefficientBlock('other_sparse', basis, param_mode='cholesky',
+                                                   error_generator_labels=labels))
+        if not blocks:
+            raise ValueError("Select at least one Hamiltonian or stochastic direction.")
+        return cls(blocks, basis, mx_basis, evotype, state_space)
 
     @classmethod
     def from_operation_matrix_and_blocks(cls, op_matrix, lindblad_coefficient_blocks, elementary_errorgen_basis='PP',

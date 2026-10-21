@@ -3,9 +3,11 @@
 import numpy as np
 import pytest
 
-from pygsti.baseobjs import Basis
+from pygsti.baseobjs import Basis, QubitSpace
+from pygsti.baseobjs.statespace import QuditSpace
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as LCB
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp, ComposedOp, StaticUnitaryOp
 
 
 def sparse_block(complex_factor=True, edges=((0, 1), (1, 2), (1, 3))):
@@ -135,3 +137,136 @@ def test_torch_matches_analytic_derivatives():
     batch = torch.stack((t, 2 * t))
     np.testing.assert_allclose(torch.vmap(func)(batch).numpy(), np.array([blk.block_data, 4 * blk.block_data]))
 
+
+@pytest.mark.parametrize('nqubits', [1, 2, 3])
+def test_weight_two_graph_and_parameter_count(nqubits):
+    errgen = LindbladErrorgen.from_weight_limited(QubitSpace(nqubits), dict(H=1, S=2, C=2, A=2))
+    blk = errgen.coefficient_blocks[-1]
+    n = 3 * nqubits + 9 * nqubits * (nqubits - 1) // 2
+    edges = (3 * nqubits) * (3 * nqubits - 1) // 2 + 90 * nqubits * (nqubits - 1) // 2
+    assert blk.num_params == n + 2 * edges
+    assert errgen.num_params == 3 * nqubits + blk.num_params
+    assert blk.cholesky_structure.factor_pattern.nnz == n + edges
+    assert np.all(errgen.to_vector() == 0)
+    errgen.from_vector(np.random.default_rng(1).normal(scale=.01, size=errgen.num_params))
+    assert np.linalg.eigvalsh(blk.kossakowski_matrix())[0] >= -1e-12
+    assert all(len(lbl.support_indices()) <= (1 if lbl.errorgen_type == 'H' else 2)
+               for lbl in errgen.coefficients(label_type='local'))
+
+
+@pytest.mark.parametrize('sectors,limits,expected', [
+    (('S',), dict(S=1), 6),
+    (('H',), dict(H=1), 6),
+    (('S', 'C'), dict(S=2, C=1), 21),
+    (('S', 'C', 'A'), dict(S=2, C=1, A=1), 27),
+])
+def test_sector_selection(sectors, limits, expected):
+    errgen = LindbladErrorgen.from_weight_limited(QubitSpace(2), limits, sectors)
+    assert errgen.num_params == expected
+    errgen.from_vector(np.random.default_rng(3).normal(scale=.01, size=expected))
+    for lbl in errgen.coefficients(label_type='local'):
+        assert lbl.errorgen_type in sectors
+        assert len(lbl.support_indices()) <= limits.get(lbl.errorgen_type, 2)
+
+
+def test_post_gate_operation_model_and_serialization():
+    from pygsti.models import ExplicitOpModel
+    from pygsti.modelmembers.states import ComputationalBasisState
+    from pygsti.modelmembers.povms import ComputationalBasisPOVM
+    from pygsti.tools import jamiolkowski_iso
+
+    space = QubitSpace(('left', 'right'))
+    errgen = LindbladErrorgen.from_weight_limited(space, dict(H=1, S=2, C=1, A=1))
+    errgen.from_vector(np.random.default_rng(19).normal(scale=.03, size=errgen.num_params))
+    channel = ExpErrorgenOp(errgen)
+    ideal = StaticUnitaryOp(np.kron([[0., 1.], [1., 0.]], np.eye(2)), state_space=space)
+    gate = ComposedOp([ideal, channel])
+    np.testing.assert_allclose(gate.to_dense(), channel.to_dense() @ ideal.to_dense(), atol=1e-12)
+    np.testing.assert_allclose(gate.to_dense()[0], np.eye(16)[0], atol=1e-12)
+    choi = jamiolkowski_iso(gate.to_dense(), op_mx_basis='pp')
+    assert np.linalg.eigvalsh(choi)[0] >= -1e-12
+    # Noise is not covariant with the ideal gate, so this also detects wrong composition order.
+    assert np.linalg.norm(gate.to_dense() - ideal.to_dense() @ channel.to_dense()) > 1e-6
+    model = ExplicitOpModel(space, basis='pp')
+    model.preps['rho0'] = ComputationalBasisState([0, 0], state_space=space)
+    model.povms['Mdefault'] = ComputationalBasisPOVM(2, state_space=space)
+    model.operations['Gx'] = gate
+    restored = ExplicitOpModel.from_nice_serialization(model.to_nice_serialization())
+    assert restored.num_params == model.num_params
+    for vector in (model.to_vector(), np.random.default_rng(8).normal(scale=.02, size=model.num_params)):
+        model.from_vector(vector)
+        restored.from_vector(vector)
+        np.testing.assert_allclose(restored.operations['Gx'].to_dense(), model.operations['Gx'].to_dense())
+        probabilities = model.probabilities(('Gx', 'Gx'))
+        assert sum(probabilities.values()) == pytest.approx(1.)
+        assert min(probabilities.values()) >= -1e-12
+        restored_blk = restored.operations['Gx'].factorops[1].errorgen.coefficient_blocks[-1]
+        assert restored_blk.block_type == 'other_sparse'
+        assert np.linalg.eigvalsh(restored_blk.kossakowski_matrix())[0] >= -1e-12
+
+
+def test_errorgen_and_operation_analytic_derivatives():
+    errgen = LindbladErrorgen.from_weight_limited(QubitSpace(1), dict(H=1, S=1, C=1, A=1))
+    vector = np.random.default_rng(4).normal(scale=.03, size=errgen.num_params)
+
+    def dense(v):
+        errgen.from_vector(v)
+        return errgen.to_dense().copy().ravel()
+
+    np.testing.assert_allclose(errgen.deriv_wrt_params(), fd_jac(dense, np.zeros_like(vector)), atol=1e-9)
+    errgen.from_vector(vector)
+    np.testing.assert_allclose(errgen.deriv_wrt_params(), fd_jac(dense, vector), atol=1e-9)
+    np.testing.assert_allclose(errgen.hessian_wrt_params(),
+                               fd_jac(lambda v: (errgen.from_vector(v), errgen.deriv_wrt_params())[1], vector), atol=1e-9)
+    op = ExpErrorgenOp(errgen)
+
+    def op_dense(v):
+        op.from_vector(v)
+        return op.to_dense().copy().ravel()
+
+    op.from_vector(vector)
+    np.testing.assert_allclose(op.deriv_wrt_params(), fd_jac(op_dense, vector), atol=1e-8)
+
+
+def test_qudit_weight_limits_and_positivity():
+    space = QuditSpace(('qutrit',), (3,))
+    errgen = LindbladErrorgen.from_weight_limited(space, dict(S=1, C=1, A=1),
+                                                errorgen_types=('S', 'C', 'A'), mx_basis='gm')
+    assert errgen.num_params == 64
+    errgen.from_vector(np.random.default_rng(4).normal(scale=.01, size=errgen.num_params))
+    blk = errgen.coefficient_blocks[0]
+    assert np.linalg.eigvalsh(blk.kossakowski_matrix())[0] >= -1e-12
+    np.testing.assert_allclose(ExpErrorgenOp(errgen).to_dense()[0], np.eye(9)[0], atol=1e-12)
+
+
+def test_sparse_operation_torch_derivatives():
+    torch = pytest.importorskip('torch')
+    errgen = LindbladErrorgen.from_weight_limited(QubitSpace(1), dict(H=1, S=1, C=1, A=1))
+    vector = np.random.default_rng(17).normal(scale=.02, size=errgen.num_params)
+    errgen.from_vector(vector)
+    for obj in (errgen, ExpErrorgenOp(errgen)):
+        sd = obj.stateless_data(torch.float64, 'cpu')
+        func = lambda v: type(obj).torch_base(sd, v).ravel()
+        tv = torch.tensor(vector, dtype=torch.float64)
+        np.testing.assert_allclose(func(tv).numpy(), obj.to_dense().ravel(), atol=1e-12)
+        np.testing.assert_allclose(torch.func.jacrev(func)(tv).numpy(), obj.deriv_wrt_params(), atol=1e-9)
+    sd = errgen.stateless_data(torch.float64, 'cpu')
+    func = lambda v: LindbladErrorgen.torch_base(sd, v).ravel()
+    np.testing.assert_allclose(torch.func.hessian(func)(tv).numpy(), errgen.hessian_wrt_params(), atol=1e-9)
+
+
+@pytest.mark.parametrize('kwargs,match', [
+    (dict(max_weights=dict(C=1, A=2)), 'matching C/A'),
+    (dict(max_weights=dict(S=2, C=3, A=3), state_space=QubitSpace(4)), 'chordal'),
+    (dict(errorgen_types=('A',)), 'require S'),
+    (dict(errorgen_types=('S', 'A')), 'matching C/A'),
+    (dict(errorgen_types=('Q',)), 'only H'),
+    (dict(max_weights=dict(S=-1)), 'nonnegative integer'),
+    (dict(max_weights=dict(S=1.5)), 'nonnegative integer'),
+    (dict(max_weights=dict(S=True)), 'nonnegative integer'),
+    (dict(max_weights=dict(H=0, S=0)), 'at least one'),
+])
+def test_weight_limited_rejects_unsupported_constraints(kwargs, match):
+    kwargs = dict(state_space=QubitSpace(2)) | kwargs
+    with pytest.raises(ValueError, match=match):
+        LindbladErrorgen.from_weight_limited(**kwargs)
