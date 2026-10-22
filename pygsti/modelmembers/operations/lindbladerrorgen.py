@@ -50,6 +50,139 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
     """
 
     @classmethod
+    def from_correlated_dephasing(cls, state_space, correlation_edges=None, *, basis_element_labels=None,
+                                 elementary_errorgen_basis=None, initial_covariance=None, mx_basis='pp',
+                                 evotype='default', param_mode='auto', initial_stochastic_rate=None,
+                                 completion_normalization='row'):
+        """Construct real correlated dephasing with a fixed covariance graph.
+
+        For diagonal Hermitian directions F_a and a real positive-semidefinite
+        covariance K, the generator is -1/2 sum_ab K_ab [F_a, [F_b, rho]].
+        Only S and C coefficients are used. Every computational-basis population
+        is fixed, and all parameter updates preserve the prescribed covariance
+        zeros and complete positivity of the exponentiated channel.
+
+        Parameters
+        ----------
+        state_space : StateSpace or castable
+            A single tensor product of quantum subsystems.
+        correlation_edges : iterable of pairs of basis-element labels, optional
+            Allowed off-diagonal covariance entries. None selects all pairs;
+            an empty iterable gives independent noise in the selected directions.
+            Self-edges, duplicates (including reversed pairs), and unknown endpoints
+            are rejected. These are covariance zeros, not inverse-covariance zeros.
+        basis_element_labels : iterable, optional
+            Selected nonidentity diagonal directions, in covariance matrix order.
+            None selects the one-body diagonal PP/GM directions, ordered first by
+            subsystem and then by their order in the elementary basis. Explicit
+            selections may include higher-body diagonal directions, such as ZZ.
+        elementary_errorgen_basis : Basis, str or None, optional
+            Hermitian, traceless, orthogonal, identity-first basis. None chooses
+            the canonical PP/GM product basis. With custom labels that do not
+            identify subsystem support, supply basis_element_labels explicitly.
+        initial_covariance : array_like, optional
+            Real symmetric positive-semidefinite matrix in basis_element_labels
+            order, with exact zeros at forbidden entries. Incompatible matrices
+            are rejected rather than projected. Cannot be combined with
+            initial_stochastic_rate.
+        mx_basis : Basis or str, optional
+            Matrix representation basis, usually 'pp' for qubits, 'gm' for qudits.
+        evotype : str or Evotype, optional
+            Evolution type, as for the ordinary constructor.
+        param_mode : {'auto', 'cholesky', 'cholesky completion'}, optional
+            Auto selects fill-free Cholesky on chordal graphs and completion on
+            nonchordal graphs. Fill-free supports PSD boundaries and zero noise;
+            completion requires a positive-definite initial covariance.
+        initial_stochastic_rate : float or None, optional
+            Initial diagonal covariance when initial_covariance is omitted.
+            None chooses zero for fill-free and 1e-6 for completion. An explicit
+            zero is rejected by completion. Units depend on direction normalization.
+        completion_normalization : {'row', 'column'}, optional
+            Normalization for completed Cholesky, as in from_weight_limited.
+
+        Notes
+        -----
+        This is a real covariance model of classical Gaussian Markovian phase
+        noise. It is not the entire family of quantum pure-dephasing generators,
+        which can also have imaginary correlations, or a colored-noise spectrum.
+        For unnormalized Pauli Z_i, a coherence |x><y| decays at rate
+        (z(x)-z(y))^T K (z(x)-z(y))/2. No Hamiltonian is included.
+        """
+        state_space = _statespace.StateSpace.cast(state_space)
+        basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
+        if param_mode not in ('auto', 'cholesky', 'cholesky completion'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'cholesky completion'.")
+        if completion_normalization not in ('row', 'column'):
+            raise ValueError("`completion_normalization` must be 'row' or 'column'.")
+        if initial_covariance is not None and initial_stochastic_rate is not None:
+            raise ValueError("Supply initial_covariance or initial_stochastic_rate, not both.")
+        if initial_stochastic_rate is not None and (
+                not isinstance(initial_stochastic_rate, (int, float, _np.integer, _np.floating))
+                or not _np.isfinite(initial_stochastic_rate) or initial_stochastic_rate < 0):
+            raise ValueError("`initial_stochastic_rate` must be a finite nonnegative scalar.")
+
+        def is_diagonal(bel):
+            mx = basis[bel]
+            mx = mx.toarray() if _sps.issparse(mx) else _np.asarray(mx)
+            return _np.allclose(mx, _np.diag(mx.diagonal()), rtol=0, atol=1e-12 * _np.max(_np.abs(mx)))
+
+        if basis_element_labels is None:
+            supports = _lt._direction_supports(basis, state_space)
+            if supports is None:
+                raise ValueError("Supply basis_element_labels when subsystem support is unknown.")
+            candidates = [i for i, s in enumerate(supports) if s.sum() == 1]
+            candidates.sort(key=lambda i: int(supports[i].argmax()))
+            bels = tuple(basis.labels[i + 1] for i in candidates if is_diagonal(basis.labels[i + 1]))
+        else:
+            bels = tuple(basis_element_labels)
+        if not bels or len(set(bels)) != len(bels) or any(b not in basis.labels[1:] for b in bels):
+            raise ValueError("Select distinct nonidentity basis_element_labels from the elementary basis.")
+        if any(not is_diagonal(b) for b in bels):
+            raise ValueError("Correlated dephasing requires diagonal Hermitian directions.")
+        pos = {b: i for i, b in enumerate(bels)}
+        if correlation_edges is None:
+            pairs = list(_itertools.combinations(range(len(bels)), 2))
+        else:
+            pairs, seen = [], set()
+            for edge in correlation_edges:
+                if len(edge) != 2 or any(b not in pos for b in edge) or edge[0] == edge[1]:
+                    raise ValueError("Each correlation edge must join two distinct selected directions.")
+                pair = tuple(sorted((pos[edge[0]], pos[edge[1]])))
+                if pair in seen:
+                    raise ValueError("Duplicate correlation edge, including reversed pairs.")
+                seen.add(pair)
+                pairs.append(pair)
+            pairs.sort()
+        labels = [_LocalElementaryErrorgenLabel('S', (b,)) for b in bels]
+        labels += [_LocalElementaryErrorgenLabel('C', (bels[i], bels[j])) for i, j in pairs]
+        block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
+                                         error_generator_labels=labels,
+                                         completion_normalization=completion_normalization)
+        n = len(bels)
+        if initial_covariance is None:
+            rate = ((1e-6 if block._param_mode == 'cholesky completion' else 0.)
+                    if initial_stochastic_rate is None else initial_stochastic_rate)
+            covariance = rate * _np.eye(n)
+        else:
+            covariance = _np.asarray(initial_covariance)
+            if covariance.shape != (n, n) or not _np.all(_np.isfinite(covariance)):
+                raise ValueError("initial_covariance must be a finite square matrix on the selected directions.")
+            if _np.iscomplexobj(covariance) and _np.any(covariance.imag != 0):
+                raise ValueError("initial_covariance must be real for this dephasing model.")
+            covariance = _np.array(covariance.real, dtype=float, copy=True)
+            scale = _np.max(_np.abs(covariance))
+            if not _np.allclose(covariance, covariance.T, rtol=1e-12, atol=1e-12 * scale):
+                raise ValueError("initial_covariance must be symmetric.")
+            covariance = (covariance + covariance.T) / 2
+            supported = _np.eye(n, dtype=bool)
+            for i, j in pairs:
+                supported[i, j] = supported[j, i] = True
+            if _np.any(covariance[~supported] != 0):
+                raise ValueError("initial_covariance contains a forbidden correlation.")
+        block.block_data[:] = [covariance[i, i] for i in range(n)] + [covariance[i, j] for i, j in pairs]
+        return cls([block], basis, mx_basis, evotype, state_space)
+
+    @classmethod
     def from_weight_limited(cls, state_space, max_weights=None, errorgen_types=('H', 'S', 'C', 'A'),
                            elementary_errorgen_basis=None, mx_basis='pp', evotype='default', *,
                            param_mode='auto', initial_stochastic_rate=None, completion_normalization='row'):

@@ -156,6 +156,27 @@ def test_polynomial_and_singular_inputs_are_rejected_explicitly():
             blk.from_vector(vector)
 
 
+@pytest.mark.parametrize('scale', [1., 1e-24])
+@pytest.mark.parametrize('row_scale', [1., 1e-12])
+def test_singular_cycle_rejection_is_invariant_under_diagonal_scaling(scale, row_scale):
+    blk = cycle_block('real')
+    laplacian = 2 * np.eye(4)
+    for i in range(4):
+        laplacian[i, (i + 1) % 4] = laplacian[(i + 1) % 4, i] = -1
+    diagonal = np.array([1., row_scale, 1., 1.])
+    for epsilon in (0., 1e-6):
+        target = scale * np.outer(diagonal, diagonal) * (laplacian + epsilon * np.eye(4))
+        for k, (i, j) in enumerate(blk._coefficient_pairs):
+            blk.block_data[k] = target[i, j]
+        if epsilon == 0:
+            with pytest.raises(ValueError, match='positive-definite'):
+                blk.to_vector()
+        else:
+            vector = blk.to_vector()
+            blk.from_vector(vector)
+            np.testing.assert_allclose(blk.kossakowski_matrix(), target, rtol=1e-10, atol=0.)
+
+
 def test_four_qubit_weight_three_full_block_and_directional_derivative():
     basis = Basis.cast('PP', 256)
     bels = [b for b in basis.labels[1:] if sum(c != 'I' for c in b) <= 3]

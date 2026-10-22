@@ -518,3 +518,36 @@ error_channel = ExpErrorgenOp(interior_errorgen)
 Common S/C/A weight three on four or more qubits also selects completion automatically. Dense density-matrix simulation still constructs global superoperator data; coefficient sparsity does not remove that state-space cost. The full four-qubit weight-three coefficient block has 174 directions and 14562 real parameters.
 
 Completed blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. The resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
+
+## Correlated dephasing covariance graphs
+
+`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real covariance to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
+
+$$\mathcal L(\rho)=-\tfrac12\sum_{ab}K_{ab}[F_a,[F_b,\rho]],\qquad K\succeq0.$$
+
+The constructor uses S and C, with no H or A. These are real Gaussian Markovian phase-noise covariances, not a colored-noise spectrum or the entire quantum pure-dephasing family. The graph encodes covariance zeros; it does not encode zeros in an inverse covariance or follow automatically from device layout.
+
+For example, use a four-cycle with positive and negative correlations:
+
+```{code-cell} ipython3
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
+import numpy as np
+
+phase_directions = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
+phase_edges = [(phase_directions[i], phase_directions[(i + 1) % 4]) for i in range(4)]
+phase_covariance = np.diag([.028, .033, .025, .030])
+for (i, j), value in zip(((0, 1), (1, 2), (2, 3), (0, 3)), (.007, -.006, .005, .004)):
+    phase_covariance[i, j] = phase_covariance[j, i] = value
+phase_errorgen = LindbladErrorgen.from_correlated_dephasing(
+    QubitSpace(4), phase_edges, initial_covariance=phase_covariance
+)
+assert phase_errorgen.num_params == 8  # Four diagonal entries and four edges.
+phase_channel = ExpErrorgenOp(phase_errorgen)
+```
+
+The cycle is nonchordal and automatically uses completion. Pass `correlation_edges=()` for independent noise or omit it for a dense covariance. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
+
+All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero for fill-free, positive diagonal for completion, and configurable `initial_stochastic_rate` and `completion_normalization`. Completion requires a numerically positive-definite covariance after diagonal scaling; singular inputs are rejected. Tiny overall rates and strongly unequal diagonal scales alone do not cause that numerical-rank rejection. Dense/chordal fill-free graphs can represent collective rank-one covariance exactly.
+
+For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; pair correlations are needed to identify off-diagonal covariance. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters, versus $n(n+1)/2$ for a dense covariance on the same directions. These are different hypotheses even though all directions have support weight one.

@@ -883,6 +883,19 @@ class _CompletedCholesky(_BlockParameterization):
         K = blk.kossakowski_matrix()[_np.ix_(st.perm, st.perm)]
         if not _np.all(_np.isfinite(K)):
             raise ValueError("Completed Cholesky requires finite positive-definite coefficients.")
+        # A singular PSD matrix can acquire a tiny positive last Cholesky pivot
+        # through roundoff. Check numerical rank after diagonal equilibration,
+        # so uniform scaling or a small physical row does not trigger rejection.
+        diagonal = K.diagonal().real
+        if _np.any(diagonal <= 0):
+            raise ValueError("Completed Cholesky requires positive-definite coefficients; "
+                             "zero noise and the singular PSD boundary are outside this chart.")
+        scale = _np.sqrt(diagonal)
+        equilibrated = (K / scale[:, None]) / scale[None, :]
+        spectrum = _np.linalg.eigvalsh(equilibrated)
+        if spectrum[0] <= st.n * _np.finfo(float).eps * spectrum[-1]:
+            raise ValueError("Completed Cholesky requires numerically positive-definite coefficients; "
+                             "the singular PSD boundary is outside this chart.")
         try:
             L = _np.linalg.cholesky(K)
         except _np.linalg.LinAlgError as exc:
