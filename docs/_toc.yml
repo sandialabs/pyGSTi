@@ -129,6 +129,7 @@ parts:
     sections:
     - file: markdown/examples/Leakage-automagic
     - file: markdown/examples/Leakage-manual
+  - file: markdown/examples/IncoherentLeakage
   - file: markdown/examples/1QGST-InterpolatedOps
   - file: markdown/examples/Robust-GST
   - file: markdown/examples/MPI
