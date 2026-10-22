@@ -456,13 +456,13 @@ from pygsti.modelmembers.operations import (
 
 space = QubitSpace(3)
 errorgen = LindbladErrorgen.from_weight_limited(
-    space, max_weights=dict(H=1, S=2, C=2, A=2)
+    space, max_weights=dict(H=1, S=2, C=2, A=2), initial_stochastic_rate=1e-4
 )
 
-# The constructor starts at zero error. These are factor parameters, not rates:
-# S/C/A coefficients are quadratic in them; H coefficients are linear.
+# Use a positive stochastic diagonal with smaller factor perturbations for a
+# well-conditioned example. S/C/A factor parameters are not physical rates.
 rng = np.random.default_rng(1234)
-errorgen.from_vector(rng.normal(scale=0.01, size=errorgen.num_params))
+errorgen.from_vector(errorgen.to_vector() + rng.normal(scale=.001, size=errorgen.num_params))
 
 ideal_gate = StaticUnitaryOp(
     np.kron(np.array([[0., 1.], [1., 0.]]), np.eye(4)), state_space=space
@@ -471,13 +471,40 @@ noisy_gate = ComposedOp([ideal_gate, ExpErrorgenOp(errorgen)])
 # ComposedOp lists factors in application order: exp(errorgen) @ ideal_gate.
 print(errorgen.num_params, "parameters")  # 657: 9 H + 648 sparse S/C/A
 
+# SPAM has independent noise channels with exactly the same weight limits.
+from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.states import ComputationalBasisState, ComposedState
+from pygsti.modelmembers.povms import ComputationalBasisPOVM, ComposedPOVM
+
+
+def weight_limited_noise(max_weights, seed):
+    generator = LindbladErrorgen.from_weight_limited(
+        space, max_weights, initial_stochastic_rate=1e-4
+    )
+    vector = generator.to_vector()
+    generator.from_vector(vector + np.random.default_rng(seed).normal(scale=.001, size=len(vector)))
+    return ExpErrorgenOp(generator)
+
+
+limits = dict(H=1, S=2, C=2, A=2)
+weight_model = ExplicitOpModel(space, basis='pp')
+weight_model.preps['rho0'] = ComposedState(
+    ComputationalBasisState([0, 0, 0], state_space=space), weight_limited_noise(limits, 21)
+)
+weight_model.povms['Mdefault'] = ComposedPOVM(
+    weight_limited_noise(limits, 22), ComputationalBasisPOVM(3, state_space=space), mx_basis='pp'
+)
+weight_model.operations['Gx'] = noisy_gate
+assert weight_model.num_params == 3 * 657
+print(weight_model.probabilities(('Gx', 'Gx')))
+
 sca_block = errorgen.coefficient_blocks[-1]
 K = sca_block.kossakowski_matrix()  # Optional dense inspection, in basis_element_labels order.
 print(K.shape)                     # (36, 36)
 assert np.linalg.eigvalsh(K)[0] >= -1e-12
 ```
 
-Assign `noisy_gate` to an explicit model's `operations` dictionary as usual. Construct a separate error generator for each independently parameterized gate. Model copying and nice serialization retain the selected support and the factor parameterization.
+Preparation noise acts after the reference state; measurement noise acts before the reference POVM, so its adjoint acts on effects. The gate and both SPAM channels have independent parameters in the same hypothesis class. Construct a separate error generator for each independently parameterized gate. Model copying and nice serialization retain the selected support and the factor parameterization.
 
 The weight-two case admits a perfect elimination order. All weight-one directions form a clique. For each two-subsystem support, its weight-two directions and the weight-one directions on those two subsystems form another clique. Eliminate all weight-two directions first, then the weight-one directions. Every eliminated vertex's remaining neighbors form a clique, so factorization adds no fill. On three qubits, this leaves 648 real S/C/A parameters rather than the 1296 of a full Hermitian matrix on the same 36 stochastic directions.
 
@@ -513,15 +540,27 @@ interior_block = interior_errorgen.coefficient_blocks[-1]
 assert interior_block.num_params == 972
 assert interior_errorgen.num_params == 981  # 9 H + 972 S/C/A
 error_channel = ExpErrorgenOp(interior_errorgen)
+
+interior_limits = dict(H=1, S=2, C=2, A=3)
+interior_model = ExplicitOpModel(space, basis='pp')
+interior_model.preps['rho0'] = ComposedState(
+    ComputationalBasisState([0, 0, 0], state_space=space), weight_limited_noise(interior_limits, 31)
+)
+interior_model.povms['Mdefault'] = ComposedPOVM(
+    weight_limited_noise(interior_limits, 32), ComputationalBasisPOVM(3, state_space=space), mx_basis='pp'
+)
+interior_model.operations['Gx'] = ComposedOp([ideal_gate.copy(), error_channel])
+assert interior_model.num_params == 3 * 981
+print(interior_model.probabilities(('Gx', 'Gx')))
 ```
 
 Common S/C/A weight three on four or more qubits also selects completion automatically. Dense density-matrix simulation still constructs global superoperator data; coefficient sparsity does not remove that state-space cost. The full four-qubit weight-three coefficient block has 174 directions and 14562 real parameters.
 
 Completed blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. The resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
 
-## Correlated dephasing covariance graphs
+## Correlated dephasing Kossakowski graphs
 
-`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real covariance to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
+`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real Kossakowski matrix to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
 
 $$\mathcal L(\rho)=-\tfrac12\sum_{ab}K_{ab}[F_a,[F_b,\rho]],\qquad K\succeq0.$$
 
@@ -544,10 +583,37 @@ phase_errorgen = LindbladErrorgen.from_correlated_dephasing(
 )
 assert phase_errorgen.num_params == 8  # Four diagonal entries and four edges.
 phase_channel = ExpErrorgenOp(phase_errorgen)
+
+# This example also includes noisy SPAM in the same eight-parameter family.
+from pygsti.baseobjs import Basis
+from pygsti.modelmembers.states import StaticState
+from pygsti.modelmembers.povms import StaticPOVMEffect, UnconstrainedPOVM
+from pygsti.tools.basistools import stdmx_to_vec
+
+phase_space = QubitSpace(4)
+phase_prep = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
+    phase_space, phase_edges, initial_covariance=.3 * phase_covariance
+))
+phase_meas = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
+    phase_space, phase_edges, initial_covariance=.2 * phase_covariance
+))
+plus = StaticState(stdmx_to_vec(np.ones((16, 16)) / 16, 'pp'), basis='pp', state_space=phase_space)
+xx = Basis.cast('PP', 256)['XXII']
+parity_povm = UnconstrainedPOVM([
+    (label, StaticPOVMEffect(stdmx_to_vec((np.eye(16) + sign * xx) / 2, 'pp'),
+                            basis='pp', state_space=phase_space))
+    for label, sign in (('+', 1), ('-', -1))
+])
+phase_model = ExplicitOpModel(phase_space, basis='pp')
+phase_model.preps['rho0'] = ComposedState(plus, phase_prep)
+phase_model.povms['Mdefault'] = ComposedPOVM(phase_meas, parity_povm, mx_basis='pp')
+phase_model.operations['Gi'] = phase_channel
+assert phase_model.num_params == 24
+print(phase_model.probabilities(('Gi',)))
 ```
 
 The cycle is nonchordal and automatically uses completion. Pass `correlation_edges=()` for independent noise or omit it for a dense covariance. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
 
 All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero for fill-free, positive diagonal for completion, and configurable `initial_stochastic_rate` and `completion_normalization`. Completion requires a numerically positive-definite covariance after diagonal scaling; singular inputs are rejected. Tiny overall rates and strongly unequal diagonal scales alone do not cause that numerical-rank rejection. Dense/chordal fill-free graphs can represent collective rank-one covariance exactly.
 
-For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; pair correlations are needed to identify off-diagonal covariance. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters, versus $n(n+1)/2$ for a dense covariance on the same directions. These are different hypotheses even though all directions have support weight one.
+For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; pair correlations are needed to identify off-diagonal entries. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters per channel, versus $n(n+1)/2$ for a dense matrix on the same directions. These are different hypotheses even though all directions have support weight one. The [correlated-dephasing experiment](../examples/CorrelatedDephasing.md) jointly fits independent gate, preparation, and pre-measurement channels in each of these families, using composed Lindblad SPAM as above.

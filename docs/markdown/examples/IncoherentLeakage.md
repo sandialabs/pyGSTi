@@ -96,7 +96,7 @@ The transfer block has 16 parameters, but only 8 combinations act on allowed sta
 
 ## States, gates, and measurements
 
-Every allowed state can be written as $(BB^\dagger)\oplus|b|^2$, divided by its trace. For a parameterized preparation in this example, apply the same block-preserving CPTP noise to a fixed allowed state. This keeps preparation updates within the state space. A similarly composed POVM remains physical and block diagonal.
+Every allowed state can be written as $(BB^\dagger)\oplus|b|^2$, divided by its trace. Preparation uses an independent block-preserving CPTP Lindblad error channel after a fixed reference state; measurement uses another before a fixed reference POVM. Both error channels have the same 28-parameter hypothesis class as the post-gate errors. Their parameters are independent, and updates keep the state and POVM physical and block diagonal.
 
 ```{code-cell} ipython3
 from pygsti.models import ExplicitOpModel
@@ -153,7 +153,20 @@ rng = np.random.default_rng(25)
 
 for _ in range(3):
     leaky_model.from_vector(rng.normal(scale=.03, size=leaky_model.num_params))
+    # Check both SPAM channels as well as the post-gate error channels.
+    channels = [leaky_model.preps['rho0'].error_map,
+                leaky_model.povms['Mdefault'].error_map]
+    channels += [op.factorops[1] for op in leaky_model.operations.values()]
+    for noise in channels:
+        channel = noise.to_dense()
+        np.testing.assert_allclose(channel[np.ix_(excluded, allowed)], 0., atol=1e-12)
+        np.testing.assert_allclose(trace_vector @ channel, trace_vector, atol=1e-12)
+        choi = jamiolkowski_iso(channel, op_mx_basis=leaky_basis, choi_mx_basis='gm')
+        assert np.linalg.eigvalsh(choi)[0] >= -1e-12
     vector = leaky_model.preps['rho0'].to_dense().ravel()
+    rho = vec_to_stdmx(vector, leaky_basis)
+    assert np.linalg.eigvalsh(rho)[0] >= -1e-12
+    np.testing.assert_allclose(np.trace(rho), 1., atol=1e-12)
     for name in ('Gx', 'Gy', 'Gx', 'Gy'):
         channel = leaky_model.operations[name].to_dense()
         np.testing.assert_allclose(channel[np.ix_(excluded, allowed)], 0., atol=1e-12)
@@ -165,10 +178,13 @@ for _ in range(3):
         np.testing.assert_allclose(rho[:2, 2], 0., atol=1e-12)
         assert np.linalg.eigvalsh(rho)[0] >= -1e-12
         np.testing.assert_allclose(np.trace(rho), 1., atol=1e-12)
+    effect_sum = np.zeros((3, 3), complex)
     for effect in leaky_model.povms['Mdefault'].values():
         effect_matrix = vec_to_stdmx(effect.to_dense(), leaky_basis)
+        effect_sum += effect_matrix
         np.testing.assert_allclose(effect_matrix[:2, 2], 0., atol=1e-12)
         assert np.linalg.eigvalsh(effect_matrix)[0] >= -1e-12
+    np.testing.assert_allclose(effect_sum, np.eye(3), atol=1e-12)
 
 restored_leaky_model = ExplicitOpModel.from_nice_serialization(leaky_model.to_nice_serialization())
 restored_leaky_model.from_vector(rng.normal(scale=.02, size=leaky_model.num_params))

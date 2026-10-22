@@ -113,8 +113,9 @@ def test_completion_rejects_boundary_and_explicit_zero():
 
 def test_covariance_derivatives_and_persistence():
     from pygsti.models import ExplicitOpModel
-    from pygsti.modelmembers.states import ComputationalBasisState
-    from pygsti.modelmembers.povms import ComputationalBasisPOVM
+    from pygsti.modelmembers.states import StaticState, ComposedState
+    from pygsti.modelmembers.povms import StaticPOVMEffect, UnconstrainedPOVM, ComposedPOVM
+    from pygsti.tools.basistools import stdmx_to_vec
 
     errorgen = construct(initial_covariance=[[.04, -.01], [-.01, .03]])
     block = errorgen.coefficient_blocks[0]
@@ -130,14 +131,27 @@ def test_covariance_derivatives_and_persistence():
     np.testing.assert_allclose(block.deriv_wrt_params(vector), numeric, atol=1e-10)
     block.from_vector(vector)
     model = ExplicitOpModel(QubitSpace(2), basis='pp')
-    model.preps['rho0'] = ComputationalBasisState([0, 0], state_space=model.state_space)
-    model.povms['Mdefault'] = ComputationalBasisPOVM(2, state_space=model.state_space)
+    reference_state = StaticState(stdmx_to_vec(np.ones((4, 4)) / 4, 'pp'),
+                                  basis='pp', state_space=model.state_space)
+    xx = Basis.cast('PP', 16)['XX']
+    reference_povm = UnconstrainedPOVM([
+        (label, StaticPOVMEffect(stdmx_to_vec((np.eye(4) + sign * xx) / 2, 'pp'),
+                                basis='pp', state_space=model.state_space))
+        for label, sign in (('+', 1), ('-', -1))
+    ])
+    model.preps['rho0'] = ComposedState(reference_state, ExpErrorgenOp(
+        construct(initial_covariance=.25 * covariance(errorgen))))
+    model.povms['Mdefault'] = ComposedPOVM(ExpErrorgenOp(
+        construct(initial_covariance=.4 * covariance(errorgen))), reference_povm, mx_basis='pp')
     model.operations['Gi'] = ExpErrorgenOp(errorgen)
+    assert model.num_params == 3 * errorgen.num_params
+    assert model.probabilities(())[('+',)] < 1  # SPAM is physically noisy at zero idle duration.
     restored = ExplicitOpModel.from_nice_serialization(model.to_nice_serialization())
     for vector in (model.to_vector(), np.random.default_rng(4).normal(scale=.1, size=model.num_params)):
         model.from_vector(vector)
         restored.from_vector(vector)
         np.testing.assert_allclose(model.operations['Gi'].to_dense(), restored.operations['Gi'].to_dense())
+        assert restored.probabilities(('Gi',)) == pytest.approx(model.probabilities(('Gi',)))
         restored_block = restored.operations['Gi'].errorgen.coefficient_blocks[0]
         assert all(label.errorgen_type in ('S', 'C') for label in restored_block.elementary_errorgens)
 

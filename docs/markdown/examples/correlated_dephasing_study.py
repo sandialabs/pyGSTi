@@ -1,8 +1,9 @@
-"""Known-SPAM identification of Markovian dephasing covariance graphs.
+"""Joint fits of dephasing gate errors and noisy CPTP Lindblad SPAM.
 
-Run with the source checkout on PYTHONPATH. All fits in each scenario share
-one binomial dataset; this is noise identification, not self-consistent GST.
-The common-mode alternative assumes a known uniform spatial profile.
+Each channel has independent parameters in the same candidate hypothesis class.
+The reference state is |+>^4. One unknown pre-measurement channel is shared by
+the reference product-Pauli parity POVMs. There is no separate pulse-gate model.
+Only K_prep + K_meas is identifiable. Run with the source checkout on PYTHONPATH.
 """
 
 import itertools
@@ -14,66 +15,102 @@ from scipy.special import rel_entr
 
 from pygsti.baseobjs import Basis, QubitSpace
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
+from pygsti.circuits import Circuit
 from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as LCB
-from pygsti.tools.basistools import change_basis
+from pygsti.modelmembers.povms import ComposedPOVM, StaticPOVMEffect, UnconstrainedPOVM
+from pygsti.modelmembers.states import ComposedState, StaticState
+from pygsti.models import ExplicitOpModel
+from pygsti.tools.basistools import change_basis, stdmx_to_vec, vec_to_stdmx
+from pygsti.tools.jamiolkowski import jamiolkowski_iso
 
 
 DIRECTIONS = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
 EDGES = ((0, 1), (1, 2), (2, 3), (0, 3))
+FAMILIES = ('independent', 'graph', 'dense', 'graph+common')
 
 
-def product_design(times):
-    """Independent experiments measuring X_i, X_i X_j, or Y_i Y_j on |+>^4.
+def parity_design(paulis, times):
+    """Fourier weights for product X/Y parities on the reference |+>^4 state.
 
-    Each signal is a weighted sum of at most two exp(-2 t v^T K v).
-    No entangled preparations are needed for this training design.
+    probabilities() includes noisy preparation, idle, and pre-measurement maps.
+    Odd-Y parities vanish in this real dephasing model. Padding allows a shared
+    evaluator for single, pair, and higher-order product measurements.
     """
     vectors, weights, durations, labels = [], [], [], []
-    eye = np.eye(4)
     for t in times:
-        for i in range(4):
-            vectors.append([eye[i], np.zeros(4)])
-            weights.append([1., 0.])
+        for word in paulis:
+            sites = [i for i, p in enumerate(word) if p != 'I']
+            ys = [i for i, p in enumerate(word) if p == 'Y']
+            assert len(word) == 4 and len(ys) % 2 == 0 and sites
+            v, w = np.zeros((16, 4)), np.zeros(16)
+            for k, signs in enumerate(itertools.product((-1., 1.), repeat=len(sites))):
+                v[k, sites] = signs
+                w[k] = (-1.) ** (len(ys) // 2) * np.prod(v[k, ys]) / 2 ** len(sites)
+            vectors.append(v)
+            weights.append(w)
             durations.append(t)
-            labels.append(('X', i))
-        for i, j in itertools.combinations(range(4), 2):
-            for observable, sign in (('XX', 1), ('YY', -1)):
-                vectors.append([eye[i] + eye[j], eye[i] - eye[j]])
-                weights.append([sign * .5, .5])
-                durations.append(t)
-                labels.append((observable, i, j))
+            labels.append(word)
     return np.array(vectors), np.array(weights), np.array(durations), labels
 
 
-def probabilities(covariance, design, covariance_jacobian=None):
-    """Positive-parity probabilities and optional parameter Jacobian."""
+def product_design(times=(0., 1., 2., 4., 8.)):
+    paulis = [''.join('X' if a == i else 'I' for a in range(4)) for i in range(4)]
+    for i, j in itertools.combinations(range(4), 2):
+        for axis in ('X', 'Y'):
+            paulis.append(''.join(axis if a in (i, j) else 'I' for a in range(4)))
+    return parity_design(paulis, times)
+
+
+def heldout_design():
+    paulis = []
+    for size in (3, 4):
+        for sites in itertools.combinations(range(4), size):
+            for axes in itertools.product('XY', repeat=size):
+                if axes.count('Y') % 2 == 0:
+                    word = ['I'] * 4
+                    for i, axis in zip(sites, axes):
+                        word[i] = axis
+                    paulis.append(''.join(word))
+    return parity_design(paulis, (.5, 1.5, 3., 6.))
+
+
+def probabilities(matrices, design, matrix_jacobians=None):
+    """Positive parity probabilities; matrices = (K_gate, K_prep, K_meas).
+
+    Jacobians use a shared parameter axis containing every fitted parameter.
+    All three contributions to t K_gate + K_prep + K_meas are differentiated.
+    """
+    gate, prep, meas = matrices
     vectors, weights, times, _ = design
-    rates = 2 * np.einsum('msi,ij,msj->ms', vectors, covariance, vectors)
-    contrasts = np.exp(-times[:, None] * rates)
+    integrated = times[:, None, None] * gate + prep + meas
+    rates = 2 * np.einsum('msi,mij,msj->ms', vectors, integrated, vectors)
+    contrasts = np.exp(-rates)
     p = .5 * (1 + np.sum(weights * contrasts, axis=1))
-    if covariance_jacobian is None:
+    if matrix_jacobians is None:
         return p
-    rate_jacobian = 2 * np.einsum('msi,ijp,msj->msp', vectors, covariance_jacobian, vectors)
-    jacobian = -.5 * times[:, None] * np.einsum('ms,ms,msp->mp', weights, contrasts, rate_jacobian)
-    return p, jacobian
+    gate_jac, prep_jac, meas_jac = matrix_jacobians
+    integrated_jac = times[:, None, None, None] * gate_jac + prep_jac + meas_jac
+    rate_jac = 2 * np.einsum('msi,mijp,msj->msp', vectors, integrated_jac, vectors)
+    jac = -.5 * np.einsum('ms,ms,msp->mp', weights, contrasts, rate_jac)
+    return p, jac
 
 
-class CovarianceChart:
-    """Use pyGSTi's coefficient charts without exponentiating global matrices in a fit."""
+class KossakowskiChart:
+    """One physical channel; graph+common uses an example-only PSD sum."""
 
-    def __init__(self, family):
-        self.family = family
+    def __init__(self, family, initial_rate):
         edges = () if family == 'independent' else (
             None if family == 'dense' else [(DIRECTIONS[i], DIRECTIONS[j]) for i, j in EDGES])
         errorgen = LindbladErrorgen.from_correlated_dephasing(
-            QubitSpace(4), edges, initial_stochastic_rate=.03
+            QubitSpace(4), edges, initial_stochastic_rate=initial_rate
         )
+        self.family = family
         self.block = errorgen.coefficient_blocks[0]
         self.initial = self.block.to_vector()
         self.nblock = self.block.num_params
         if family == 'graph+common':
-            self.initial = np.r_[self.initial, .05]  # Common covariance is amplitude squared.
+            self.initial = np.r_[self.initial, np.sqrt(initial_rate / 10)]
         self.nparams = len(self.initial)
         pos = {b: i for i, b in enumerate(self.block.basis_element_labels)}
         self.pairs = [(pos[label.basis_element_labels[0]], pos[label.basis_element_labels[-1]])
@@ -81,16 +118,37 @@ class CovarianceChart:
 
     def evaluate(self, vector):
         self.block.from_vector(vector[:self.nblock])
-        covariance = self.block.kossakowski_matrix().real
-        coefficient_jacobian = self.block.deriv_wrt_params(vector[:self.nblock])
-        jacobian = np.zeros((4, 4, self.nparams))
-        for (i, j), derivative in zip(self.pairs, coefficient_jacobian):
-            jacobian[i, j, :self.nblock] = derivative
-            jacobian[j, i, :self.nblock] = derivative
+        matrix = self.block.kossakowski_matrix().real
+        coefficient_jac = self.block.deriv_wrt_params(vector[:self.nblock])
+        jac = np.zeros((4, 4, self.nparams))
+        for (i, j), derivative in zip(self.pairs, coefficient_jac):
+            jac[i, j, :self.nblock] = derivative
+            jac[j, i, :self.nblock] = derivative
         if self.family == 'graph+common':
-            covariance += vector[-1] ** 2 * np.ones((4, 4))
-            jacobian[:, :, -1] = 2 * vector[-1]
-        return covariance, jacobian
+            matrix += vector[-1] ** 2 * np.ones((4, 4))
+            jac[:, :, -1] = 2 * vector[-1]
+        return matrix, jac
+
+
+class JointChart:
+    """Independent, same-family channels for gate, preparation, and measurement."""
+
+    def __init__(self, family):
+        self.charts = [KossakowskiChart(family, rate) for rate in (.03, .006, .009)]
+        self.nchannel = self.charts[0].nparams
+        self.nparams = 3 * self.nchannel
+        self.initial = np.concatenate([chart.initial for chart in self.charts])
+
+    def evaluate(self, vector):
+        matrices, jacobians = [], []
+        for a, chart in enumerate(self.charts):
+            indices = slice(a * self.nchannel, (a + 1) * self.nchannel)
+            matrix, local_jac = chart.evaluate(vector[indices])
+            jac = np.zeros((4, 4, self.nparams))
+            jac[:, :, indices] = local_jac
+            matrices.append(matrix)
+            jacobians.append(jac)
+        return matrices, jacobians
 
 
 def binomial_residuals(p, positives, shots):
@@ -103,7 +161,6 @@ def binomial_residuals(p, positives, shots):
     far = ~near
     derivative = np.empty_like(p)
     derivative[far] = shots * (p[far] - q[far]) / (p[far] * (1 - p[far]) * residual[far])
-    # Local expansion avoids cancellation when predicted and observed proportions coincide.
     variance = p[near] * (1 - p[near])
     residual[near] = np.sqrt(shots) * (q[near] - p[near]) / np.sqrt(variance)
     derivative[near] = (-np.sqrt(shots) / np.sqrt(variance)
@@ -112,21 +169,25 @@ def binomial_residuals(p, positives, shots):
 
 
 def fit(family, design, positives, shots):
-    chart = CovarianceChart(family)
+    chart = JointChart(family)
 
     def evaluate(vector, with_jacobian=False):
-        covariance, derivative = chart.evaluate(vector)
-        p, jacobian = probabilities(covariance, design, derivative)
+        matrices, derivatives = chart.evaluate(vector)
+        p, jac = probabilities(matrices, design, derivatives)
         residual, slope = binomial_residuals(p, positives, shots)
-        return slope[:, None] * jacobian if with_jacobian else residual
+        return slope[:, None] * jac if with_jacobian else residual
 
     optimum = least_squares(evaluate, chart.initial, jac=lambda v: evaluate(v, True),
-                            max_nfev=300, ftol=1e-10, xtol=1e-10, gtol=1e-10, x_scale='jac')
+                            max_nfev=500, ftol=1e-10, xtol=1e-10, gtol=1e-10,
+                            tr_solver='lsmr', tr_options={'atol': 1e-12, 'btol': 1e-12})
     if not optimum.success:
         raise RuntimeError(f'{family} failed to converge: {optimum.message}')
-    covariance = chart.evaluate(optimum.x)[0]
-    return covariance, {
+    matrices, derivatives = chart.evaluate(optimum.x)
+    _, jac = probabilities(matrices, design, derivatives)
+    return matrices, {
+        'parameters_per_channel': chart.nchannel,
         'parameters': chart.nparams,
+        'probability_jacobian_rank': int(np.linalg.matrix_rank(jac, tol=1e-8)),
         'deviance': float(np.sum(optimum.fun ** 2)),
         'converged': bool(optimum.success),
         'status': int(optimum.status),
@@ -135,40 +196,79 @@ def fit(family, design, positives, shots):
     }
 
 
-def heldout_design():
-    # Contrasts between basis states differing on 3 or 4 sites, absent from training.
-    vectors = [v for v in itertools.product((-1., 0., 1.), repeat=4)
-               if sum(x != 0 for x in v) >= 3 and next(x for x in v if x != 0) > 0]
-    rows = [(v, t) for t in (.5, 1.5, 3., 6.) for v in vectors]
-    return (np.array([[v, np.zeros(4)] for v, _ in rows]),
-            np.tile([1., 0.], (len(rows), 1)), np.array([t for _, t in rows]),
-            [('coherence',) for _ in rows])
-
-
-def verify_physical_signals(covariance, design):
-    """Independent full-channel check of the product-state parity formulas."""
-    p_formula = probabilities(covariance, design)
-    plus = np.ones((16, 16)) / 16
+def observable(word):
     one = Basis.cast('PP', 4)
+    out = np.ones((1, 1))
+    for p in word:
+        out = np.kron(out, one[p])
+    return out
+
+
+def make_model(matrices, paulis):
+    """Independent full pyGSTi check of the analytic joint signals.
+
+    Dense real charts reproduce the supplied matrices exactly. Family-specific
+    restrictions during fitting are imposed by JointChart. One measurement map
+    is shared across reference POVMs, independently of preparation and idle.
+    """
+    space = QubitSpace(4)
+    gate, prep, meas = [
+        ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(space, initial_covariance=k))
+        for k in matrices]
+    model = ExplicitOpModel(space, basis='pp')
+    reference = StaticState(stdmx_to_vec(np.ones((16, 16)) / 16, 'pp'),
+                            basis='pp', state_space=space)
+    model.preps['rho0'] = ComposedState(reference, prep)
+    model.operations['Gi'] = gate  # Ideal idle followed by its error channel.
+    for word in dict.fromkeys(paulis):
+        effect = (np.eye(16) + observable(word)) / 2
+        reference_povm = UnconstrainedPOVM([
+            (label, StaticPOVMEffect(stdmx_to_vec(matrix, 'pp'), basis='pp', state_space=space))
+            for label, matrix in (('+', effect), ('-', np.eye(16) - effect))
+        ])
+        model.povms['M' + word.lower()] = ComposedPOVM(meas, reference_povm, mx_basis='pp')
+    assert model.num_params == 30
+    return model
+
+
+def verify_physical_signals(matrices, design):
+    """Check composed SPAM, channel order, physicality, probabilities, and persistence."""
+    model = make_model(matrices, design[3])
     expected = []
-    for t in sorted(set(design[2])):
-        errorgen = LindbladErrorgen.from_correlated_dephasing(QubitSpace(4), initial_covariance=t * covariance)
-        channel = change_basis(ExpErrorgenOp(errorgen).to_dense(), 'pp', 'std')
-        rho = (channel @ plus.ravel()).reshape(16, 16)
-        for label in [label for duration, label in zip(design[2], design[3]) if duration == t]:
-            factors = [one['I']] * 4
-            for i in label[1:]:
-                factors[i] = one['Y' if label[0] == 'YY' else 'X']
-            observable = factors[0]
-            for factor in factors[1:]:
-                observable = np.kron(observable, factor)
-            expected.append(.5 * (1 + np.trace(observable @ rho).real))
-    np.testing.assert_allclose(expected, p_formula, atol=2e-13)
-    return float(np.max(np.abs(expected - p_formula)))
+    for t, word in zip(design[2], design[3]):
+        assert t == int(t)
+        circuit = Circuit(('rho0',) + ('Gi',) * int(t) + ('M' + word.lower(),), line_labels=(0, 1, 2, 3))
+        expected.append(model.probabilities(circuit)[('+',)])
+    p_formula = probabilities(matrices, design)
+    np.testing.assert_allclose(expected, p_formula, atol=3e-13)
+    rho = vec_to_stdmx(model.preps['rho0'].to_dense(), 'pp')
+    np.testing.assert_allclose(np.trace(rho), 1, atol=1e-13)
+    assert np.linalg.eigvalsh(rho)[0] >= -1e-12
+    min_choi = np.inf
+    for channel in (model.operations['Gi'], model.preps['rho0'].error_map,
+                    next(iter(model.povms.values())).error_map):
+        matrix = channel.to_dense()
+        np.testing.assert_allclose(matrix[0], np.eye(256)[0], atol=1e-13)
+        eigmin = np.linalg.eigvalsh(jamiolkowski_iso(matrix, op_mx_basis='pp'))[0]
+        min_choi = min(min_choi, eigmin)
+        assert eigmin >= -1e-12
+    for povm in model.povms.values():
+        effects = [vec_to_stdmx(e.to_dense(), 'pp') for e in povm.values()]
+        np.testing.assert_allclose(sum(effects), np.eye(16), atol=1e-13)
+        assert min(np.linalg.eigvalsh(e)[0] for e in effects) >= -1e-12
+    restored = ExplicitOpModel.from_nice_serialization(model.to_nice_serialization())
+    assert restored.num_params == model.num_params
+    np.testing.assert_allclose(restored.to_vector(), model.to_vector(), atol=1e-13)
+    word = design[3][-1]
+    np.testing.assert_allclose(restored.povms['M' + word.lower()]['+'].to_dense(),
+                               model.povms['M' + word.lower()]['+'].to_dense(), atol=1e-13)
+    return {'max_full_model_probability_error': float(np.max(np.abs(expected - p_formula))),
+            'min_gate_and_spam_choi_eigenvalue': float(min_choi),
+            'serialized_parameters': restored.num_params}
 
 
 def quantum_phase_cycle():
-    """A phase cycle separates Gaussian covariance plus H from general dephasing."""
+    """Algebraic counterexamples, without a preparation/measurement experiment."""
     basis = Basis.cast('PP', 16)
     labels = [LEEL('S', ('ZI',)), LEEL('S', ('IZ',)),
               LEEL('C', ('ZI', 'IZ')), LEEL('A', ('ZI', 'IZ'))]
@@ -179,112 +279,165 @@ def quantum_phase_cycle():
     np.testing.assert_allclose(generator - np.diag(generator.diagonal()), 0, atol=1e-14)
     phases = generator.diagonal().reshape(4, 4).imag
     cycle = phases[0, 1] + phases[1, 3] + phases[3, 0]
-    assert abs(cycle) > .01  # A Hamiltonian phase h_y-h_x has zero sum on every cycle.
-    # A classical Poisson process applying a fixed diagonal unitary also has a
-    # nonzero phase cycle. This is not, by itself, a witness of a quantum bath.
-    unitary_diagonal = np.exp(1j * np.array([0., np.pi / 2, 0., np.pi]))
-    poisson_phases = .01 * np.outer(unitary_diagonal, unitary_diagonal.conj()).imag
+    assert abs(cycle) > .01
+    # Classical Poisson diagonal-unitary kicks can also have a nonzero cycle.
+    diagonal = np.exp(1j * np.array([0., np.pi / 2, 0., np.pi]))
+    poisson_phases = .01 * np.outer(diagonal, diagonal.conj()).imag
     poisson_cycle = poisson_phases[0, 1] + poisson_phases[1, 3] + poisson_phases[3, 0]
     assert abs(poisson_cycle) > .01
     return float(cycle), float(poisson_cycle)
 
 
-def run_study():
-    design = product_design((1., 2., 4., 8.))
-    heldout = heldout_design()
-    true_graph = np.diag([.028, .033, .025, .03])
-    for (i, j), value in zip(EDGES, (.007, -.006, .005, .004)):
-        true_graph[i, j] = true_graph[j, i] = value
+def truth_matrices(common=False):
+    diagonals = ([.028, .033, .025, .030], [.010, .008, .011, .009], [.006, .010, .007, .008])
+    edges = ((.007, -.006, .005, .004), (.0012, -.0010, .0008, .0011),
+             (-.0008, .0011, -.0005, .0006))
+    matrices = []
+    for diagonal, correlations, common_rate in zip(diagonals, edges, (.006, .0015, .0025)):
+        matrix = np.diag(diagonal)
+        for (i, j), value in zip(EDGES, correlations):
+            matrix[i, j] = matrix[j, i] = value
+        if common:
+            matrix += common_rate * np.ones((4, 4))
+        assert np.linalg.eigvalsh(matrix)[0] > 0
+        matrices.append(matrix)
+    return matrices
 
-    # Identify coefficient directions directly, independently of factor-chart geometry.
-    coordinates = np.zeros((4, 4, 10))
+
+def identifiability(matrices, design):
+    """K-coordinate ranks with SPAM nuisance directions and their exact ambiguity."""
+    coordinates = np.zeros((4, 4, 30))
     pairs = [(i, i) for i in range(4)] + list(itertools.combinations(range(4), 2))
     for k, (i, j) in enumerate(pairs):
         coordinates[i, j, k] = coordinates[j, i, k] = 1
-    _, jacobian = probabilities(true_graph, design, coordinates)
-    singles = np.array([label[0] == 'X' for label in design[3]])
-    ranks = {'single_ramsey_means': int(np.linalg.matrix_rank(jacobian[singles])),
-             'all_product_parities': int(np.linalg.matrix_rank(jacobian))}
-    assert ranks == {'single_ramsey_means': 4, 'all_product_parities': 10}
+    derivatives = [np.roll(coordinates, 10 * a, axis=-1) for a in range(3)]
+    _, jac = probabilities(matrices, design, derivatives)
+    result = {}
+    for name, rows in (
+            ('single_ramsey_means', np.array([p.count('X') == 1 and 'Y' not in p for p in design[3]])),
+            ('all_product_parities', np.ones(len(jac), dtype=bool))):
+        local = jac[rows]
+        nuisance = local[:, 10:]
+        u, s, _ = np.linalg.svd(nuisance, full_matrices=False)
+        nuisance_rank = np.count_nonzero(s > 1e-9)
+        projected = local[:, :10] - u[:, :nuisance_rank] @ (u[:, :nuisance_rank].T @ local[:, :10])
+        result[name] = {'joint_rank': int(np.linalg.matrix_rank(local, tol=1e-9)),
+                        'spam_nuisance_rank': int(nuisance_rank),
+                        'gate_rank_after_spam_projection': int(np.linalg.matrix_rank(projected, tol=1e-9))}
+    assert result['single_ramsey_means'] == {
+        'joint_rank': 8, 'spam_nuisance_rank': 4, 'gate_rank_after_spam_projection': 4}
+    assert result['all_product_parities'] == {
+        'joint_rank': 20, 'spam_nuisance_rank': 10, 'gate_rank_after_spam_projection': 10}
+    shift = .0001 * np.eye(4)
+    equivalent = (matrices[0], matrices[1] + shift, matrices[2] - shift)
+    error = np.max(np.abs(probabilities(matrices, design) - probabilities(equivalent, design)))
+    assert error < 1e-14
+    return result, float(error)
 
-    # Verify the complete analytic probability Jacobian before using it in fitting.
-    chart = CovarianceChart('graph+common')
+
+def run_study():
+    design, heldout = product_design(), heldout_design()
+    truth = truth_matrices()
+    ranks, ambiguity_error = identifiability(truth, design)
+    chart = JointChart('graph+common')
     vector = chart.initial.copy()
-    covariance, derivative = chart.evaluate(vector)
-    _, analytic = probabilities(covariance, design, derivative)
+    matrices, derivatives = chart.evaluate(vector)
+    p, analytic = probabilities(matrices, design, derivatives)
     eps = 1e-6
     numeric = np.stack([(probabilities(chart.evaluate(vector + eps * e)[0], design)
                          - probabilities(chart.evaluate(vector - eps * e)[0], design)) / (2 * eps)
                         for e in np.eye(len(vector))], axis=-1)
-    np.testing.assert_allclose(analytic, numeric, rtol=1e-6, atol=1e-9)
-
-    observed = np.random.default_rng(90).binomial(50000, probabilities(covariance, design))
-    p_at_start = probabilities(covariance, design)
-    residual_slope = binomial_residuals(p_at_start, observed, 50000)[1]
-    residual_jacobian = residual_slope[:, None] * analytic
+    np.testing.assert_allclose(analytic, numeric, rtol=2e-6, atol=1e-9)
+    observed = np.random.default_rng(90).binomial(50000, p)
+    residual_jac = binomial_residuals(p, observed, 50000)[1][:, None] * analytic
     numeric_residual = np.stack([
         (binomial_residuals(probabilities(chart.evaluate(vector + eps * e)[0], design), observed, 50000)[0]
          - binomial_residuals(probabilities(chart.evaluate(vector - eps * e)[0], design), observed, 50000)[0])
         / (2 * eps) for e in np.eye(len(vector))], axis=-1)
-    np.testing.assert_allclose(residual_jacobian, numeric_residual, rtol=2e-5, atol=2e-4)
-
-    # A noise-free recovery check distinguishes optimizer behavior from sample fluctuations.
-    exact_p = probabilities(true_graph, design)
+    np.testing.assert_allclose(residual_jac, numeric_residual, rtol=3e-5, atol=3e-4)
+    exact_p = probabilities(truth, design)
     exact_fit, exact_info = fit('graph', design, 50000 * exact_p, 50000)
-    np.testing.assert_allclose(exact_fit, true_graph, atol=2e-9)
+    gate_error = float(np.max(np.abs(exact_fit[0] - truth[0])))
+    spam_error = float(np.max(np.abs(exact_fit[1] + exact_fit[2] - truth[1] - truth[2])))
+    assert gate_error < 2e-8 and spam_error < 2e-8
 
     scenarios = {}
-    for seed, (name, truth) in enumerate((('graph', true_graph),
-                                        ('graph+common', true_graph + .006 * np.ones((4, 4)))), 810):
+    for seed, name in enumerate(('graph', 'graph+common'), 810):
+        truth = truth_matrices(common=name == 'graph+common')
         shots = 50000
         true_p = probabilities(truth, design)
         positives = np.random.default_rng(seed).binomial(shots, true_p)
         true_deviance = float(np.sum(binomial_residuals(true_p, positives, shots)[0] ** 2))
         true_heldout = probabilities(truth, heldout)
         results = {}
-        for family in ('independent', 'graph', 'dense', 'graph+common'):
+        for family in FAMILIES:
             fitted, info = fit(family, design, positives, shots)
             predicted = probabilities(fitted, heldout)
+            spam_sum = fitted[1] + fitted[2]
+            true_spam_sum = truth[1] + truth[2]
             info.update({
                 'deviance_minus_truth': info['deviance'] - true_deviance,
                 'heldout_mean_tvd': float(np.mean(np.abs(predicted - true_heldout))),
                 'heldout_max_tvd': float(np.max(np.abs(predicted - true_heldout))),
-                'relative_covariance_error': float(np.linalg.norm(fitted - truth) / np.linalg.norm(truth)),
-                'fitted_covariance': fitted.tolist(),
+                'relative_gate_kossakowski_error': float(np.linalg.norm(fitted[0] - truth[0])
+                                                          / np.linalg.norm(truth[0])),
+                'relative_spam_sum_error': float(np.linalg.norm(spam_sum - true_spam_sum)
+                                                 / np.linalg.norm(true_spam_sum)),
+                'fitted_gate_kossakowski': fitted[0].tolist(),
+                'fitted_spam_kossakowski_sum': spam_sum.tolist(),
+                'representative_prep_kossakowski': fitted[1].tolist(),
+                'representative_meas_kossakowski': fitted[2].tolist(),
+                'minimum_channel_kossakowski_eigenvalues': [float(np.linalg.eigvalsh(k)[0]) for k in fitted],
             })
-            assert np.linalg.eigvalsh(fitted)[0] > 0
+            assert min(info['minimum_channel_kossakowski_eigenvalues']) > 0
             if family == name or family == 'dense':
                 assert info['deviance_minus_truth'] <= 1e-6
-            # A freshly constructed pyGSTi generator reproduces the fitted covariance.
-            restored = LindbladErrorgen.from_correlated_dephasing(QubitSpace(4), initial_covariance=fitted)
-            np.testing.assert_allclose(restored.coefficient_blocks[0].kossakowski_matrix(), fitted, atol=1e-13)
+            if family in ('independent', 'graph'):
+                allowed = set(EDGES) if family == 'graph' else set()
+                for matrix in fitted:
+                    for i, j in itertools.combinations(range(4), 2):
+                        if (i, j) not in allowed:
+                            assert matrix[i, j] == 0
             results[family] = info
+        zero = [np.zeros((4, 4))] * 3
         scenarios[name] = {
-            'true_covariance': truth.tolist(), 'true_deviance': true_deviance,
-            'noiseless_model_heldout_mean_tvd': float(np.mean(1 - true_heldout)),
+            'true_gate_kossakowski': truth[0].tolist(),
+            'true_prep_kossakowski': truth[1].tolist(),
+            'true_meas_kossakowski': truth[2].tolist(),
+            'true_deviance': true_deviance,
+            'noiseless_model_heldout_mean_tvd': float(np.mean(np.abs(probabilities(zero, heldout) - true_heldout))),
+            'prep_probability_effect': float(np.max(np.abs(
+                true_p - probabilities((truth[0], zero[0], truth[2]), design)))),
+            'meas_probability_effect': float(np.max(np.abs(
+                true_p - probabilities((truth[0], truth[1], zero[0]), design)))),
             'fits': results,
         }
-
-    dense_covariance = np.ones((3, 3)) + .1 * np.eye(3)
-    thresholded = dense_covariance.copy()
+    dense = np.ones((3, 3)) + .1 * np.eye(3)
+    thresholded = dense.copy()
     thresholded[0, 2] = thresholded[2, 0] = 0
-    assert np.linalg.eigvalsh(dense_covariance)[0] > 0
-    assert np.linalg.eigvalsh(thresholded)[0] < 0
+    assert np.linalg.eigvalsh(dense)[0] > 0 and np.linalg.eigvalsh(thresholded)[0] < 0
     complex_cycle, poisson_cycle = quantum_phase_cycle()
-    result = {
+    words = list(dict.fromkeys(design[3])) + ['XXYY', 'XXXX']
+    physical = verify_physical_signals(truth_matrices(), parity_design(words, (0., 1., 4.)))
+    return {
+        'spam': 'independent CPTP Lindblad prep and pre-measurement channels; same family as gate; jointly fitted',
+        'spam_ambiguity': 'only K_prep + K_meas is identifiable; representatives are not individual estimates',
+        'measurement_sharing': 'one fitted channel shared across reference product-Pauli parity POVMs',
+        'controls': 'no separate pulse-gate model; reference |+>^4 and Pauli POVMs with fitted error channels',
         'shots_per_setting': shots, 'training_settings': len(design[2]),
-        'heldout_coherences_and_times': len(heldout[2]), 'identifiability_ranks': ranks,
+        'heldout_settings': len(heldout[2]), 'identifiability_ranks': ranks,
+        'spam_exchange_probability_error': ambiguity_error,
         'max_analytic_probability_jacobian_error': float(np.max(np.abs(analytic - numeric))),
-        'max_binomial_residual_jacobian_error': float(np.max(np.abs(residual_jacobian - numeric_residual))),
-        'expected_data_recovery_error': float(np.max(np.abs(exact_fit - true_graph))),
+        'max_binomial_residual_jacobian_error': float(np.max(np.abs(residual_jac - numeric_residual))),
+        'expected_data_gate_recovery_error': gate_error,
+        'expected_data_spam_sum_recovery_error': spam_error,
         'expected_data_fit_converged': exact_info['converged'],
-        'max_full_channel_signal_error': verify_physical_signals(true_graph, product_design((1., 4.))),
+        'physical_model_checks': physical,
         'entrywise_zeroing_negative_eigenvalue': float(np.linalg.eigvalsh(thresholded)[0]),
         'imaginary_correlation_phase_cycle': complex_cycle,
         'classical_poisson_phase_cycle': poisson_cycle,
         'scenarios': scenarios,
     }
-    return result
 
 
 if __name__ == '__main__':

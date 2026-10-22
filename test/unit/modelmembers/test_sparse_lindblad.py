@@ -171,8 +171,8 @@ def test_sector_selection(sectors, limits, expected):
 
 def test_post_gate_operation_model_and_serialization():
     from pygsti.models import ExplicitOpModel
-    from pygsti.modelmembers.states import ComputationalBasisState
-    from pygsti.modelmembers.povms import ComputationalBasisPOVM
+    from pygsti.modelmembers.states import ComputationalBasisState, ComposedState
+    from pygsti.modelmembers.povms import ComputationalBasisPOVM, ComposedPOVM
     from pygsti.tools import jamiolkowski_iso
 
     space = QubitSpace(('left', 'right'))
@@ -188,9 +188,15 @@ def test_post_gate_operation_model_and_serialization():
     # Noise is not covariant with the ideal gate, so this also detects wrong composition order.
     assert np.linalg.norm(gate.to_dense() - ideal.to_dense() @ channel.to_dense()) > 1e-6
     model = ExplicitOpModel(space, basis='pp')
-    model.preps['rho0'] = ComputationalBasisState([0, 0], state_space=space)
-    model.povms['Mdefault'] = ComputationalBasisPOVM(2, state_space=space)
+    prep_errorgen, meas_errorgen = errgen.copy(), errgen.copy()
+    prep_errorgen.from_vector(.6 * errgen.to_vector())
+    meas_errorgen.from_vector(.4 * errgen.to_vector())
+    reference_state = ComputationalBasisState([0, 0], state_space=space)
+    reference_povm = ComputationalBasisPOVM(2, state_space=space)
+    model.preps['rho0'] = ComposedState(reference_state, ExpErrorgenOp(prep_errorgen))
+    model.povms['Mdefault'] = ComposedPOVM(ExpErrorgenOp(meas_errorgen), reference_povm, mx_basis='pp')
     model.operations['Gx'] = gate
+    assert model.num_params == 3 * errgen.num_params
     restored = ExplicitOpModel.from_nice_serialization(model.to_nice_serialization())
     assert restored.num_params == model.num_params
     for vector in (model.to_vector(), np.random.default_rng(8).normal(scale=.02, size=model.num_params)):
@@ -200,6 +206,13 @@ def test_post_gate_operation_model_and_serialization():
         probabilities = model.probabilities(('Gx', 'Gx'))
         assert sum(probabilities.values()) == pytest.approx(1.)
         assert min(probabilities.values()) >= -1e-12
+        assert restored.probabilities(('Gx', 'Gx')) == pytest.approx(probabilities)
+        prep = model.preps['rho0']
+        povm = model.povms['Mdefault']
+        np.testing.assert_allclose(prep.to_dense(), prep.error_map.to_dense() @ reference_state.to_dense())
+        for label in povm:
+            np.testing.assert_allclose(povm[label].to_dense(),
+                                       povm.error_map.to_dense().T @ reference_povm[label].to_dense())
         restored_blk = restored.operations['Gx'].factorops[1].errorgen.coefficient_blocks[-1]
         assert restored_blk.block_type == 'other_sparse'
         assert np.linalg.eigvalsh(restored_blk.kossakowski_matrix())[0] >= -1e-12

@@ -271,8 +271,8 @@ def test_model_serialization_operation_derivatives_and_torch():
     from pygsti.baseobjs import QubitSpace
     from pygsti.models import ExplicitOpModel
     from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp, ComposedOp, StaticUnitaryOp
-    from pygsti.modelmembers.states import ComputationalBasisState
-    from pygsti.modelmembers.povms import ComputationalBasisPOVM
+    from pygsti.modelmembers.states import ComputationalBasisState, ComposedState
+    from pygsti.modelmembers.povms import ComputationalBasisPOVM, ComposedPOVM
     blk = cycle_block('mixed')
     vector = np.random.default_rng(3).normal(scale=.1, size=blk.num_params)
     vector[:4] -= 4.
@@ -282,16 +282,31 @@ def test_model_serialization_operation_derivatives_and_torch():
     channel = ExpErrorgenOp(errgen)
     ideal = StaticUnitaryOp(np.kron([[0., 1.], [1., 0.]], np.eye(2)), state_space=space)
     model = ExplicitOpModel(space, basis='pp')
-    model.preps['rho0'] = ComputationalBasisState([0, 0], state_space=space)
-    model.povms['Mdefault'] = ComputationalBasisPOVM(2, state_space=space)
+    spam_channels = []
+    for scale in (.6, .4):
+        spam = errgen.copy()
+        spam_vector = vector.copy()
+        spam_vector[:4] += .5 * np.log(scale)
+        spam.from_vector(spam_vector)
+        spam_channels.append(ExpErrorgenOp(spam))
+    model.preps['rho0'] = ComposedState(ComputationalBasisState([0, 0], state_space=space), spam_channels[0])
+    model.povms['Mdefault'] = ComposedPOVM(
+        spam_channels[1], ComputationalBasisPOVM(2, state_space=space), mx_basis='pp')
     model.operations['Gx'] = ComposedOp([ideal, channel])
+    assert model.num_params == 3 * errgen.num_params
     restored = ExplicitOpModel.from_nice_serialization(model.to_nice_serialization())
-    np.testing.assert_allclose(restored.to_vector(), vector)
-    for v in (vector, vector + .01):
+    model_vector = model.to_vector()
+    np.testing.assert_allclose(restored.to_vector(), model_vector)
+    for v in (model_vector, model_vector + .01):
         model.from_vector(v)
         restored.from_vector(v)
         np.testing.assert_allclose(restored.operations['Gx'].to_dense(), model.operations['Gx'].to_dense())
         assert sum(model.probabilities(('Gx', 'Gx')).values()) == pytest.approx(1.)
+        assert restored.probabilities(('Gx', 'Gx')) == pytest.approx(model.probabilities(('Gx', 'Gx')))
+        for member in (restored.preps['rho0'], restored.povms['Mdefault']):
+            restored_block = member.error_map.errorgen.coefficient_blocks[0]
+            assert restored_block._param_mode == 'cholesky completion'
+            assert restored_block._eeg_labels == blk._eeg_labels
     def dense(v):
         channel.from_vector(v)
         return channel.to_dense().copy().ravel()
