@@ -256,13 +256,25 @@ class StandardCircuitEncoder(CircuitEncoder):
     available in the `ProcessorSpec`. If multiple gates occur in a layer, multiple
     entries can be 1.
 
+    With `include_spam=True`, the encoding also represents the implicit state-preparation and
+    measurement layers, so that a QPANN can model state-preparation and measurement (SPAM)
+    errors: each layer's vector gets `2 * num_qubits` extra entries, one "prepared" and one
+    "measured" indicator per qubit. Every circuit's encoding then starts with an initialization
+    row (all "prepared" indicators set) and ends with a measurement row (all "measured"
+    indicators set); circuit layers have these entries set to 0. `indices_for_qubits` includes
+    the indicators of the requested qubits, so snippers built from this encoder
+    (`snippers.layer_snipper_from_qubit_graph`) let each error generator's rate depend on the
+    preparation/measurement of the qubits in its window. Use with
+    `error_generator_tensors(..., include_spam=True)`, whose rows line up with this encoding.
+
     Notes
     -----
     `self.gate_indexing` is a flat list of all available gate labels across all gate names
-    and all allowed qubit placements; the per-layer encoding length is `len(self.gate_indexing)`.
+    and all allowed qubit placements; the per-layer encoding length is `len(self.gate_indexing)`
+    (plus `2 * num_qubits` if `include_spam` is True).
     """
 
-    def __init__(self, pspec: "ProcessorSpec") -> None:
+    def __init__(self, pspec: "ProcessorSpec", include_spam: bool = False) -> None:
         """
         Construct a StandardCircuitEncoder.
 
@@ -273,6 +285,9 @@ class StandardCircuitEncoder(CircuitEncoder):
               * `gate_names`
               * `qubit_labels`
               * `available_gatelabels(...)`
+        include_spam : bool, default False
+            If True, also encode the implicit state-preparation and measurement layers (see the
+            class docstring), for QPANNs that model SPAM errors.
         """
         from pygsti.processors import QubitProcessorSpec
         assert isinstance(pspec, QubitProcessorSpec)
@@ -281,7 +296,35 @@ class StandardCircuitEncoder(CircuitEncoder):
         for gate in pspec.gate_names:
             all_gates += list(pspec.available_gatelabels(gate, pspec.qubit_labels))
         self.gate_indexing = all_gates
-        self.length = len(all_gates)
+        self.include_spam = include_spam
+        self.num_gate_features = len(all_gates)
+        num_qubits = len(pspec.qubit_labels)
+        # Indicator positions: prep for qubit i at num_gate_features + i, meas at
+        # num_gate_features + num_qubits + i (i = position of the qubit in pspec.qubit_labels).
+        self.length = self.num_gate_features + (2 * num_qubits if include_spam else 0)
+
+    def _spam_row(self, which: str) -> list[float]:
+        row = _np.zeros(self.length, float)
+        num_qubits = len(self.pspec.qubit_labels)
+        start = self.num_gate_features + (0 if which == 'prep' else num_qubits)
+        row[start:start + num_qubits] = 1
+        return list(row)
+
+    def initialization_encoding(self, circuit: _Circuit) -> list[list[float]]:
+        """One row with every qubit's "prepared" indicator set, if `include_spam`; otherwise empty."""
+        return [self._spam_row('prep')] if self.include_spam else []
+
+    def initialization_encoding_depth(self) -> int:
+        """1 if `include_spam`, otherwise 0."""
+        return 1 if self.include_spam else 0
+
+    def measurement_encoding(self, circuit: _Circuit) -> list[list[float]]:
+        """One row with every qubit's "measured" indicator set, if `include_spam`; otherwise empty."""
+        return [self._spam_row('meas')] if self.include_spam else []
+
+    def measurement_encoding_depth(self) -> int:
+        """1 if `include_spam`, otherwise 0."""
+        return 1 if self.include_spam else 0
 
     def layer_encoding(self, layer: tuple | list | None) -> list[float]:
         """
@@ -295,7 +338,8 @@ class StandardCircuitEncoder(CircuitEncoder):
         Returns
         -------
         list[float]
-            A list of length `self.length` containing 0/1 floats.
+            A list of length `self.length` containing 0/1 floats (any SPAM indicator entries
+            are 0 for circuit layers).
         """
 
         if layer is not None:
@@ -310,7 +354,8 @@ class StandardCircuitEncoder(CircuitEncoder):
 
     def indices_for_qubits(self, qubits: list | set | tuple) -> list[int]:
         """
-        Return encoding indices for gate labels that touch any of the specified qubits.
+        Return encoding indices for gate labels that touch any of the specified qubits (and, if
+        `include_spam`, those qubits' preparation and measurement indicators).
 
         Parameters
         ----------
@@ -320,9 +365,15 @@ class StandardCircuitEncoder(CircuitEncoder):
         Returns
         -------
         list[int]
-            Indices into `self.gate_indexing` (and hence into the per-layer encoding).
+            Indices into the per-layer encoding.
         """
-        return [i for i, gate in enumerate(self.gate_indexing) if len(set(qubits).intersection(gate.qubits)) > 0]
+        indices = [i for i, gate in enumerate(self.gate_indexing) if len(set(qubits).intersection(gate.qubits)) > 0]
+        if self.include_spam:
+            labels = list(self.pspec.qubit_labels)
+            positions = sorted(labels.index(q) for q in set(qubits) if q in labels)
+            indices += [self.num_gate_features + p for p in positions]
+            indices += [self.num_gate_features + len(labels) + p for p in positions]
+        return indices
 
 
 def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encoding_depth: int | None = None) -> _np.ndarray:
@@ -336,8 +387,9 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
     encoder : CircuitEncoder
         Encoder used to convert each circuit to a 2D array.
     encoding_depth : int or None, optional
-        If None, uses the maximum circuit depth in `circuits` and computes
-        the corresponding encoder depth via `encoder.depth(max_depth)`.
+        The depth of each circuit's encoding, including any initialization/measurement
+        encoding rows (see `CircuitEncoder.depth`). If None, uses the maximum circuit depth in
+        `circuits` and computes the corresponding encoder depth via `encoder.depth(max_depth)`.
 
     Returns
     -------
@@ -349,15 +401,18 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
         max_depth = _np.max([c.depth for c in circuits])
         encoding_depth = encoder.depth(max_depth)
 
+    # `encoding_depth` is the depth of the whole encoding, while the encoder's `padded_depth` is the
+    # depth its circuit-layer portion is padded to (excluding any initialization/measurement rows).
+    padded_depth = encoding_depth - encoder.initialization_encoding_depth() - encoder.measurement_encoding_depth()
     circuits_tensor = _np.zeros((len(circuits), encoding_depth, encoder.length), float)
     for i, circuit in enumerate(circuits):
-        circuits_tensor[i,:,:] = encoder(circuit, padded_depth=encoding_depth)
+        circuits_tensor[i,:,:] = encoder(circuit, padded_depth=padded_depth)
 
     return circuits_tensor
 
 
 def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',
-                            process_num: int = 5) -> dict:
+                            process_num: int = 5, include_spam: bool = False) -> dict:
     """
     Compute the tensors needed by QPANN probability-approximation layers.
 
@@ -375,6 +430,14 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         Processor specification (used mainly for num_qubits).
     alpha_representation : {'concise', 'matrix'}, default 'concise'
         Which alpha/first-order representation to compute.
+    process_num : int, default 5
+        Number of worker processes used for the 'concise' representation.
+    include_spam : bool, default False
+        If True, the tensors include a state-preparation error row (first) and a measurement
+        error row (last), so that a QPANN models SPAM errors as two extra error generator layers
+        (see `error_propagation_tensors`). Use with a circuit encoder that encodes the implicit
+        initialization and measurement layers, e.g. `StandardCircuitEncoder(pspec, include_spam=True)`,
+        so that the rows of the circuit encoding and of these tensors line up.
 
     Returns
     -------
@@ -398,7 +461,7 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
             "since it only ever computes alphas for the (few) error generators/indices that actually "
             "occur in each circuit, regardless of type."
         )
-    indices, signs = error_propagation_tensors(circuits, error_generators, pspec)
+    indices, signs = error_propagation_tensors(circuits, error_generators, pspec, include_spam=include_spam)
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, pspec, indices=indices)
     elif alpha_representation == 'concise':
@@ -408,7 +471,7 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
 
 
-def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list) -> tuple[_np.ndarray, _np.ndarray]:
+def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list, include_spam: bool = False) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Computers the `indices` and `signs` matrices used in quantum physics aware neural networks,
     for the input circuit and the error generators specified in the `error_generators` list.
@@ -430,17 +493,35 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
         `paulis_tuple` is a tuple of Pauli strings. For 'H' and 'S', this is a single Pauli
         string. The Pauli strings should be length-n strings where n is the number of qubits
         on which `circuit` acts.
+    include_spam : bool, default False
+        If True, add a state-preparation error row and a measurement error row (see Returns),
+        so that a QPANN can model SPAM errors as two extra error generator layers: one acting
+        right after the ideal state preparation, the other right before the ideal measurement.
 
     Returns
     -------
     indices : numpy.ndarray
         Integer array of shape `(circuit.depth, len(error_generators))` giving, for each
         layer and each generator inserted after that layer, the index of the propagated
-        (end-of-circuit) elementary error generator.
+        (end-of-circuit) elementary error generator. If `include_spam` is True, the shape is
+        `(circuit.depth + 2, len(error_generators))`: row 0 is for error generators acting right
+        after state preparation (so propagated through every layer of the circuit), rows
+        `1, ..., circuit.depth` are for the circuit's layers as above, and the last row is for
+        error generators acting right before measurement (not propagated at all).
     signs : numpy.ndarray
         Integer array of the same shape giving (+-1) sign factors for each propagation.
 
     """
+    if include_spam:
+        # State preparation errors act before the first layer, i.e., exactly like errors "after"
+        # an idle layer prepended to the circuit: they propagate through every layer. Measurement
+        # errors act after the last layer and are not propagated (identity propagation).
+        prepended = _Circuit([[]], line_labels=circuit.line_labels) + circuit
+        indices, signs = circuit_error_propagation_matrices(prepended, error_generators)
+        meas_indices = _np.array([[_tools.error_generator_index(t, paulis) for t, paulis in error_generators]])
+        meas_signs = _np.array([[_tools.error_generator_canonicalization_sign(t, paulis) for t, paulis in error_generators]])
+        return _np.concatenate([indices, meas_indices]), _np.concatenate([signs, meas_signs])
+
     # An empty `fixed_errorgen_layer` (rather than no arguments at all) is required: the
     # constructor asserts that exactly one of `model`/`fixed_errorgen_layer` is given. We need
     # neither -- this instance is only used for its stateless propagation helpers, because the 
@@ -466,7 +547,8 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
 
 
 def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", prior_error_generators: list | None = None,
-                              prior_indices: _np.ndarray | None = None, prior_signs: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
+                              prior_indices: _np.ndarray | None = None, prior_signs: _np.ndarray | None = None,
+                              include_spam: bool = False) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Compute batched error-propagation tensors (`indices`, `signs`) for multiple circuits.
 
@@ -484,18 +566,28 @@ def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, 
     prior_indices : numpy.ndarray or None, optional
         Previously computed indices tensor to copy into the left block.
     prior_signs : numpy.ndarray or None, optional
-        Previously computed signs tensor to copy into the left block.
+        Previously computed signs tensor to copy into the left block (computed with the same
+        `include_spam` setting).
+    include_spam : bool, default False
+        If True, include state-preparation and measurement error rows (see
+        `circuit_error_propagation_matrices`).
 
     Returns
     -------
     indices : numpy.ndarray
-        Array of shape `(num_circuits, max_depth, num_error_generators_total)` with propagated indices.
+        Array of shape `(num_circuits, max_depth, num_error_generators_total)` with propagated
+        indices, or `(num_circuits, max_depth + 2, num_error_generators_total)` if `include_spam`
+        is True. In the latter case, row 0 is the state-preparation row, rows `1, ..., depth` are
+        the circuit's layers, and row `max_depth + 1` is the measurement row -- the same row order
+        as the encoding produced by a `CircuitEncoder` with initialization and measurement
+        encodings of depth 1 (e.g., `StandardCircuitEncoder(pspec, include_spam=True)`).
     signs : numpy.ndarray
         Array of the same shape with (+-1) sign factors.
 
     Notes
     -----
-    For a circuit with depth < max_depth, the trailing layers remain zero-filled.
+    For a circuit with depth < max_depth, the trailing layers (before the measurement row, if
+    `include_spam` is True) remain zero-filled.
     For more information on what a circuit's `indices` and `signs` matrix encode, see the docstring for
     the function `circuit_error_propagation_matrices`, which this function calls to compute these matrices
     for each circuit.
@@ -512,20 +604,31 @@ def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, 
     num_qubits = pspec.num_qubits
     max_depth = _np.max([circuit.depth for circuit in circuits])
 
-    indices = _np.zeros((len(circuits), max_depth, len(error_generators) + num_pregs), int)
-    signs = _np.zeros((len(circuits), max_depth, len(error_generators) + num_pregs), int)
+    num_rows = max_depth + 2 if include_spam else max_depth
+    indices = _np.zeros((len(circuits), num_rows, len(error_generators) + num_pregs), int)
+    signs = _np.zeros((len(circuits), num_rows, len(error_generators) + num_pregs), int)
 
     if prior_error_generators is not None:
         assert prior_indices is not None and prior_signs is not None
+        assert prior_indices.shape[1] == num_rows, \
+            "prior_indices has the wrong depth: was it computed with the same `include_spam` setting?"
         indices[:, :, 0:num_pregs] = prior_indices.copy()
         signs[:, :, 0:num_pregs] = prior_signs.copy()
 
     for i, circuit in enumerate(circuits):
 
         # compute the sign and indices matrices for this circuit
-        indices_for_circuit, signs_for_circuit = circuit_error_propagation_matrices(circuit, error_generators)
-        indices[i, 0:circuit.depth, num_pregs:] = indices_for_circuit.copy()
-        signs[i, 0:circuit.depth, num_pregs:] = signs_for_circuit.copy()
+        indices_for_circuit, signs_for_circuit = circuit_error_propagation_matrices(circuit, error_generators,
+                                                                                    include_spam=include_spam)
+        if include_spam:
+            # prep row and layer rows at the top; measurement row last (after any padding)
+            indices[i, 0:circuit.depth + 1, num_pregs:] = indices_for_circuit[:-1]
+            signs[i, 0:circuit.depth + 1, num_pregs:] = signs_for_circuit[:-1]
+            indices[i, -1, num_pregs:] = indices_for_circuit[-1]
+            signs[i, -1, num_pregs:] = signs_for_circuit[-1]
+        else:
+            indices[i, 0:circuit.depth, num_pregs:] = indices_for_circuit.copy()
+            signs[i, 0:circuit.depth, num_pregs:] = signs_for_circuit.copy()
 
     return indices, signs
 

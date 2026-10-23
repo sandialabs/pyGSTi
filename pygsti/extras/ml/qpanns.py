@@ -36,6 +36,16 @@ class QPANN(_keras.Model):
     The model maps circuit encodings (plus auxiliary propagation/alpha information) to
     predicted outcome probabilities using a first-order error model.
 
+    State-preparation and measurement (SPAM) errors are modelled as two extra error generator
+    layers, one right after the ideal state preparation and one right before the ideal
+    measurement, whose rates the network predicts like any other layer's. To use this, build the
+    circuit encoding with `encoding.StandardCircuitEncoder(pspec, include_spam=True)` and the
+    tensors with `encoding.error_generator_tensors(..., include_spam=True)`; their rows line up.
+    Include 'A'-type generators (e.g. `('A', ('X', 'Y'))` on each qubit) to capture non-unital
+    SPAM errors such as asymmetric readout error. Note that modelling SPAM errors enlarges the
+    gauge freedom of the learned error rates (as in GST), so compare learned rates only after
+    gauge fixing, or compare predictions.
+
     Attributes
     ----------
     encoding_length : int
@@ -68,10 +78,13 @@ class QPANN(_keras.Model):
         modelled_error_generators : list
             A list of the "elementary error generators" that the QPANN models. Each element of this
             list is a tuple. The first element of the tuple is a string specifying the error
-            generator type: 'H' or 'S', for Hamiltonian and stochastic errors (currently active
-            and Pauli-correlation errors are not supported by QPANNs). The second element of
-            the tuple is a single-element tuple where that single element is a string for the
-            Pauli indexing the error (e.g., for 4 qubits, this could be 'XYZI').
+            generator type: 'H', 'S', 'C', or 'A' (Hamiltonian, stochastic Pauli, stochastic
+            Pauli-correlation, and active; see "A Taxonomy of Small Markovian Errors"). The second
+            element of the tuple is a tuple of Pauli strings indexing the error: a single Pauli
+            for 'H'/'S' (e.g., for 4 qubits, `('XYZI',)`), or two distinct Paulis for 'C'/'A'
+            (e.g., `('XIII', 'YIII')`). 'S' rates are constrained to be non-negative (the network
+            output is squared); 'H', 'C' and 'A' rates are unconstrained. 'C'/'A' generators
+            require `probability_computation='concise'`.
 
         snipper : list[list[int]]
              For each error generator, a list of encoding indices to extract as inputs

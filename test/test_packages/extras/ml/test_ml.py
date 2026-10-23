@@ -743,6 +743,134 @@ class MLSubpackageTester(unittest.TestCase):
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
 
+    @staticmethod
+    def _dense_spam_model_probabilities(circuit, num_qubits, rows):
+        """Exact outcome probabilities of `circuit` with error generator layers exp(L_r) applied
+        after state preparation (r = 0), after each circuit layer (r = 1..depth) and before
+        measurement (r = depth + 1); `rows` maps r -> list of (rate, (type, paulis))."""
+        from scipy.linalg import expm
+        from pygsti.baseobjs.basis import BuiltinBasis
+        from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
+        basis_1q = BuiltinBasis('PP', 4)
+        d = 2 ** num_qubits
+
+        def gen(r):
+            L = np.zeros((d * d, d * d), complex)
+            for rate, (typ, paulis) in rows.get(r, []):
+                L += rate * create_elementary_errorgen_nqudit(typ, paulis, basis_1q, normalize=False, sparse=False,
+                                                               tensorprod_basis=False)
+            return expm(L)
+
+        rho = gen(0) @ state_to_dmvec(np.eye(d)[:, 0].astype(complex))
+        for l, tab in enumerate(circuit.convert_to_stim_tableau_layers()):
+            U = tab.to_unitary_matrix(endian='big')
+            rho = gen(l + 1) @ (np.kron(U, U.conj()) @ rho)
+        rho = gen(circuit.depth + 1) @ rho
+        effects = [state_to_dmvec(np.eye(d)[:, i].astype(complex)).conj() for i in range(d)]
+        return np.real(np.array([e @ rho for e in effects]))
+
+    def test_spam_error_generator_tensors_match_dense_simulation(self):
+        # The SPAM rows of the QPANN tensors (state-preparation errors, row 0; measurement errors,
+        # last row), and the circuit-layer rows in between, must give the exact first-order
+        # sensitivity of every outcome probability to each error generator's rate -- including
+        # 'C'/'A' generators (e.g. the A term of asymmetric, amplitude-damping-like readout error)
+        # and weight-2 'C'/'A' pairs. Checked against central finite differences of a dense
+        # density-matrix simulation.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+                    Circuit('[Gypi2:0][Gcphase:0:1]@(0,1)'),
+                    Circuit('[Gxpi2:0Gxpi2:1]@(0,1)')]
+        gens = [('H', ('XI',)), ('H', ('IY',)), ('S', ('XI',)), ('S', ('ZZ',)),
+                ('C', ('XI', 'YI')), ('A', ('XI', 'YI')), ('A', ('IX', 'IY')),  # amplitude-damping-like terms
+                ('C', ('XI', 'YZ')), ('A', ('XI', 'YZ'))]
+        tensors = encoding.error_generator_tensors(circuits, gens, pspec, include_spam=True, process_num=1)
+        alphas, probabilities = tensors['alphas'], tensors['probabilities']
+        max_depth = max(c.depth for c in circuits)
+        self.assertEqual(alphas.shape, (len(circuits), 4, max_depth + 2, len(gens)))
+
+        eps = 1e-6
+        for ci, circuit in enumerate(circuits):
+            p0 = self._dense_spam_model_probabilities(circuit, 2, {})
+            self.assertTrue(np.allclose(p0, probabilities[ci], atol=1e-10))
+            # rows of the dense model: 0 = prep, 1..depth = layers, depth + 1 = measurement
+            # rows of the tensors:     0 = prep, 1..depth = layers, max_depth + 1 = measurement
+            for dense_row, tensor_row in [(0, 0), (1, 1), (circuit.depth, circuit.depth),
+                                          (circuit.depth + 1, max_depth + 1)]:
+                for j, g in enumerate(gens):
+                    plus = self._dense_spam_model_probabilities(circuit, 2, {dense_row: [(eps, g)]})
+                    minus = self._dense_spam_model_probabilities(circuit, 2, {dense_row: [(-eps, g)]})
+                    derivative = (plus - minus) / (2 * eps)
+                    self.assertTrue(np.allclose(alphas[ci, :, tensor_row, j], derivative, atol=1e-6),
+                                    f"circuit {ci}, row {tensor_row}, generator {g}: "
+                                    f"{alphas[ci, :, tensor_row, j]} vs {derivative}")
+            # padding rows (between the last layer and the measurement row) contribute nothing
+            for r in range(circuit.depth + 1, max_depth + 1):
+                self.assertTrue(np.all(alphas[ci, :, r, :] == 0))
+
+    def test_spam_rows_without_spam_unchanged(self):
+        # include_spam=True must leave the circuit-layer rows identical to include_spam=False.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1@(0,1)'), Circuit('[Gypi2:0]@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YZ'))]
+        idx0, sg0 = encoding.error_propagation_tensors(circuits, gens, pspec)
+        idx1, sg1 = encoding.error_propagation_tensors(circuits, gens, pspec, include_spam=True)
+        self.assertEqual(idx1.shape, (2, idx0.shape[1] + 2, len(gens)))
+        self.assertTrue(np.array_equal(idx1[:, 1:-1], idx0) and np.array_equal(sg1[:, 1:-1], sg0))
+        # measurement errors are not propagated: index of the generator itself
+        expected = [errgentools.error_generator_index(t, p) for t, p in gens]
+        self.assertTrue(np.array_equal(idx1[:, -1], np.array([expected, expected])))
+
+    def test_encoder_with_spam(self):
+        pspec = _ProcessorSpec(3, ['Gxpi2', 'Gcphase'], {}, {'Gcphase': [(0, 1), (1, 2)]},
+                                geometry="line", qubit_labels=[0, 1, 2])
+        plain = encoding.StandardCircuitEncoder(pspec)
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        ng = len(encoder.gate_indexing)
+        self.assertEqual(encoder.length, ng + 6)
+        self.assertEqual(encoder.depth(4), 6)
+        circ = Circuit('[Gxpi2:0Gcphase:1:2]Gxpi2:1@(0,1,2)')
+        enc = encoder(circ, padded_depth=3)
+        self.assertEqual(enc.shape, (5, ng + 6))
+        self.assertTrue(np.array_equal(enc[0], [0] * ng + [1, 1, 1, 0, 0, 0]))       # preparation row
+        self.assertTrue(np.array_equal(enc[-1], [0] * ng + [0, 0, 0, 1, 1, 1]))      # measurement row
+        self.assertTrue(np.array_equal(enc[1:3, :ng], plain(circ)))                  # circuit layers
+        self.assertTrue(np.all(enc[1:4, ng:] == 0) and np.all(enc[3] == 0))          # padding row
+        # snipper windows include the preparation/measurement indicators of their qubits
+        self.assertEqual(encoder.indices_for_qubits([2]), plain.indices_for_qubits([2]) + [ng + 2, ng + 5])
+        # Regression test: circuits_to_tensor used to pass the total encoding depth (including the
+        # initialization/measurement rows) as the encoder's layer-padding depth, which broke any
+        # encoder with non-empty initialization/measurement encodings.
+        circs = [circ, Circuit('Gxpi2:2@(0,1,2)')]
+        tensor = encoding.circuits_to_tensor(circs, encoder)
+        self.assertEqual(tensor.shape, (2, 2 + 2, ng + 6))
+        self.assertTrue(np.array_equal(tensor[0], encoder(circ)))
+        self.assertTrue(np.array_equal(tensor[1, -1], enc[-1]) and np.all(tensor[1, 2] == 0))
+
+    def test_qpann_forward_and_fit_with_spam(self):
+        # End-to-end: SPAM-aware encoder + tensors -> QPANN forward pass and training, with an
+        # A-type (non-unital) generator for asymmetric readout error.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1@(0,1)'), Circuit('[Gypi2:0][Gxpi2:1]@(0,1)'),
+                    Circuit('Gcphase:0:1@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YI'))]
+        tensors = encoding.error_generator_tensors(circuits, gens, pspec, include_spam=True, process_num=1)
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        self.assertEqual(circuits_tensor.shape[1], tensors['alphas'].shape[2])   # rows line up
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(gens, encoder, adjacency_matrix, hops=0)
+        model = qpanns.QPANN(encoder.length, gens, snipper)
+        x = [circuits_tensor, tensors['alphas'], tensors['probabilities']]
+        output = model(x)
+        self.assertEqual(tuple(output.shape), (len(circuits), 4))
+        initial_weights = [w.numpy().copy() for w in model.trainable_variables]
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-1), loss='mse')
+        model.fit(x, tensors['probabilities'] + 0.01, epochs=2, verbose=0)
+        self.assertTrue(any(not np.allclose(w0, w1.numpy()) for w0, w1 in zip(initial_weights, model.trainable_variables)))
+
     def test_definite_outcome_hamiltonian_alpha_is_zero(self):
         # Regression test for a dead-code bug in `encoding._circuit_loop_probs`: it used to
         # contain
