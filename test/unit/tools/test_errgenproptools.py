@@ -18,7 +18,7 @@ import warnings
 import pickle
 from unittest import mock
 from ..util import BaseCase, PoolDispatchSpy as _PoolDispatchSpy, forced_parallel, parallel_path_exercised
-from itertools import product, chain
+from itertools import product, chain, combinations
 from math import factorial
 import random
 import stim
@@ -1457,9 +1457,20 @@ class ApproxStabilizerMethodTester(BaseCase):
             paulis = [''.join(p) for p in product('IXYZ', repeat=n)][1:]
             exact = 2 * len(paulis) + 2 * (len(paulis) * (len(paulis) - 1) // 2)
             self.assertEqual(_eprop._num_distinct_errorgen_labels(n), exact)
-        # support-limited bound: equals the exact count at full support, is monotone, and counts support-1 labels
+        # support-limited count: exact, by enumeration, for every support limit (the C/A pairs are the
+        # unordered pairs of distinct non-identity Paulis, in the sorted order the labels store them in)
+        def support(pauli):
+            return {q for q, c in enumerate(pauli) if c != 'I'}
+        for n in (1, 2, 3):
+            paulis = [''.join(p) for p in product('IXYZ', repeat=n)][1:]
+            for max_support in range(n + 1):
+                exact = 2 * sum(len(support(p)) <= max_support for p in paulis) \
+                    + 2 * sum(len(support(p) | support(q)) <= max_support for p, q in combinations(paulis, 2))
+                self.assertEqual(_eprop._num_labels_with_support_at_most(n, max_support), exact, (n, max_support))
         self.assertEqual(_eprop._num_labels_with_support_at_most(3, 3), _eprop._num_distinct_errorgen_labels(3))
-        self.assertEqual(_eprop._num_labels_with_support_at_most(3, 1), 3 * (2 * 3 + 15 - 3))
+        self.assertEqual(_eprop._num_labels_with_support_at_most(3, 1), 3 * (15 - 3))
+        self.assertEqual(_eprop._num_labels_with_support_at_most(3, 7), _eprop._num_distinct_errorgen_labels(3))
+        self.assertEqual(_eprop._num_labels_with_support_at_most(10, 10), _eprop._num_distinct_errorgen_labels(10))
         self.assertEqual(_eprop._num_labels_with_support_at_most(5, 0), 0)
         vals = [_eprop._num_labels_with_support_at_most(10, s) for s in range(11)]
         self.assertEqual(vals, sorted(vals))

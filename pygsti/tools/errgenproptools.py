@@ -727,17 +727,26 @@ def estimate_magnus_peak_memory(
 
 def _num_labels_with_support_at_most(n_qubits: int, max_support: int) -> int:
     """
-    Upper bound on the number of distinct elementary error generator labels on `n_qubits` qubits
-    whose (combined) support has at most `max_support` qubits: for each support set of size k,
-    2 * 3^k H/S labels and at most 15^k - 3^k C/A labels (pairs of Paulis that are jointly
-    non-identity on every qubit of the set). Equals `_num_distinct_errorgen_labels` up to the C/A
-    pairs involving an identity, which this bound includes.
+    The number of distinct elementary error generator labels on `n_qubits` qubits whose (combined)
+    support has at most `max_support` qubits.
+
+    Labels are counted by their exact support set S, of size k, outside of which all Paulis are the
+    identity (there are C(n, k) such sets):
+
+    - H/S labels: one Pauli that is non-identity on every qubit of S, so 3^k of each type.
+    - C/A labels: an unordered pair of distinct non-identity Paulis that together cover S. There are
+      15^k ordered pairs of Paulis covering S (any of the 16 pairs of single-qubit Paulis except
+      (I, I) on each qubit), of which 3^k have P = Q and 2 * 3^k have one Pauli equal to the identity,
+      leaving 15^k - 3 * 3^k ordered pairs of distinct non-identity Paulis. The labels store their two
+      Paulis in sorted order, so each unordered pair is one label: (15^k - 3 * 3^k) / 2 pairs, each
+      giving a C and an A label, i.e. 15^k - 3 * 3^k C/A labels in total.
+
+    In total each support set holds 2 * 3^k + 15^k - 3 * 3^k = 15^k - 3^k labels. For
+    `max_support >= n_qubits` this is `_num_distinct_errorgen_labels(n_qubits)`.
     """
     n = int(n_qubits)
     s = max(0, min(n, int(max_support)))
-    if s == n:
-        return _num_distinct_errorgen_labels(n)
-    return sum(_math.comb(n, k) * (2 * 3**k + 15**k - 3**k) for k in range(1, s + 1))
+    return sum(_math.comb(n, k) * (15**k - 3**k) for k in range(1, s + 1))
 
 
 def _layer_support_statistics(errorgen_layers: list[_ErrorgenDict], n_qubits: int):
