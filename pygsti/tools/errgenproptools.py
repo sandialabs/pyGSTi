@@ -589,8 +589,7 @@ def _qubit_scale_tier(n_qubits: int) -> str:
 
 
 # Memory of one stim.PauliString (Python object plus its SIMD-aligned bit buffers): measured at
-# ~240 bytes for up to ~128 qubits, growing by roughly a byte per 4 additional qubits beyond that
-# (see review/scripts/phase3_component_size.py); `240 + n // 4` bounds the measurements from above.
+# ~240 bytes for up to ~128 qubits, growing by roughly a byte per 4 additional qubits beyond that.
 _STIM_PAULISTRING_BASE_BYTES = 240
 
 # Memory of one slot of a Python dict (hash, key and value pointers, plus the index entry), scaled
@@ -1252,10 +1251,7 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     # testing (4 to 100 qubits, orders 2 and 3, serial and parallel) found that both the worst-case
     # estimate (`estimate_magnus_peak_memory`) and the support-aware estimate
     # (`_estimate_magnus_peak_memory_from_layers`) overestimate actual memory use by too much to be
-    # practically useful at present (roughly 25-1000x at order 2 and up to ~10^5-10^6x at order 3),
-    # which would produce spurious warnings for routine large-qubit workloads. The overestimate is
-    # dominated by data-dependent effects (overlapping pairs that still commute, and outputs repeated
-    # across layer pairs) that cannot be bounded from term supports alone.
+    # practically useful at present.
     #
     # if len(errorgen_layers) > 1 and magnus_order >= 2 and identity is not None:
     #     n_q = len(identity)
@@ -5718,7 +5714,7 @@ def approximate_stabilizer_probabilities(
 
         Note on backwards compatibility: in pyGSTi 0.10 and earlier this function had no
         `bitstrings` argument and its third positional argument was `order`. Callers
-        that passed `order` positionally must now pass it by keyword (`order=...`).
+        that passed `order` positionally should be updated.
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.

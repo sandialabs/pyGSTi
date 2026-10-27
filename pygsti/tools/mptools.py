@@ -910,7 +910,7 @@ def parallel_pair_reduce(
 
 # Baseline memory footprint of one pool worker process: the unique set size (USS) of a worker that
 # has imported numpy, stim and pyGSTi's Cython extensions, measured at ~125 MiB for 'spawn' and
-# 'forkserver' workers (Linux, Python 3.13; see review/scripts/phase3_baseline_rss.py). 'fork'
+# 'forkserver' workers (Linux, Python 3.13). 'fork'
 # workers start out sharing their parent's pages (USS ~2 MiB) but un-share them as reference counts
 # are touched, so the spawn value is used as a conservative bound for every start method. The main
 # process's own footprint is deliberately *not* part of any estimate: it is already resident, and

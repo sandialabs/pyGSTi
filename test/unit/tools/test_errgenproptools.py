@@ -1715,7 +1715,7 @@ class ApproxStabilizerMethodTester(BaseCase):
             # serial truncation is exactly that of the raw product
             self.assertEqual(set(seq), {k for k, v in raw.items() if abs(v) > thr})
             for k in set(seq) & set(par):
-                self.assertLessEqual(abs(seq[k] - par[k]), thr + 1e-9 * abs(seq[k]))
+                self.assertLessEqual(abs(seq[k] - par[k]), thr + 1e-15 * abs(seq[k])) # allow small roundoff error from FP
             for k in set(seq) ^ set(par):  # a label kept by only one evaluation must be near the threshold
                 self.assertLessEqual(abs(raw[k]), 2 * thr)
 
