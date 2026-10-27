@@ -17,7 +17,9 @@ import sys
 import warnings
 import pickle
 from unittest import mock
-from ..util import BaseCase, PoolDispatchSpy as _PoolDispatchSpy, forced_parallel, parallel_path_exercised
+from ..util import BaseCase
+from .errgenprop_test_utils import parallel_path_exercised
+from .mptools_test_utils import PoolDispatchSpy as _PoolDispatchSpy
 from itertools import product, chain, combinations
 from math import factorial
 import random
