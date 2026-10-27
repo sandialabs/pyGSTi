@@ -92,8 +92,8 @@ class MPToolsTester(BaseCase):
 
     # ----- worker-count resolution (affinity, SMT, cgroup quotas) -----
     # These tests substitute a fake `psutil` through `sys.modules` (so they behave identically whether
-    # or not the optional psutil is installed), fake the affinity mask, and read cgroup files from
-    # temporary directory trees.
+    # or not the optional psutil is installed), fake the affinity mask, and read cgroup and CPU
+    # topology files from temporary directory trees.
 
     def _fake_psutil(self, logical, physical, affinity=None):
         logical_count, physical_count = logical, physical
@@ -102,8 +102,12 @@ class MPToolsTester(BaseCase):
         fake.Process.return_value.cpu_affinity.return_value = list(range(affinity)) if affinity else []
         return fake
 
-    def _patched_hardware(self, logical, physical, affinity=None, psutil_available=True):
-        """Context manager faking the machine: SMT layout, affinity mask size, and psutil availability."""
+    def _patched_hardware(self, logical, physical, affinity=None, psutil_available=True, topology_cores=None):
+        """
+        Context manager faking the machine: SMT layout, affinity mask size, and psutil availability.
+        The sysfs topology lookup is disabled (as on platforms without it) unless `topology_cores`, the
+        number of physical cores it would report for the affinity mask, is given.
+        """
         stack = contextlib.ExitStack()
         mpt._logical_to_physical_cpu_ratio.cache_clear()
         stack.callback(mpt._logical_to_physical_cpu_ratio.cache_clear)
@@ -112,14 +116,15 @@ class MPToolsTester(BaseCase):
         allowed = affinity if affinity is not None else logical
         stack.enter_context(mock.patch.object(mpt._os, 'process_cpu_count', create=True, return_value=allowed))
         stack.enter_context(mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=None))
+        stack.enter_context(mock.patch.object(mpt, '_allowed_physical_core_count', return_value=topology_cores))
         return stack
 
     def test_available_cpu_count_respects_smt_affinity_and_cgroup_quota(self):
         # 64 logical CPUs with two-way SMT = 32 physical cores
         with self._patched_hardware(64, 32):
             self.assertEqual(mpt.available_cpu_count(), 32)
-        # a Slurm-style allocation of 4 CPUs on that machine: affinity limits the result (this used to be
-        # ignored whenever psutil was installed)
+        # a Slurm-style allocation of 8 logical CPUs (4 whole cores) on that machine: the affinity mask limits
+        # the result (this used to be ignored whenever psutil was installed)
         with self._patched_hardware(64, 32, affinity=8):
             self.assertEqual(mpt.available_cpu_count(), 4)
             self.assertEqual(mpt.determine_num_workers("auto"), 4)
@@ -138,6 +143,101 @@ class MPToolsTester(BaseCase):
             self.assertEqual(mpt.available_cpu_count(), 16)
         with self._patched_hardware(16, 8, affinity=4, psutil_available=False):
             self.assertEqual(mpt.available_cpu_count(), 4)
+
+    def test_available_cpu_count_uses_topology_where_available(self):
+        # the topology count replaces the machine-wide SMT-ratio estimate (here 4 CPUs on 4 distinct cores)
+        with self._patched_hardware(64, 32, affinity=4, topology_cores=4):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+        with self._patched_hardware(64, 32, affinity=4, psutil_available=False, topology_cores=4):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+        # the cgroup quota still applies, and never raises the count
+        with self._patched_hardware(64, 32, affinity=8, topology_cores=4), \
+                mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=2):
+            self.assertEqual(mpt.available_cpu_count(), 2)
+        with self._patched_hardware(64, 32, affinity=8, topology_cores=4), \
+                mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=16):
+            self.assertEqual(mpt.available_cpu_count(), 4)
+
+    def test_parse_cpu_list(self):
+        self.assertEqual(mpt._parse_cpu_list("0"), {0})
+        self.assertEqual(mpt._parse_cpu_list("0-3,8,10-11\n"), {0, 1, 2, 3, 8, 10, 11})
+        self.assertEqual(mpt._parse_cpu_list(""), set())
+        with self.assertRaises(ValueError):
+            mpt._parse_cpu_list("a-b")
+
+    def _write_cpu_topology(self, siblings, name="core_cpus_list"):
+        """A fake sysfs CPU tree in which `siblings` lists the SMT siblings (as a CPU list string) of each CPU."""
+        return self._write_cgroup_tree({f"cpu{cpu}/topology/{name}": text for cpu, text in siblings.items()})
+
+    def test_physical_core_count_from_topology(self):
+        # 4 cores with two-way SMT, the siblings of core c being CPUs c and c + 4 (as on many Intel machines)
+        smt = {cpu: f"{cpu % 4},{cpu % 4 + 4}" for cpu in range(8)}
+        root = self._write_cpu_topology(smt)
+        count = lambda cpus: mpt._physical_core_count(cpus, cpu_root=root)
+        self.assertEqual(count(range(8)), 4)         # everything
+        self.assertEqual(count([0, 4]), 1)           # both threads of one core
+        self.assertEqual(count([0, 1, 4, 5]), 2)     # whole cores
+        self.assertEqual(count([0, 1, 2, 3]), 4)     # one thread per core: a logical/SMT-ratio estimate gives 2
+        self.assertEqual(count([1, 2, 3, 4]), 4)     # one thread on each core
+        self.assertEqual(count([0, 1, 5]), 2)        # a partially covered core still counts
+        self.assertIsNone(count([]))
+
+        # adjacent numbering of siblings (as on many AMD machines)
+        adjacent = {cpu: f"{cpu - cpu % 2}-{cpu - cpu % 2 + 1}" for cpu in range(8)}
+        root = self._write_cpu_topology(adjacent)
+        self.assertEqual(count([0, 2, 4, 6]), 4)
+        self.assertEqual(count([0, 1, 2, 3]), 2)
+
+        # a hybrid CPU: two SMT cores (CPUs 0-3) and four single-threaded cores (CPUs 4-7)
+        hybrid = {0: "0-1", 1: "0-1", 2: "2-3", 3: "2-3", 4: "4", 5: "5", 6: "6", 7: "7"}
+        root = self._write_cpu_topology(hybrid)
+        self.assertEqual(count(range(8)), 6)
+        self.assertEqual(count([0, 1, 4, 5]), 3)
+
+        # kernels before 5.3 only have thread_siblings_list
+        root = self._write_cpu_topology(smt, name="thread_siblings_list")
+        self.assertEqual(count([0, 1, 4, 5]), 2)
+
+        # topology that is missing for any CPU, or malformed, is reported as unknown
+        root = self._write_cpu_topology({0: "0,4", 1: "1,5"})
+        self.assertIsNone(count([0, 1, 2]))
+        root = self._write_cpu_topology({0: "garbage"})
+        self.assertIsNone(count([0]))
+        self.assertIsNone(mpt._physical_core_count([0], cpu_root="/nonexistent"))
+
+    def test_allowed_physical_core_count(self):
+        mask = {0, 1, 2, 3}
+        with mock.patch.object(mpt._sys, 'platform', 'linux'), \
+                mock.patch.object(mpt._os, 'sched_getaffinity', create=True, return_value=mask), \
+                mock.patch.object(mpt, '_allowed_logical_cpu_count', return_value=4), \
+                mock.patch.object(mpt, '_physical_core_count', return_value=3) as count:
+            self.assertEqual(mpt._allowed_physical_core_count(), 3)
+            self.assertEqual(count.call_args.args[0], mask)  # asked about the CPUs in the affinity mask
+            # unknown topology: the caller falls back to the logical CPU count
+            count.return_value = None
+            self.assertIsNone(mpt._allowed_physical_core_count())
+            count.return_value = 3
+            # an overridden CPU count (the mask no longer describes the usable CPUs)
+            with mock.patch.object(mpt, '_allowed_logical_cpu_count', return_value=2):
+                self.assertIsNone(mpt._allowed_physical_core_count())
+            # no readable affinity mask
+            with mock.patch.object(mpt._os, 'sched_getaffinity', create=True, side_effect=OSError):
+                self.assertIsNone(mpt._allowed_physical_core_count())
+            # not Linux
+            with mock.patch.object(mpt._sys, 'platform', 'win32'):
+                self.assertIsNone(mpt._allowed_physical_core_count())
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and os.path.isdir("/sys/devices/system/cpu/cpu0/topology"),
+                         "needs the Linux sysfs CPU topology")
+    def test_available_cpu_count_on_this_machine_matches_topology(self):
+        mpt._logical_to_physical_cpu_ratio.cache_clear()
+        self.addCleanup(mpt._logical_to_physical_cpu_ratio.cache_clear)
+        cores = mpt._allowed_physical_core_count()
+        self.assertIsNotNone(cores)
+        self.assertGreaterEqual(cores, 1)
+        self.assertLessEqual(cores, len(os.sched_getaffinity(0)))
+        with mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=None):
+            self.assertEqual(mpt.available_cpu_count(), cores)
 
     def test_available_cpu_count_affinity_fallbacks(self):
         # falls back from os.process_cpu_count to sched_getaffinity, then psutil's affinity, then os.cpu_count

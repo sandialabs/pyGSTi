@@ -118,6 +118,66 @@ def _allowed_logical_cpu_count() -> int:
     return max(1, int(n or _os.cpu_count() or 1))
 
 
+def _parse_cpu_list(text: str) -> set:
+    """Parse a Linux CPU list such as `"0-3,8,10-11"` into a set of CPU numbers."""
+    cpus = set()
+    for part in text.strip().split(","):
+        if not part.strip():
+            continue
+        lo, _, hi = part.partition("-")
+        cpus.update(range(int(lo), int(hi or lo) + 1))
+    return cpus
+
+
+def _physical_core_count(cpus: Sequence[int], cpu_root: str = "/sys/devices/system/cpu") -> Optional[int]:
+    """
+    The number of distinct physical cores that the logical CPUs `cpus` belong to, read from the Linux
+    sysfs CPU topology (the SMT siblings of each CPU, in `cpuN/topology/core_cpus_list`, or
+    `thread_siblings_list` on kernels older than 5.3), or None if this is not available for some CPU.
+
+    Unlike dividing the number of logical CPUs by a machine-wide SMT ratio, this is exact for any
+    set of CPUs: one thread on each of four cores counts as four cores, both threads of one core
+    count as one, and cores with differing numbers of threads (e.g. hybrid P- and E-core CPUs) are
+    handled correctly.
+    """
+    seen = set()
+    n_cores = 0
+    for cpu in sorted(set(cpus)):
+        if cpu in seen:
+            continue
+        siblings = None
+        for name in ("core_cpus_list", "thread_siblings_list"):
+            try:
+                with open(f"{cpu_root}/cpu{cpu}/topology/{name}", "r") as f:
+                    siblings = _parse_cpu_list(f.read())
+                break
+            except (OSError, ValueError):
+                continue
+        if not siblings:
+            return None
+        seen |= siblings | {cpu}
+        n_cores += 1
+    return n_cores or None
+
+
+def _allowed_physical_core_count() -> Optional[int]:
+    """
+    The number of physical cores that the logical CPUs in this process's affinity mask belong to,
+    or None where this cannot be determined (platforms other than Linux, or no readable sysfs CPU
+    topology) and the caller should estimate it from the logical CPU count instead.
+    """
+    if not _sys.platform.startswith("linux") or not hasattr(_os, "sched_getaffinity"):
+        return None
+    try:
+        mask = _os.sched_getaffinity(0)
+    except Exception:
+        return None
+    # if the usable CPU count has been overridden (e.g. PYTHON_CPU_COUNT) the mask no longer describes it
+    if len(mask) != _allowed_logical_cpu_count():
+        return None
+    return _physical_core_count(mask)
+
+
 def _cgroup_cpu_quota(cgroup_root: str = "/sys/fs/cgroup", proc_cgroup_file: str = "/proc/self/cgroup") -> Optional[int]:
     """
     The whole number of CPUs this process is limited to by Linux cgroup CPU quotas (as set by
@@ -185,19 +245,27 @@ def available_cpu_count() -> int:
     Three separate limits are combined, since each is imposed by different tools:
 
     1. the hardware: SMT / hyper-threading logical CPUs are not counted separately from the
-       physical core they share (assuming a uniform number of logical CPUs per core, as reported by
-       `psutil`; without `psutil` all logical CPUs are counted);
+       physical core they share;
     2. the CPU affinity mask: the subset of CPUs the operating system permits this process to run
        on (`taskset`, Slurm allocations, `numactl`, `docker --cpuset-cpus`);
     3. the cgroup CPU quota (Linux): the amount of CPU time the process may use (`docker --cpus`,
        Kubernetes CPU limits).
+
+    The first two limits are combined by counting the distinct physical cores among the CPUs in the
+    affinity mask. On Linux this is read from the CPU topology in sysfs, so it is exact for any mask
+    (for example, one thread on each of four cores counts as four cores, and both threads of two cores
+    as two). Elsewhere it is estimated by dividing the number of allowed logical CPUs by the ratio of
+    logical CPUs to physical cores reported by `psutil`, which assumes the mask contains whole cores
+    and a uniform number of threads per core; without `psutil` every logical CPU is counted.
 
     Returns
     -------
     int
         The number of usable physical cores (>= 1).
     """
-    n = max(1, int(_allowed_logical_cpu_count() / _logical_to_physical_cpu_ratio()))
+    n = _allowed_physical_core_count()
+    if n is None:
+        n = max(1, int(_allowed_logical_cpu_count() / _logical_to_physical_cpu_ratio()))
     if _sys.platform.startswith("linux"):
         quota = _cgroup_cpu_quota()
         if quota is not None:
