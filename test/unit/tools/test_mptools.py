@@ -55,6 +55,9 @@ def _slow_get_pid(_=None):
     return os.getpid()
 
 
+mpt_real_quota = mpt._cgroup_cpu_quota  # the unpatched function, for tests that patch the module attribute
+
+
 class MPToolsTester(BaseCase):
     def test_starmap_with_kwargs(self):
         # Sequential (1 processor)
@@ -336,6 +339,21 @@ class MPToolsTester(BaseCase):
         self.assertIsNone(self._quota(files, "4:cpu,cpuacct:/\n"))
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
+    def test_available_cpu_count_cgroup_quota_is_independent_of_platform(self):
+        # the quota is applied wherever one is found, and a platform without cgroups simply has none
+        for platform in ('linux', 'win32', 'darwin'):
+            with self.subTest(platform=platform), mock.patch.object(mpt._sys, 'platform', platform):
+                with self._patched_hardware(64, 32), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=4):
+                    self.assertEqual(mpt.available_cpu_count(), 4)
+                with self._patched_hardware(64, 32):  # no quota
+                    self.assertEqual(mpt.available_cpu_count(), 32)
+        # without a readable /proc/self/cgroup (as on Windows and macOS) the lookup finds no quota
+        # instead of failing
+        missing = lambda: mpt_real_quota(proc_cgroup_file="/nonexistent/proc")
+        with self._patched_hardware(8, 8), mock.patch.object(mpt, '_cgroup_cpu_quota', side_effect=missing) as quota:
+            self.assertEqual(mpt.available_cpu_count(), 8)
+            quota.assert_called_once()
+
     def test_determine_num_workers_uses_cgroup_quota(self):
         with self._patched_hardware(64, 64), mock.patch.object(mpt, '_cgroup_cpu_quota', return_value=2):
             self.assertEqual(mpt.available_cpu_count(), 2)

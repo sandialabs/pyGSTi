@@ -266,10 +266,9 @@ def available_cpu_count() -> int:
     n = _allowed_physical_core_count()
     if n is None:
         n = max(1, int(_allowed_logical_cpu_count() / _logical_to_physical_cpu_ratio()))
-    if _sys.platform.startswith("linux"):
-        quota = _cgroup_cpu_quota()
-        if quota is not None:
-            n = min(n, quota)
+    quota = _cgroup_cpu_quota()  # None where there are no cgroups (any platform other than Linux)
+    if quota is not None:
+        n = min(n, quota)
     return n
 
 
