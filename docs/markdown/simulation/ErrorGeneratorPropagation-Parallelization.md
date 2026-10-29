@@ -21,6 +21,7 @@ As circuit depth, qubit count, or the number of terms in a noise model grows—p
 import pygsti
 import stim
 import numpy as np
+from pygsti.baseobjs import QubitSpace
 from pygsti.tools import errorgenpropagation as eprop
 from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
@@ -47,7 +48,7 @@ for gate, avail in pspec.availability.items():
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
         error_rates_dict[label] = random_cptp_errorgen_rates(
-            num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234
+            QubitSpace(n), errorgen_types=('H', 'S'), label_type='local', seed=1234
         )
 
 error_model = pygsti.models.create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)

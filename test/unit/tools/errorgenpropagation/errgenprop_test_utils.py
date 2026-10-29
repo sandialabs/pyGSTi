@@ -95,7 +95,7 @@ def _all_sector_rate_subset(num_qubits, num_per_sector, seed):
     is generally not CP (S terms supporting the kept C/A terms may be dropped), which is
     irrelevant for error generator propagation.
     """
-    full = random_cptp_errorgen_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
+    full = random_cptp_errorgen_rates(QubitSpace(num_qubits), errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
                                              SCA_params=(0, .01), label_type='local', seed=seed)
     rng = np.random.default_rng(seed + 1)
     subset = {}
