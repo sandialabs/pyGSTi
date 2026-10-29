@@ -16,12 +16,14 @@ types. `LocalStimErrorgenLabel` is referenced via string forward references for 
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, Callable, Iterable, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import stim
     import numpy as _np
+    from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 else:
     try:
         import stim
@@ -47,7 +49,7 @@ __all__ = [
 
 # A list of (error generator label, rate) pairs, as produced by the commutator and
 # composition routines. Rates may be complex prior to aggregation.
-_ErrorgenTerms = list[tuple['LocalStimErrorgenLabel', complex]]
+_ErrorgenTerms = list[tuple[LocalStimErrorgenLabel, complex]]
 
 # A dictionary of error generator rates keyed by label, as taken and returned by the drivers
 # (BCH, Magnus, Zassenhaus, Taylor) for one layer or one order.
@@ -62,7 +64,7 @@ _SignedPauli = Union[tuple[complex, stim.PauliString], tuple[complex, stim.Pauli
 
 # The signature shared by the `_commutator_XY` and `_composition_XY` handlers:
 # (errorgen_1, errorgen_2, weight, identity string) -> terms.
-_PairHandler = Callable[['LocalStimErrorgenLabel', 'LocalStimErrorgenLabel', complex, str], _ErrorgenTerms]
+_PairHandler = Callable[[LocalStimErrorgenLabel, LocalStimErrorgenLabel, complex, str], _ErrorgenTerms]
 
 _F = TypeVar('_F', bound=Callable)
 
