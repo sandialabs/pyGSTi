@@ -14,8 +14,6 @@ def format_dem_stim(dem_dict, n_logical):
     formats a dictionary of event probabilities into a stim dem
     '''
     n_detectors = len(list(dem_dict.keys())[0])
-    #detectors called D0,D1,...D(n_detectors-1)
-    #need to add in logical detectors as a separate thing
     dem_string = ''
     for dbs, prob in dem_dict.items():
         if prob > 0:
@@ -33,14 +31,10 @@ def compute_contribution_bulk(eegs, rates, det_pauli, tableau):
     contributions = [r*ap for r, ap in zip(rates, alpha_paulis)]  
     return contributions
 
-def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
+def sort_terms_by_effect(terms, detectors):
     sorted_terms = defaultdict(list)
     for j,eeg in enumerate(terms):
         dets_fired = []
-        #print(eeg[0])
-        if show_progress:
-            if j%100==0:
-                print(j)
         for i, det_pauli in enumerate(detectors):
             P = eeg.basis_element_labels[0]
             if not P.commutes(det_pauli): 
@@ -63,7 +57,7 @@ def split_generator(term_sorting, eoc_eeg):
         generator_split.append(term_dict)
     return generator_split, base_events
 
-def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, sim):
+def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings):
     for event, egens in zip(base_events, leading_order_channels):
         if event != '0'*len(event):
             first_flipped_detector = event.find('1')
@@ -108,14 +102,6 @@ def compose_dems(dem1, dem2):
     return new_dem
 
 def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim,  zassenhaus_order=1):
-    #note: we're checking which detectors are affected, then combining the results to get which DEM event is affected. 
-    #let's try to do this without the sensitivity vectors to make it easier to generalize
-
-    #one way to think about this is that we group the errors by DEM event, then estimate the rate to first order. 
-    #I don't think that we can guarantee that going to higher guarantees the same effect. 
-    
-    #simply go through the list of Pauli strings and compute which ones are affected. 
-    #I'm guessing multiple detectors can be affected in this case.
 
     dem = defaultdict(float)
     eoc_eeg_terms = eoc_eeg.keys()
@@ -165,7 +151,7 @@ def estimate_error_rate_taylor(edict, tableau, det_pauli, order=1, truncation_th
         contribution /= 2 
     return contribution
 
-def build_dem_end2end(circuit, model, detectors, zassenhaus_order=1 ):
+def build_dem_end2end(circuit, model, detectors, zassenhaus_order=1):
 	#TODO n_logical functionality
     dets_as_pauli_strings = [dems.get_detector_as_parity(d, measurements, n_qubits) for d in detectors]
 
