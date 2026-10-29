@@ -64,8 +64,13 @@ def __getattr__(name):
     # pygsti.leakage.  Only fires for names not otherwise defined in this module.
     if name in _LEAKAGE_NAMES:
         return _get_leakage_shim(name)
+    if name == "errorgenpropagation":
+        import importlib as _importlib
+        mod = _importlib.import_module("pygsti.tools.errorgenpropagation")
+        globals()["errorgenpropagation"] = mod
+        return mod
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__():
-    return sorted(list(globals()) + list(_LEAKAGE_NAMES))
+    return sorted(list(globals()) + list(_LEAKAGE_NAMES) + ["errorgenpropagation"])
