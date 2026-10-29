@@ -14,14 +14,11 @@ from __future__ import annotations
 from typing import Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import itertools as _itertools
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
@@ -383,6 +380,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # The scatter targets (i, j) and sources (gi, gj) are cached, parameter-independent quadruplets
         # that mirror `to_dense`'s overwrite of `np.identity(dim)`.  `t_bg` is that identity with every
         # covered (i, j) zeroed out. Parameters are pure pass-through to the embedded op.
+        _torch = _import_torch()
         quads = list(self._iter_matrix_elements('HilbertSchmidt'))
         i, j, gi, gj = (_torch.tensor(c, dtype=_torch.long, device=device) for c in zip(*quads))
         bg = _np.identity(self.state_space.dim)
@@ -392,6 +390,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        _torch = _import_torch()
         etype, esd, t_bg, i, j, gi, gj = sd
         A = etype.torch_base(esd, t_param)  # whole t_param: params are pass-through
         # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.

@@ -23,7 +23,7 @@ authors = [
 ]
 dependencies=[
     'numpy>=1.15.0',
-    'scipy',
+    'scipy>=1.11',
     'stim',
     'plotly>=3.8.0',
     'pandas',

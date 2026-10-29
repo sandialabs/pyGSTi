@@ -5,6 +5,23 @@ from ..util import BaseCase
 
 
 class BasisConstructorsTester(BaseCase):
+    def test_GM_normalization(self):
+        for dim in (1, 2, 3, 5):
+            with self.subTest(dim=dim):
+                matrices = np.array(bc.GM_matrices(dim))
+                self.assertEqual(matrices.shape, (dim**2, dim, dim))
+                np.testing.assert_array_equal(matrices[0], np.eye(dim))
+                np.testing.assert_allclose(matrices, matrices.conj().transpose(0, 2, 1))
+                np.testing.assert_allclose(np.trace(matrices[1:], axis1=1, axis2=2), 0, atol=1e-13)
+                vectors = matrices.reshape(dim**2, dim**2)
+                np.testing.assert_allclose(vectors.conj() @ vectors.T, dim * np.eye(dim**2), atol=1e-13)
+
+    def test_GM_qubit_matches_PP(self):
+        np.testing.assert_array_equal(bc.GM_matrices(2), bc.PP_matrices(2))
+
+    def test_GM_empty(self):
+        self.assertEqual(bc.GM_matrices(0), [])
+
     def test_GellMann(self):
         id2x2 = np.array([[1, 0], [0, 1]])
         sigmax = np.array([[0, 1], [1, 0]])

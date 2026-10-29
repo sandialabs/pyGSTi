@@ -1,0 +1,74 @@
+# This workflow runs the docs notebook regression on beta and master.
+# It is a standalone workflow, rather than one entry of the "beta & master" test
+# matrix, so that it reports its own status and can be re-run on its own. The suite
+# is slow, so it runs on a single configuration (Linux + Python 3.13 + Cython).
+
+name: Notebook regression (beta & master)
+
+on:
+  push:
+    branches: [ "beta", "master" ]
+  workflow_dispatch: # Allow manual running from GitHub
+
+env:
+  SKIP_DEAP: 1
+  PYGSTI_NO_CUSTOMLM_SIGINT: 1
+  # CPU-only PyTorch wheels; see reuseable-main.yml.
+  UV_TORCH_BACKEND: cpu
+
+jobs:
+  notebooks:
+    runs-on: ubuntu-latest
+    name: Run notebook regression
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up installation environment
+      run: |
+        ./.github/ci-scripts/before_install.sh
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    # See reuseable-main.yml for why uv is bootstrapped with pip.
+    - name: Set up uv
+      run: python -m pip install --upgrade pip uv
+    - name: Cache uv downloads
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/uv
+        key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
+    - name: Install package
+      # The `ml` extra is needed for docs/markdown/ml/* (the QPANN tutorials), which
+      # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
+      # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
+      # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
+      # download TensorFlow purely to render Markdown.
+      run: |
+        uv pip install --system setuptools wheel
+        uv pip install --system -e .[testing,pytorch,docs,ml]
+    - name: Materialize notebooks
+      # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
+      # .md with an .ipynb sitting NEXT TO IT in the same directory (see
+      # docs/jupytext.toml), so the materialized notebooks land back under
+      # docs/markdown/ for nbval to consume.
+      run: |
+        cd docs && jupytext --sync 'markdown/**/*.md'
+    - name: Build CHP
+      # Download and compile CHP for the Clifford-simulation notebook;
+      # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
+      run: |
+        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
+        gcc -o /usr/local/bin/chp /tmp/chp.c
+    - name: Run notebook regression
+      env:
+        # glibc serves the thread-local storage of libraries built for "initial-exec" TLS from a
+        # small fixed reserve (1664 bytes by default on x86_64) when they are loaded after startup.
+        # qiskit's _accelerate takes 1544 bytes as of qiskit 2.6, and qiskit-aer's bundled libgomp
+        # needs 120 more, so MCFE-Example's `import qiskit_aer` failed with "cannot allocate memory
+        # in static TLS block". Enlarging the reserve leaves room for both.
+        GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 docs/markdown

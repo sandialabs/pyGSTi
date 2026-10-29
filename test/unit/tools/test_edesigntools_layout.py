@@ -37,12 +37,22 @@ class EdesignLayoutTester(BaseCase):
                   '_fisher': ['calculate_fisher_information_per_circuit',
                               'calculate_fisher_information_matrix',
                               'calculate_fisher_information_matrices_by_L'],
+                  '_reduction': ['CircuitSelection', 'DesignReducer', 'CallableReducer'],
         }
         for modname, names in owners.items():
             mod = importlib.import_module('pygsti.tools.edesigntools.' + modname)
             for name in names:
                 with self.subTest(module=modname, name=name):
                     self.assertIs(getattr(mod, name), getattr(edesigntools, name))
+
+    def test_blockdopt_is_a_public_submodule_whose_names_are_all_re_exported(self):
+        blockdopt = importlib.import_module('pygsti.tools.edesigntools.blockdopt')
+        self.assertIs(blockdopt, edesigntools.blockdopt)
+        for name in ['block_linear_dopt', 'BlockDoptReducer']:
+            self.assertIn(name, blockdopt.__all__)
+        for name in blockdopt.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(blockdopt, name), getattr(edesigntools, name))
 
     def test_star_import_namespace_is_curated(self):
         # edesigntools used to leak math.ceil into pygsti.tools via star-import,

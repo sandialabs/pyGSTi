@@ -486,12 +486,14 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     Parameters
     ----------
     v : numpy array
-        The vector length 4 or 16 respectively.
+        The vector, of length `basis.size`; a column vector of shape
+        `(basis.size, 1)` is also accepted. To convert a state or effect
+        ModelMember, pass `member.to_dense()`.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis
         The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
         Pauli-product (pp), and Qutrit (qt).  If a Basis object, then the basis
-        matrices are contained therein, and its dimension is checked to match `v`.
+        matrices are contained therein, and its size is checked to match `v`.
 
     keep_complex : bool, optional
         If True, leave the final (output) array elements as complex numbers when
@@ -504,17 +506,17 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    if not isinstance(basis, _basis.Basis):
-        basis = _basis.BuiltinBasis(basis, len(v))
     if not isinstance(v, _np.ndarray):
-        v = v.to_dense()
-        # TODO: track down functions that hit this code path, then change
-        # then so this conversion isn't needed in vec_to_stdmx.
+        msg = f"`v` must be a numpy.ndarray, not {type(v).__name__}."
+        if hasattr(v, 'to_dense'):
+            msg += " Pass `v.to_dense()` instead."
+        raise TypeError(msg)
     v = v.ravel()
+    if not isinstance(basis, _basis.Basis):
+        basis = _basis.BuiltinBasis(basis, v.size)
+    if v.size != basis.size:
+        raise ValueError(f"`v` has {v.size} entries, but the basis has {basis.size} elements.")
     ret = _np.zeros(basis.elshape, 'complex')
-    if v.ndim > 1:
-        assert v.size == v.shape[0]
-        v = v.ravel()
     for i, mx in enumerate(basis.elements):
         if keep_complex:
             ret += v[i] * mx

@@ -28,7 +28,8 @@ import pygsti
 import stim
 from pygsti.tools import errorgenpropagation as eprop
 from pygsti.tools.errorgenpropagation import polynomials as epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
@@ -59,7 +60,7 @@ for gate, availability in pspec.availability.items():
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
         # Sample error rates.
-        error_rates_dict[label] = random_CPTP_error_generator_rates(num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234)
+        error_rates_dict[label] = random_cptp_errorgen_rates(QubitSpace(n), errorgen_types=('H', 'S'), label_type='local', seed=1234)
 ```
 
 ```{code-cell} ipython3
@@ -288,8 +289,8 @@ This can be done using the `fixed_errorgen_layer` argument of the `ErrorGenerato
 For example, we can construct a random 4-qubit error generator layer directly:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,
@@ -328,8 +329,8 @@ If the fixed error generator layer is specified using `GlobalElementaryErrorgenL
 For example:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer_global = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer_global = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,
@@ -436,9 +437,9 @@ print(eprop.pauli_conjugation_composition(stim.PauliString('Z'), errorgen_1))
 Here `H_X` anticommutes with `Z`, so `{H_X, S_Z} = -2 H_X` with no further terms, and conjugating `H_X` by `Z` gives `-i C_{ZX, Z} = -i C_{iY, Z} = C_{Y,Z}`.
 
 ### `canonicalize_errorgen_layer` and the order of basis element labels
-Pauli-correlation (C) and active (A) error generators are indexed by an *unordered* pair of Paulis: `C_{P,Q} = C_{Q,P}` and `A_{P,Q} = -A_{Q,P}`. Every label class nevertheless stores the pair as an ordered tuple, and the propagation code needs a single convention so that one error generator is always one dictionary key. The convention used throughout this module is that the two padded Pauli strings of a `LocalStimErrorgenLabel` are sorted as python strings (`'I' < 'X' < 'Y' < 'Z'`, character by character), e.g. `C(IX, YI)` and never `C(YI, IX)`. `LocalStimErrorgenLabel.cast` raises a `ValueError` if handed a pair in the other order.
+Pauli-correlation (C) and active (A) error generators are indexed by an *unordered* pair of Paulis: `C_{P,Q} = C_{Q,P}` and `A_{P,Q} = -A_{Q,P}`. Every label class nevertheless stores the pair as an ordered tuple, and the propagation code needs a single convention so that one error generator is always one dictionary key. The convention used throughout this module is that the two Pauli strings of a `LocalStimErrorgenLabel` are sorted as python strings (`'I' < 'X' < 'Y' < 'Z'`, character by character), e.g. `C(IX, YI)` and never `C(YI, IX)`. `LocalStimErrorgenLabel.cast` raises a `ValueError` if handed a pair in the other order.
 
-pyGSTi's model objects do not currently enforce this convention. In particular, a two-qubit gate acting on a permuted set of target qubits (e.g. `Gcphase` on qubits `(1, 0)`) hands out local labels whose pair is sorted on the *gate's* qubits, which need not be sorted once written into the full width. `ErrorGeneratorPropagator` therefore reorders the labels it takes from a model (negating the rate of a reordered A generator), and the same is done to any `fixed_errorgen_layer` and to the error generator dictionaries accepted by the `approximate_stabilizer_*` functions, using `canonicalize_errorgen_layer`. That function accepts dictionaries keyed by `LocalStimErrorgenLabel`, `LocalElementaryErrorgenLabel` or (with the `sslbls` argument) `GlobalElementaryErrorgenLabel` and returns one keyed by canonical `LocalStimErrorgenLabel`s, folding the A sign into the rate and summing rates of labels that coincide after reordering. It is available directly from `pygsti.errorgenpropagation`:
+pyGSTi's model objects do not currently enforce this convention. In particular, a two-qubit gate acting on a permuted set of target qubits (e.g. `Gcphase` on qubits `(1, 0)`) hands out local labels whose pair is sorted on the *gate's* qubits, which need not be sorted once written into the full width. `ErrorGeneratorPropagator` therefore reorders the labels it takes from a model (negating the rate of a reordered A generator), and the same is done to any `fixed_errorgen_layer` and to the error generator dictionaries accepted by the `approximate_stabilizer_*` functions, using `canonicalize_errorgen_layer`.
 
 ```{code-cell} ipython3
 from pygsti.errorgenpropagation import canonicalize_errorgen_layer
@@ -450,7 +451,7 @@ noncanonical_layer = {LocalElementaryErrorgenLabel('C', ['YI', 'IX']): 0.01,
 canonicalize_errorgen_layer(noncanonical_layer)
 ```
 
-The C rate is unchanged, while the two A entries are the same generator written both ways and are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand. Here is the model-side situation it exists for: a `Gcphase` on qubits `(1, 0)` with an A error rate stored by the model under the pair `('YX', 'XY')`, which the propagator reports under the canonical key `A(XY, YX)` with the rate negated.
+In the above output the C rate is unchanged, while the two A entries are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand.
 
 There's a whole bunch of other functionality and utilities available, particularly in the `errorgenpropagation` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 

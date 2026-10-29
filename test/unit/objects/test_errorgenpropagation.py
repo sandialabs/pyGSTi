@@ -409,6 +409,7 @@ class LocalStimErrorgenLabelTester(BaseCase):
                 self.assertEqual(_lse_mod._slow_support_mask(lbl._hashable_basis_element_labels), expected)
                 self.assertEqual(_lse_mod.support_mask_from_strings(lbl._hashable_basis_element_labels), expected)
 
+
 class CanonicalLabelOrderTester(BaseCase):
     """The two basis element labels of every C/A `LocalStimErrorgenLabel` are in canonical
     (string-sorted) order. A model embedding a two-qubit gate into reversed target qubits
@@ -422,9 +423,9 @@ class CanonicalLabelOrderTester(BaseCase):
         return len(strs) == 1 or strs[0] < strs[1]
 
     def setUp(self):
-        from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+        from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
         pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
-        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        rates = random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S', 'C', 'A'), seed=7)
         self.model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
         self.circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
         self.propagator = ErrorGeneratorPropagator(self.model)

@@ -1,5 +1,7 @@
 import copy
 import pickle
+import warnings
+from unittest import mock
 
 import numpy as np
 
@@ -391,6 +393,109 @@ class FromEffectsTester(BaseCase):
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+
+
+def _central_difference_deriv(operator, h=1e-6):
+    """Central-difference derivative of `operator.to_dense()`, in the layout of `deriv_wrt_params`."""
+    p0 = operator.to_vector()
+    work = operator.copy()
+    cols = []
+    for i in range(len(p0)):
+        p = p0.copy()
+        p[i] += h
+        work.from_vector(p)
+        plus = work.to_dense()
+        p[i] -= 2 * h
+        work.from_vector(p)
+        cols.append(((plus - work.to_dense()) / (2 * h)).ravel())
+    return np.array(cols).T
+
+
+class RootConjDerivativeTester(BaseCase):
+    """RootConjOperator.deriv_wrt_params: exact where E^(1/2) is differentiable, and the
+    minimum-norm derivative at singular E."""
+
+    def setUp(self):
+        self.basis = std.target_model().basis
+
+    def _root_conj(self, effects, basis, perturbation=0.0, seed=0):
+        instrument = Instrument.from_effects(effects, basis)
+        if perturbation:
+            rng = np.random.default_rng(seed)
+            instrument.from_vector(instrument.to_vector() + perturbation * rng.standard_normal(instrument.num_params))
+        return {lbl: member.factorops[0] for lbl, member in instrument.items()}
+
+    def test_matches_central_differences(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05, seed=1)['p0']
+        self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_matches_central_differences_with_repeated_eigenvalues(self):
+        # A depolarized two-qubit projector has a threefold eigenvalue, where differentiating
+        # eigenvectors (as autograd through eigh does) breaks down.
+        P = np.diag([1.0, 0, 0, 0]).astype(complex)
+        E0 = 0.8 * P + 0.2 * np.eye(4) / 4
+        basis = pygsti.baseobjs.Basis.cast('pp', 16)
+        rcops = self._root_conj({'p0': E0, 'p1': np.eye(4) - E0}, basis)
+        for rcop in rcops.values():
+            self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_wrt_filter(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05)['p0']
+        full = rcop.deriv_wrt_params()
+        self.assertEqual(full.shape, (self.basis.dim**2, rcop.num_params))
+        self.assertArraysEqual(rcop.deriv_wrt_params([3, 1]), full[:, [3, 1]])
+
+    def test_zero_effect_has_zero_derivative(self):
+        rcop = self._root_conj({'p0': np.eye(2, dtype=complex), 'p1': np.zeros((2, 2), complex)},
+                               self.basis, perturbation=0.05)['p1']
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            deriv = rcop.deriv_wrt_params()
+        self.assertArraysEqual(deriv, np.zeros((self.basis.dim**2, rcop.num_params)))
+
+    def test_ideal_effect(self):
+        # At an ideal projective effect with zero error rates, the Hamiltonian coordinates rotate E
+        # (rank-preserving, so E^(1/2) is smooth), and the 9 Cholesky coordinates of the stochastic
+        # block move E only at second order. A central difference is then exact up to roundoff:
+        # the derivative along a rotation, and 0 along the Cholesky coordinates, since +h and -h
+        # give the same rates.
+        E0 = np.diag([1.0, 0.0]).astype(complex)
+        rcops = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)
+        for rcop in rcops.values():
+            self.assertEqual(rcop.num_params, 12)
+            with warnings.catch_warnings(), mock.patch.object(
+                    op.linearop, 'finite_difference_deriv_wrt_params', side_effect=AssertionError):
+                warnings.simplefilter('error')
+                deriv = rcop.deriv_wrt_params()
+            self.assertArraysEqual(deriv[:, 3:], np.zeros((self.basis.dim**2, 9)))
+            self.assertGreater(np.abs(deriv[:, :2]).max(axis=0).min(), 0.0)
+            self.assertArraysAlmostEqual(deriv, _central_difference_deriv(rcop), places=7)
+
+    def test_shifted_ideal_effect(self):
+        # simplish_leastsq takes its first step from the Jacobian at the ideal point shifted by
+        # JAC_SHIFT in the zero columns. There E has eigenvalues near JAC_SHIFT**2, and the
+        # derivative along the Cholesky coordinates must not be zeroed again.
+        from pygsti.optimize.simplerlm import JAC_SHIFT
+        E0 = np.diag([1.0, 0.0]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)['p0']
+        x = np.zeros(rcop.num_params)
+        x[3:] = JAC_SHIFT
+        rcop.from_vector(x)
+        deriv = rcop.deriv_wrt_params()
+        # (A finite-difference reference is out of reach here: roundoff in sqrt(lambda) is about
+        # 1e-9, comparable to any step small enough to stay clear of the kink at 0.)
+        self.assertGreater(np.abs(deriv[:, 3:]).max(), 0.1)
+
+    def test_ideal_two_qubit_effect(self):
+        # A rank-one projector: a threefold zero eigenvalue.
+        P = np.diag([1.0, 0, 0, 0]).astype(complex)
+        basis = pygsti.baseobjs.Basis.cast('pp', 16)
+        rcops = self._root_conj({'p0': P, 'p1': np.eye(4) - P}, basis)
+        for rcop in rcops.values():
+            # The norm is over 256 x 240 entries, each with about 1e-9 of roundoff from the central difference.
+            self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=6)
 
 
 class SharedErrorMapCopyTester(BaseCase):

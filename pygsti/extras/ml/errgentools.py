@@ -21,14 +21,13 @@ This module defines utility functions for:
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as np
 import itertools as _itertools
 import stim as _stim
 from typing import Any
 
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
-from pygsti.extras.ml import graphtools as _graphtools
+from pygsti.tools import graphs as _graphtools
 
 
 def numberToBase(n: int, b: int) -> list[int]:
@@ -669,89 +668,6 @@ def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
     return pairs
 
 
-def _qubit_graph_close_matrix(qubit_graph: Any, n: int, num_hops: int) -> np.ndarray:
-    """
-    Computes the boolean "within num_hops" adjacency matrix for a qubit connectivity graph.
-    Shared helper used by both `up_to_weight_k_paulis_from_qubit_graph` and
-    `up_to_weight_k_pauli_pairs_from_qubit_graph` to determine which candidate multi-qubit
-    supports are "connected" (and hence allowed) under the graph-locality restriction.
-
-    Parameters
-    ----------
-    qubit_graph : graph-like
-        The qubit connectivity graph, in any of the representations accepted by
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` (a networkx/igraph/graph-tool
-        graph, a pygsti `QubitGraph`/`QubitProcessorSpec`, or a raw adjacency matrix). Qubit `i`
-        (matching Pauli-string position `i`) is identified with the `i`-th qubit in
-        `qubit_graph`'s own native node order.
-    n : int
-        Number of qubits.
-    num_hops : int
-        Hop distance defining which qubit pairs are considered "close enough."
-
-    Returns
-    -------
-    numpy.ndarray
-        Boolean `(n, n)` matrix; `close[i, j]` is True iff qubits `i` and `j` (`i != j`) are
-        within `num_hops` hops of each other (true shortest-path graph distance).
-    """
-    qubit_labels = list(range(n))
-    close = _graphtools.within_hops_matrix(qubit_graph, num_hops, qubit_labels=qubit_labels)
-
-    # Sanity-check dimensions: the graph must describe exactly n qubits.
-    if close.shape != (n, n):
-        raise ValueError(  # pragma: no cover - within_hops_matrix already enforces this via qubit_labels
-            f"qubit_graph must describe exactly n={n} qubits (got shape {close.shape}).")
-    return close
-
-
-def _support_is_connected(support_qubits: tuple[int, ...], close: np.ndarray) -> bool:
-    """
-    Returns True iff the induced subgraph on `support_qubits` is connected, where edges are
-    given by the boolean adjacency matrix `close` (see `_qubit_graph_close_matrix`).
-
-    Parameters
-    ----------
-    support_qubits : tuple[int, ...]
-        Qubit indices forming the candidate support set.
-    close : numpy.ndarray
-        Boolean `(n, n)` "within num_hops" adjacency matrix, as returned by
-        `_qubit_graph_close_matrix`.
-
-    Returns
-    -------
-    bool
-    """
-    # Empty support shouldn't appear here (we generate weights starting at 1),
-    # and a single vertex is trivially connected.
-    if len(support_qubits) <= 1:
-        return True
-
-    # We'll do a simple DFS/BFS over the support set using the `close` adjacency.
-    support = list(support_qubits)
-    support_set = set(support)
-
-    # Start from the first qubit in the support.
-    seen = {support[0]}
-    stack = [support[0]]
-
-    # Standard depth-first traversal restricted to nodes in the support.
-    while stack:
-        u = stack.pop()
-
-        # Consider only neighbors v that are:
-        #   (1) in the support set
-        #   (2) adjacent to u under "close"
-        #   (3) not yet visited
-        for v in support:
-            if v not in seen and close[u, v]:
-                seen.add(v)
-                stack.append(v)
-
-    # Connected iff we reached every vertex in the support.
-    return len(seen) == len(support_set)
-
-
 def up_to_weight_k_paulis_from_qubit_graph(
     k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None,
 ) -> list[str]:
@@ -776,7 +692,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
@@ -812,38 +728,34 @@ def up_to_weight_k_paulis_from_qubit_graph(
     # Clamp k so we never ask for weight > n.
     k = min(k, n)
 
-    # ---- Build the "within num_hops" connectivity relation ----
-    close = _qubit_graph_close_matrix(qubit_graph, n, num_hops)
+    # ---- Enumerate the allowed supports ----
+    # `connected_supports` grows connected sets outward instead of testing every one of the
+    # sum_w C(n, w) candidate subsets, and returns them in (size, ascending tuple) order -- the
+    # same order a filtered `itertools.combinations` scan over w = 1..k would produce. That
+    # order is load-bearing: it fixes error-generator indices and hence QPANN parameter order.
+    supports = _graphtools.connected_supports(qubit_graph, k, num_hops, qubit_labels=list(range(n)))
 
     # ---- Enumerate all valid Pauli strings ----
     base = ['I'] * n            # template for fast construction
     paulis = []                 # output list of Pauli strings
-    qubits = range(n)           # qubit labels 0..n-1
 
-    # Enumerate all weights w = 1..k
-    for w in range(1, k + 1):
+    for support_qubits in supports:
+        w = len(support_qubits)
 
-        # Enumerate all possible supports (sets of qubits) of size w.
-        for support_qubits in _itertools.combinations(qubits, w):
+        # For each support, assign an X/Y/Z to each qubit in the support.
+        # There are 3^w assignments.
+        for letters in _itertools.product("XYZ", repeat=w):
 
-            # Skip supports that are not connected under the within-num_hops rule.
-            if not _support_is_connected(support_qubits, close):
-                continue
+            # Start from all-identity string, then overwrite the support positions.
+            s = base[:]
 
-            # For each support, assign an X/Y/Z to each qubit in the support.
-            # There are 3^w assignments.
-            for letters in _itertools.product("XYZ", repeat=w):
+            # Place each chosen letter at the appropriate *string* index.
+            # Remember: qubit q corresponds to string position q.
+            for q, P in zip(support_qubits, letters):
+                s[q] = P
 
-                # Start from all-identity string, then overwrite the support positions.
-                s = base[:]
-
-                # Place each chosen letter at the appropriate *string* index.
-                # Remember: qubit q corresponds to string position q.
-                for q, P in zip(support_qubits, letters):
-                    s[q] = P
-
-                # Convert list-of-chars to a string and store it.
-                paulis.append("".join(s))
+            # Convert list-of-chars to a string and store it.
+            paulis.append("".join(s))
 
     return paulis
 
@@ -882,7 +794,7 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
@@ -909,24 +821,13 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
 
     k = min(k, n)
 
-    # ---- Build the "within num_hops" connectivity relation ----
-    close = _qubit_graph_close_matrix(qubit_graph, n, num_hops)
+    # ---- Enumerate the allowed (union) supports; see up_to_weight_k_paulis_from_qubit_graph ----
+    supports = _graphtools.connected_supports(qubit_graph, k, num_hops, qubit_labels=list(range(n)))
 
     # ---- Enumerate all valid Pauli pairs ----
     pairs: list[tuple[str, str]] = []
-    qubits = range(n)
-
-    # Enumerate all union-weights w = 1..k
-    for w in range(1, k + 1):
-
-        # Enumerate all possible (candidate union) supports (sets of qubits) of size w.
-        for support_qubits in _itertools.combinations(qubits, w):
-
-            # Skip supports that are not connected under the within-num_hops rule.
-            if not _support_is_connected(support_qubits, close):
-                continue
-
-            pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=False))
+    for support_qubits in supports:
+        pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=False))
 
     return pairs
 
@@ -994,7 +895,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         The maximum graph hop distance defining allowable connectivity between

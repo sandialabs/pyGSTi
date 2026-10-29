@@ -71,12 +71,12 @@ gss = results1.circuit_lists['final']
 ## Gallery of `Workspace` plots and tables.
 Now that we have some results, let's create a `Workspace` and make some plots and tables.
 
-To get tables and plots to display properly, one must run `init_notebook_mode`.  The `connected` argument indicates whether you want to rely on an active internet connection.  If `True`, then resources will be loaded from the web (e.g. a CDN), and if you save a notebook as HTML the file size may be smaller.  If `False`, then all the needed resources (except MathJax) are provided by pyGSTi, and an `offline` directory is automatically created in the same directory as your notebook.  This directory contains all the necessary resources, and must "tag along" with the notebook and any saved-as-HTML versions of it in order for everything to work.  The second argument, `autodisplay`, determines whether tables and plots are automatically displayed when they are created.  If `autodisplay=False`, one must call the `display()` member function of a table or plot to display it.
+To get tables and plots to display properly, one must run `init_notebook_mode`.  The `enable_offline_mode` argument indicates whether you want to rely on an active internet connection.  If `False`, then resources will be loaded from the web (e.g. a CDN), and if you save a notebook as HTML the file size may be smaller.  If `True`, then all the needed resources (except MathJax) are provided by pyGSTi, and an `offline` directory is automatically created in the same directory as your notebook.  This directory contains all the necessary resources, and must "tag along" with the notebook and any saved-as-HTML versions of it in order for everything to work.  The second argument, `autodisplay`, determines whether tables and plots are automatically displayed when they are created.  If `autodisplay=False`, one must call the `display()` member function of a table or plot to display it.
 
 ```{code-cell} ipython3
 from pygsti.report import workspace
 w = workspace.Workspace()
-w.init_notebook_mode(connected=False, autodisplay=True) 
+w.init_notebook_mode(enable_offline_mode=True, autodisplay=True) 
 ```
 
 Plots and tables are created via member functions of a `Workspace` (`w` in our case).  Note that you can start typing "`w.`" and TAB-complete to see the different things a `Workspace` can make for you.  Furthermore, pressing SHIFT-TAB after the opening parenthesis of a function,  e.g. after typing "`w.GatesVsTargetTable(`", will bring up Jupyter's help window showing you the function signature (the arguments you need to give the function).
@@ -255,4 +255,4 @@ obj.saveas("../../tutorial_files/tempTest/testSave.pdf")
 ```
 
 ## Exporting notebooks to HTML
-If you want, you can save figure-containing notebooks (like this one) as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot interactivity, so long as its in a directory with an `offline` folder (because we set `connected=False` above).
+If you want, you can save figure-containing notebooks (like this one) as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot interactivity, so long as its in a directory with an `offline` folder (because we set `enable_offline_mode=True` above).

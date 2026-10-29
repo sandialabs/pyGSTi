@@ -72,7 +72,7 @@ probabilities_ideal, alphas = tensors['probabilities'], tensors['alphas']
 # 3. Build snipper & QPANN. `pspec` has no 2-qubit gates declared (availability={}), so we
 # describe the physical qubit-0/qubit-1 coupling as a standalone networkx graph instead --
 # `layer_snipper_from_qubit_graph` accepts a networkx/igraph/graph-tool graph, a pygsti
-# QubitGraph/QubitProcessorSpec, or a raw adjacency matrix (see graphtools).
+# QubitGraph/QubitProcessorSpec, or a raw adjacency matrix (see pygsti.tools.graphs).
 qubit_graph = nx.Graph()
 qubit_graph.add_nodes_from(qubit_labels)
 qubit_graph.add_edge(0, 1)

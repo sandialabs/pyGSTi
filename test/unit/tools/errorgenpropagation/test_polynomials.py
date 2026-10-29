@@ -13,7 +13,8 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import errorgenpropagation as _eprop
 from pygsti.tools.errorgenpropagation import polynomials as _epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 
 from ...util import BaseCase
 from .errgenprop_test_utils import sample_error_rates_dict
@@ -36,9 +37,9 @@ class SymbolicPolynomialTester(BaseCase):
         self.errorgen_propagator = ErrorGeneratorPropagator(self.error_model.copy())
 
         error_rates_dict_shared = {
-            'Gcphase': random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S'), label_type='local', seed=1234),
-            'Gxpi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1235),
-            'Gypi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1236)
+            'Gcphase': random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S'), label_type='local', seed=1234),
+            'Gxpi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1235),
+            'Gypi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1236)
         }
         self.error_model_shared = create_crosstalk_free_model(self.pspec, lindblad_error_coeffs=error_rates_dict_shared)
         self.errorgen_propagator_shared = ErrorGeneratorPropagator(self.error_model_shared.copy())
@@ -532,7 +533,7 @@ class SymbolicPolynomialTester(BaseCase):
         # result - including for the (never propagated) last gate layer.
         from pygsti.circuits import Circuit
         pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
-        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        rates = random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S', 'C', 'A'), seed=7)
         model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
         circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
         propagator = ErrorGeneratorPropagator(model)

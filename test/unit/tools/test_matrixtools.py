@@ -262,6 +262,67 @@ class GeneralMatrixToolsTester(BaseCase):
             np.array(sorted(actual, key=sort_key)), np.array(sorted(expected, key=sort_key)))
 
 
+    def test_sqrtm_frechet_derivative_solves_sylvester(self):
+        # A repeated eigenvalue: eigh picks an arbitrary basis of that eigenspace, and the result
+        # must not depend on the choice.
+        rng = np.random.default_rng(3)
+        V, _ = np.linalg.qr(rng.standard_normal((4, 4)) + 1j * rng.standard_normal((4, 4)))
+        A = (V * np.array([0.5, 0.5, 0.2, 0.9])) @ V.conj().T
+        H = rng.standard_normal((3, 4, 4)) + 1j * rng.standard_normal((3, 4, 4))
+        H = H + H.conj().transpose(0, 2, 1)
+
+        evals, evecs = np.linalg.eigh(A)
+        X = mt.sqrtm_frechet_derivative(evecs, evals, H)
+        S = spl.sqrtm(A)
+        self.assertEqual(X.shape, H.shape)
+        for X_k, H_k in zip(X, H):
+            self.assertArraysAlmostEqual(X_k, spl.solve_sylvester(S, S, H_k))
+
+    def test_sqrtm_frechet_derivative_singular_is_minimum_norm(self):
+        # A twofold zero eigenvalue, and directions with a nonzero block on it, where the
+        # Sylvester equation has no solution: the result is its minimum-norm least-squares solution.
+        rng = np.random.default_rng(4)
+        n = 4
+        V, _ = np.linalg.qr(rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n)))
+        A = (V * np.array([0.0, 0.0, 0.3, 0.8])) @ V.conj().T
+        H = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+        H = H + H.conj().T
+
+        evals, evecs = np.linalg.eigh(A)
+        X = mt.sqrtm_frechet_derivative(evecs, evals, H, tol=1e-10)
+        S = (evecs * np.sqrt(np.where(evals > 1e-10, evals, 0.0))) @ evecs.conj().T
+        # vec(S X + X S) = (I ⊗ S + Sᵀ ⊗ I) vec(X), column-major
+        sylvester = np.kron(np.eye(n), S) + np.kron(S.T, np.eye(n))
+        X_lstsq = np.linalg.lstsq(sylvester, H.ravel(order='F'), rcond=1e-8)[0].reshape((n, n), order='F')
+        self.assertArraysAlmostEqual(X, X_lstsq)
+
+    def test_sqrtm_frechet_derivative_along_rotation_of_singular_matrix(self):
+        # A(t) = U(t) A U(t)^† keeps its rank, so A(t)^(1/2) = U(t) A^(1/2) U(t)^† is smooth.
+        rng = np.random.default_rng(5)
+        n = 4
+        G = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+        G = G + G.conj().T
+        A = np.diag([0.0, 0.0, 0.4, 1.0]).astype(complex)
+
+        def sqrt_at(t):
+            U = spl.expm(1j * t * G)
+            return U @ np.diag(np.sqrt(np.diag(A).real)) @ U.conj().T
+
+        h = 1e-6
+        expected = (sqrt_at(h) - sqrt_at(-h)) / (2 * h)
+        evals, evecs = np.linalg.eigh(A)
+        self.assertArraysAlmostEqual(mt.sqrtm_frechet_derivative(evecs, evals, 1j * (G @ A - A @ G), tol=1e-10),
+                                     expected)
+
+    def test_sqrtm_frechet_derivative_zero_matrix(self):
+        self.assertArraysEqual(mt.sqrtm_frechet_derivative(np.eye(2), np.zeros(2), np.ones((2, 2))),
+                               np.zeros((2, 2)))
+
+    def test_sqrtm_frechet_derivative_rejects_negative_eigenvalues(self):
+        with self.assertRaises(ValueError):
+            mt.sqrtm_frechet_derivative(np.eye(2), np.array([-0.1, 1.0]), np.eye(2))
+
+
 class ApproximateMatrixLogBCHTester(BaseCase):
     """
     Cover ``approximate_matrix_log_BCH``, which builds a *real* generator for a
