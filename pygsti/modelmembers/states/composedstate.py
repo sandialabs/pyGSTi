@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import term as _term
@@ -73,6 +75,7 @@ class ComposedState(_State, _Torchable):
 
         self.state_vec = static_state
         self.error_map = errormap
+        # term caches: used only by the deprecated TermForwardSimulator machinery (remove in 0.12, see #916)
         self.terms = {}
         self.local_term_poly_coeffs = {}
 
@@ -124,6 +127,7 @@ class ComposedState(_State, _Torchable):
         -------
         None
         """
+        # term caches: used only by the deprecated TermForwardSimulator machinery (remove in 0.12, see #916)
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
         super().set_gpindices(gpindices, parent, memo)
@@ -171,9 +175,14 @@ class ComposedState(_State, _Torchable):
         superop = emap_type.torch_base(emap_sd, t_param)
         return superop @ static_superket
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this state vector.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -228,9 +237,14 @@ class ComposedState(_State, _Torchable):
         else:
             return self.terms[order]
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this state vector that have magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -273,9 +287,14 @@ class ComposedState(_State, _Torchable):
         return terms
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this state vector's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         The magnitude of a term is the absolute value of its coefficient, so
         this function returns the number you'd get from summing up the
@@ -290,9 +309,14 @@ class ComposedState(_State, _Torchable):
         return self.error_map.total_term_magnitude  # error map is only part with terms
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this state vector's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Get the derivative of the total (sum) of the magnitudes of all this
         state vector's terms with respect to the operators (local) parameters.

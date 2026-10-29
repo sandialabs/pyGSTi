@@ -470,8 +470,7 @@ class ExplicitOpModel(_mdl.OpModel):
         ----------
         parameterization_type : string
             The gate, state, and POVM parameterization type.  Allowed
-            values are (where '*' means " terms" and " clifford terms"
-            evolution-type suffixes are allowed):
+            values are:
 
             - "full" : each gate / state / POVM effect element is an independent parameter
             - "TP" : Trace-Preserving gates and state preps
@@ -1554,7 +1553,7 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate.to_dense("HilbertSchmidt"), self.basis) # type: ignore
             print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
             print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))

@@ -14,5 +14,5 @@ from .forwardsim import ForwardSimulator
 from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
 from .torchfwdsim import TorchForwardSimulator
 from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
-from .termforwardsim import TermForwardSimulator
+from .termforwardsim import TermForwardSimulator  # term-sim machinery: deprecated, remove in 0.12 (see #916)
 from .weakforwardsim import WeakForwardSimulator

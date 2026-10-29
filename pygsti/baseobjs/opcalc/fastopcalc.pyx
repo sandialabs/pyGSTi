@@ -480,6 +480,17 @@ def compact_deriv(np.ndarray[np.int64_t, ndim=1, mode="c"] vtape,
 
 def prs_as_polynomials(circuit, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
                  int stabilizer_evo):
+    """
+    Compute circuit outcome probabilities as polynomials by expanding rank-1 Taylor terms (max_order <= 2).
+
+    An early, standalone version of the term forward simulator's probability expansion, superseded by
+    `pygsti.forwardsims.termforwardsim_calc_*`.  It is not used within pyGSTi and does not work with
+    the current `Polynomial` and term APIs.
+
+    .. deprecated:: 0.11
+        Specific to the deprecated `TermForwardSimulator` machinery; will be removed
+        in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+    """
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
 
