@@ -1,5 +1,5 @@
 from ..util import BaseCase
-from ..tools.errgenprop_test_utils import parallel_path_exercised
+from ..tools.errorgenpropagation.errgenprop_test_utils import parallel_path_exercised
 from pygsti.circuits import Circuit
 from pygsti.algorithms.randomcircuit import create_random_circuit, find_all_sets_of_compatible_two_q_gates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
