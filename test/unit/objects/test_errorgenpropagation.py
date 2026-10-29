@@ -7,8 +7,8 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.models.modelconstruction import create_crosstalk_free_model, create_cloud_crosstalk_model
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
-from pygsti.tools import errgenproptools as _eprop
-from pygsti.tools import errgenpolytools as _epoly
+from pygsti.tools import errorgenpropagation as _eprop
+from pygsti.tools.errorgenpropagation import polynomials as _epoly
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product

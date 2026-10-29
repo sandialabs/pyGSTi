@@ -11,8 +11,8 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
-from pygsti.tools import errgenproptools as _eprop
-from pygsti.tools import errgenpolytools as _epoly
+from pygsti.tools import errorgenpropagation as _eprop
+from pygsti.tools.errorgenpropagation import polynomials as _epoly
 from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 
 from ..util import BaseCase

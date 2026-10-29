@@ -5,7 +5,7 @@ and `test/unit/objects/test_errorgenpropagation.py`. This module is not collecte
 """
 from contextlib import contextmanager
 
-from pygsti.tools import errgenproptools as _eprop
+from pygsti.tools import errorgenpropagation as _eprop
 
 from .mptools_test_utils import assert_pool_dispatch
 

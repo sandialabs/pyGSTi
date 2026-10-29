@@ -6,7 +6,7 @@ from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than, bel_str
-from pygsti.tools import errgenproptools as _eprop
+from pygsti.tools import errorgenpropagation as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
@@ -37,7 +37,7 @@ def _mock_taylor_expansion():
     real = _eprop.error_generator_taylor_expansion
     def serial(errorgen_dict, order=1, truncation_threshold=1e-14, num_workers=None, pool=None):
         return real(errorgen_dict, order, truncation_threshold)
-    return mock.patch.object(_eprop, 'error_generator_taylor_expansion', side_effect=serial)
+    return mock.patch.object(_eprop.expansions, 'error_generator_taylor_expansion', side_effect=serial)
 
 
 class ErrgenCompositionCommutationTester(BaseCase):
@@ -662,7 +662,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         # so an empty (or small) state-prep layer disabled parallelism for the whole expansion.
         layers = [{}] + list(self.propagated_errorgen_layers)
         expected_avg = sum(len(l) for l in layers) // len(layers)
-        with mock.patch.object(_eprop, '_should_parallelize_magnus', return_value=False) as decision:
+        with mock.patch.object(_eprop.parallelutils, '_should_parallelize_magnus', return_value=False) as decision:
             _eprop.magnus_expansion(layers, magnus_order=2, num_workers=2)
         self.assertEqual(decision.call_args.args[1], expected_avg)
 
@@ -1373,8 +1373,8 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.addCleanup(configure, reset_to_defaults=True)
         n, t_ipc = 10, 1e-4
         fake_tau = lambda m: 2.0 + 0.05 * m  # microseconds per cell at m qubits
-        with mock.patch.object(_eprop, '_measure_alpha_throughput_us', side_effect=fake_tau) as timing, \
-                mock.patch.object(_eprop, '_measure_ipc_latency', return_value=t_ipc):
+        with mock.patch.object(_eprop.parallelutils, '_measure_alpha_throughput_us', side_effect=fake_tau) as timing, \
+                mock.patch.object(_eprop.parallelutils, '_measure_ipc_latency', return_value=t_ipc):
             res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=n, num_workers=2)
             # measured at the target size and `_ALPHA_CALIBRATION_QUBIT_SPAN` qubits above it
             self.assertEqual([c.args[0] for c in timing.call_args_list], [n, n + _eprop._ALPHA_CALIBRATION_QUBIT_SPAN])
@@ -1407,12 +1407,12 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_alpha_calibration_with_single_worker_does_not_record_ipc_latency(self):
         self.addCleanup(_eprop.configure_errorgen_propagation_parallelization, reset_to_defaults=True)
-        with mock.patch.object(_eprop, '_measure_alpha_throughput_us', return_value=1.0):
+        with mock.patch.object(_eprop.parallelutils, '_measure_alpha_throughput_us', return_value=1.0):
             _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=1)
         self.assertTrue(_eprop._ACTIVE_PARALLEL_THRESHOLDS['dynamic_calibrated'])
         self.assertNotIn('t_ipc_s', _eprop._ACTIVE_PARALLEL_THRESHOLDS)
         # a later multi-worker decision measures the latency instead of using a latency of zero (always parallel)
-        with mock.patch.object(_eprop, '_measure_ipc_latency', return_value=1e-3) as ipc:
+        with mock.patch.object(_eprop.parallelutils, '_measure_ipc_latency', return_value=1e-3) as ipc:
             self.assertFalse(_eprop._should_parallelize_alpha(4, 1, 1, num_workers=2))
             ipc.assert_called_once()
 
@@ -1604,7 +1604,7 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertArraysAlmostEqual(probs_pos, probs_kw)
 
         # Underflow check: mock random_support returning > 2148
-        with mock.patch("pygsti.tools.errgenproptools.random_support", return_value=2200):
+        with mock.patch.object(_eprop.sensitivities, "random_support", return_value=2200):
             with self.assertRaises(RuntimeError):
                 _eprop.approximate_stabilizer_probabilities(
                     self.propagated_errorgen_layer, self.circuit, subset, 1
@@ -1903,7 +1903,7 @@ class ErrorGenPropUtilsTester(BaseCase):
         from pygsti.errorgenpropagation import localstimerrorgen as lse
         impls = {'default': lse.bel_product_str, 'python': lse._slow_bel_product_str}
         try:
-            from pygsti.tools.fasterrgencalc import fast_bel_product_str
+            from pygsti.tools.errorgenpropagation.fasterrgencalc import fast_bel_product_str
             impls['cython'] = fast_bel_product_str
         except ImportError:
             pass
