@@ -12,9 +12,9 @@ kernelspec:
 ---
 
 # Error Generator Polynomials
-In this tutorial we provide an introduction to the functionality available through pyGSTi's `errgenpolytools` module.
+In this tutorial we provide an introduction to the functionality available through pyGSTi's `errorgenpropagation.polynomials` module.
 
-The error generator propagation framework described in the companion tutorial {doc}`ErrorGeneratorPropagation` makes it possible to propagate sparse Markovian error generators through Clifford circuits and to construct efficient approximations to the resulting noisy dynamics. The `errgenpolytools` module builds directly on top of that framework and allows one to go one step further: instead of working only with *numerical* propagated error generator rates, we can construct **symbolic polynomial representations** of quantities of interest such as
+The error generator propagation framework described in the companion tutorial {doc}`ErrorGeneratorPropagation` makes it possible to propagate sparse Markovian error generators through Clifford circuits and to construct efficient approximations to the resulting noisy dynamics. The `errorgenpropagation.polynomials` module builds directly on top of that framework and allows one to go one step further: instead of working only with *numerical* propagated error generator rates, we can construct **symbolic polynomial representations** of quantities of interest such as
 
 - effective end-of-circuit error generators,
 - corrections to computational basis measurement probabilities, and
@@ -26,7 +26,7 @@ These polynomial representations are useful when one wants to:
 - connect circuit-level propagated quantities back to model-level parameters,
 - efficiently construct multiple observable corrections while reusing shared intermediate results.
 
-The `errgenpolytools` module provides this additional symbolic layer by representing relevant rates and observable corrections as instances of pyGSTi's `Polynomial` class.
+The `errorgenpropagation.polynomials` module provides this additional symbolic layer by representing relevant rates and observable corrections as instances of pyGSTi's `Polynomial` class.
 
 Please note: the functionality described here requires the error generator propagation framework, and thus also requires the `stim` python package.
 
@@ -36,8 +36,8 @@ import stim
 import numpy as np
 from itertools import product
 
-from pygsti.tools import errgenproptools as eprop
-from pygsti.tools import errgenpolytools as epoly
+from pygsti.tools import errorgenpropagation as eprop
+from pygsti.tools.errorgenpropagation import polynomials as epoly
 from pygsti.baseobjs import QubitSpace
 from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
@@ -65,7 +65,7 @@ error_rates_dict_shared = {
 error_model = pygsti.models.create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict_shared)
 ```
 
-We also create an `ErrorGeneratorPropagator`, which is the object responsible for producing the propagation data structures used by `errgenpolytools`.
+We also create an `ErrorGeneratorPropagator`, which is the object responsible for producing the propagation data structures used by `errorgenpropagation.polynomials`.
 
 ```{code-cell} ipython3
 errorgen_propagator = ErrorGeneratorPropagator(error_model)
@@ -126,7 +126,7 @@ poly_paramvec[:10]
 This vector can be fed directly into the `.evaluate(...)` method of a `Polynomial`.
 
 ## Constructing Polynomial Magnus Expansions
-The first major construction provided by `errgenpolytools` is a symbolic Magnus approximation to the effective end-of-circuit error generator. The function `magnus_symbolic_polynomial` takes as input the layer-by-layer transform maps and a variable map and returns a dictionary whose keys are final `LocalStimErrorgenLabel`s and whose values are `Polynomial` objects giving the corresponding rates.
+The first major construction provided by `errorgenpropagation.polynomials` is a symbolic Magnus approximation to the effective end-of-circuit error generator. The function `magnus_symbolic_polynomial` takes as input the layer-by-layer transform maps and a variable map and returns a dictionary whose keys are final `LocalStimErrorgenLabel`s and whose values are `Polynomial` objects giving the corresponding rates.
 
 ### First-order Magnus
 We begin with the first-order Magnus approximation.
@@ -232,7 +232,7 @@ for i, (lbl, poly) in enumerate(second_order_taylor_polys.items()):
         break
 ```
 
-We can compare evaluated symbolic Taylor terms against the corresponding Taylor expansion with numerical rates from `errgenproptools`.
+We can compare evaluated symbolic Taylor terms against the corresponding Taylor expansion with numerical rates from `errorgenpropagation`.
 
 ```{code-cell} ipython3
 numeric_taylor_order_1 = eprop.error_generator_taylor_expansion(propagated_errorgen_layer_first_order, order=1)[0]
@@ -256,7 +256,7 @@ for lbl, poly in list(second_order_taylor_polys.items())[:5]:
 ```
 
 ## Probability Correction Polynomials
-A major use case for `errgenpolytools` is the construction of symbolic corrections to the
+A major use case for `errorgenpropagation.polynomials` is the construction of symbolic corrections to the
 probabilities of computational basis measurement outcomes.
 
 The function `stabilizer_probability_correction_symbolic_polynomial` returns a `Polynomial`
@@ -278,7 +278,7 @@ Evaluating this polynomial gives the numerical first-order correction.
 prob_corr_poly_order_1.evaluate(poly_paramvec)
 ```
 
-We can compare this against the numerical correction computed using `errgenproptools`.
+We can compare this against the numerical correction computed using `errorgenpropagation`.
 
 ```{code-cell} ipython3
 prob_corr_numeric_order_1 = eprop.stabilizer_probability_correction(
@@ -337,7 +337,7 @@ print("Absolute error:", abs(exact_prob_0000 - approx_prob_0000))
 ```
 
 ## Pauli Expectation Correction Polynomials
-In addition to measurement probabilities, `errgenpolytools` can also construct symbolic correction
+In addition to measurement probabilities, `errorgenpropagation.polynomials` can also construct symbolic correction
 polynomials for expectation values of Pauli observables.
 
 The relevant functions are:
@@ -387,7 +387,7 @@ By default, the string representation of a `Polynomial` uses generic variable na
 replace these generic names with labels that make clear which propagated error generator parameter
 each variable corresponds to.
 
-Because the variables used in `errgenpolytools` are indexed by the maps returned from
+Because the variables used in `errorgenpropagation.polynomials` are indexed by the maps returned from
 `error_generator_to_polynomial_variable_maps` (or its aggregated variants), we can construct a
 dictionary mapping variable indices to more descriptive labels and pass this into the
 `Polynomial.to_string(...)` method.
@@ -424,7 +424,7 @@ print(custom_label_poly.to_string(var_labels=parameter_label_map))
 ```
 
 Please note that `var_labels` can be supplied in several forms supported by the `Polynomial` class,
-including a dictionary (as above), a sequence, or a callable. For most `errgenpolytools`
+including a dictionary (as above), a sequence, or a callable. For most `errorgenpropagation.polynomials`
 applications, a dictionary keyed by variable index is often the most convenient option.
 
 
@@ -526,7 +526,7 @@ for lbl, poly in list(first_order_magnus_polys_gate_agg.items())[:5]:
 ```
 
 ## End-to-End Example Workflow
-A typical `errgenpolytools` workflow looks like this:
+A typical `errorgenpropagation.polynomials` workflow looks like this:
 
 1. Build a noisy error-generator-parameterized model and a Clifford circuit.
 2. Construct propagation transform maps using `ErrorGeneratorPropagator`.

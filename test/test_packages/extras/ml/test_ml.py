@@ -408,7 +408,7 @@ class MLSubpackageTester(unittest.TestCase):
         tableau = circuit.convert_to_stim_tableau()
         canonical_label = errgentools.index_to_error_gen(indices[0, 0], 1, as_label=True)
         for bs in ['0', '1']:
-            from pygsti.tools import errgenproptools as ep
+            from pygsti.tools import errorgenpropagation as ep
             raw_alpha = raw_weightmod * ep.alpha(raw_propagated, tableau, bs).real
             canonical_alpha = signs[0, 0] * ep.alpha(canonical_label, tableau, bs).real
             self.assertAlmostEqual(raw_alpha, canonical_alpha)

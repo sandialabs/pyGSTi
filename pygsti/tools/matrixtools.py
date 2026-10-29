@@ -1000,7 +1000,7 @@ def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Un
     logM : numpy array
         A matrix of the same shape as `m`.
     """
-    from pygsti.tools.errgenproptools import pairwise_bch_numerical
+    from pygsti.tools.errorgenpropagation import pairwise_bch_numerical
 
     log_target = unitary_superoperator_matrix_log(target, mx_basis)
 

@@ -18,7 +18,7 @@ Read top-down (top = depends on nothing below it):
 
 - **Primitives**: linear algebra (`matrixtools.py`), basis manipulation (`basistools.py`), GF(2) arithmetic (`matrixmod2.py`), simple list/slice helpers (`listtools.py`, `slicetools.py`, `typeddict.py`, `nameddict.py`).
 - **Quantum operator tools**: channel/operator conversions (`optools.py`), gate construction (`gatetools.py`), standard-gate definitions (`internalgates.py`), Jamiolkowski isomorphism (`jamiolkowski.py`).
-- **Error generators / Lindblad**: `lindbladtools.py`, `errgenproptools.py` (~9k lines — huge), `errgenpolytools.py`.
+- **Error generators / Lindblad**: `lindbladtools.py`, `errorgenpropagation/` (subpackage; legacy `errgenproptools.py` and `errgenpolytools.py` are deprecation shims).
 - **Statistical**: `likelihoodfns.py`, `chi2fns.py` (these wrap or duplicate logic in `objectivefns/` — see misplacement table).
 - **Convex / SDP** (cvxpy-optional): `sdptools.py`, parts of `optools.py` and `jamiolkowski.py`.
 - **Experiment-design helpers**: `edesigntools/` (misplaced).
@@ -28,7 +28,7 @@ Read top-down (top = depends on nothing below it):
 - **FOGI / diagnostics**: `fogitools.py`, `mcfetools.py`.
 - **Misc**: `dataframetools.py` (pandas helpers), `exceptions.py`, `hypothesis.py`, `opttools.py`.
 
-Cython kernels: `fastcalc.pyx` (general fast math), `fasterrgencalc.pyx` (error-generator hot paths).
+Cython kernels: `fastcalc.pyx` (general fast math), `errorgenpropagation/fasterrgencalc.pyx` (error-generator hot paths).
 
 ### 2. Several files are misplaced domain features, not utilities
 
@@ -58,7 +58,7 @@ If you're writing new utilities, **add an `__all__`** to your file, even if the 
 | Linear algebra / matrix ops | [matrixtools.py](../pygsti/tools/matrixtools.py), [matrixmod2.py](../pygsti/tools/matrixmod2.py) | `matrixtools.py` is the BLAS-wrapper / gram-matrix / `expm`-tolerance backbone. |
 | Basis manipulation | [basistools.py](../pygsti/tools/basistools.py) | Pauli / Gell-Mann / std conversions. |
 | Quantum operators & gates | [optools.py](../pygsti/tools/optools.py), [gatetools.py](../pygsti/tools/gatetools.py), [internalgates.py](../pygsti/tools/internalgates.py) | `optools.py` (~2.8k lines) is the channel-rep conversion library: std ↔ superop ↔ Choi, CP/TP checks. |
-| Error generators / Lindblad | [errgenproptools.py](../pygsti/tools/errgenproptools.py) (~9k lines), [lindbladtools.py](../pygsti/tools/lindbladtools.py) | `errgenproptools.py` is the BCH / matrix-exponential / error-generator-propagation backbone. Requires `stim` for some functions. |
+| Error generators / Lindblad | [errorgenpropagation/](../pygsti/tools/errorgenpropagation/), [lindbladtools.py](../pygsti/tools/lindbladtools.py) | `errorgenpropagation/` is the BCH / matrix-exponential / error-generator-propagation backbone (split into submodules, each with `__all__`). Requires `stim` for some functions. |
 | Statistical fit functions | [likelihoodfns.py](../pygsti/tools/likelihoodfns.py), [chi2fns.py](../pygsti/tools/chi2fns.py) | Misplaced (see above). Prefer the class-based interfaces in `objectivefns/`. |
 | Convex / SDP (cvxpy-optional) | [sdptools.py](../pygsti/tools/sdptools.py), parts of [jamiolkowski.py](../pygsti/tools/jamiolkowski.py), parts of [optools.py](../pygsti/tools/optools.py) | All guarded by `try: import cvxpy`. |
 | Experiment design | [edesigntools/](../pygsti/tools/edesigntools/) | Fisher information and reduction; misplaced. |
@@ -68,7 +68,7 @@ If you're writing new utilities, **add an `__all__`** to your file, even if the 
 | Infrastructure | [mpitools.py](../pygsti/tools/mpitools.py) (~1.4k lines), [mptools.py](../pygsti/tools/mptools.py), [sharedmemtools.py](../pygsti/tools/sharedmemtools.py), [locking.py](../pygsti/tools/locking.py), [profile.py](../pygsti/tools/profile.py), [metaprogramming.py](../pygsti/tools/metaprogramming.py) | Parallel-processing, shared-memory, profiling helpers. |
 | Tagged data containers | [nameddict.py](../pygsti/tools/nameddict.py), [typeddict.py](../pygsti/tools/typeddict.py) | Dict variants used throughout pyGSTi for structured key/value data. |
 | Slicing / list helpers | [slicetools.py](../pygsti/tools/slicetools.py), [listtools.py](../pygsti/tools/listtools.py) | Clean utilities; no cross-package coupling. |
-| Cython hot paths | [fastcalc.pyx](../pygsti/tools/fastcalc.pyx), [fasterrgencalc.pyx](../pygsti/tools/fasterrgencalc.pyx) | Compiled-at-install C extensions for inner loops. |
+| Cython hot paths | [fastcalc.pyx](../pygsti/tools/fastcalc.pyx), [errorgenpropagation/fasterrgencalc.pyx](../pygsti/tools/errorgenpropagation/fasterrgencalc.pyx) | Compiled-at-install C extensions for inner loops. |
 | Deprecation infrastructure | [legacytools.py](../pygsti/tools/legacytools.py) | `@deprecate` decorator; reused across the codebase. |
 | Misc | [pdftools.py](../pygsti/tools/pdftools.py), [dataframetools.py](../pygsti/tools/dataframetools.py), [hypothesis.py](../pygsti/tools/hypothesis.py), [opttools.py](../pygsti/tools/opttools.py), [exceptions.py](../pygsti/tools/exceptions.py), [fogitools.py](../pygsti/tools/fogitools.py), [mcfetools.py](../pygsti/tools/mcfetools.py) | One-off helpers and diagnostics. |
 
@@ -105,7 +105,7 @@ All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and noth
 ## Optional-dep landmines
 
 - **`cvxpy`** is required by [sdptools.py](../pygsti/tools/sdptools.py), parts of [jamiolkowski.py](../pygsti/tools/jamiolkowski.py), and parts of [optools.py](../pygsti/tools/optools.py). All try-import-guarded; missing cvxpy = those functions raise informatively or return `None`. Cross-link [AGENTS.md cross-cutting](../AGENTS.md#optional-dependencies).
-- **`stim`** is required by some [errgenproptools.py](../pygsti/tools/errgenproptools.py) entry points. Without `stim` you can still use the non-Stim parts.
+- **`stim`** is required by some [errorgenpropagation/](../pygsti/tools/errorgenpropagation/) entry points. Without `stim` you can still use the non-Stim parts.
 
 ## Pitfalls and gotchas
 
@@ -117,7 +117,7 @@ All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and noth
 
 - **Cython kernels.** `fastcalc.so` and `fasterrgencalc.so` are compiled at install time. If they didn't build, some callers fall back to Python implementations (others fail loudly, depending on the call site). Because that dispatch is silent, a `tools/` performance surprise should start with checking whether the `.so` actually loaded.
 
-- **`errgenproptools.py` is huge (~9k lines).** Don't refactor it casually. It's the math backbone for error-generator propagation work; subtle changes have correctness implications.
+- **`errorgenpropagation/` is the error-generator math backbone.** It was split out of the former `errgenproptools.py` (~6.7k lines), which is now a PEP 562 deprecation shim; `errgenpolytools.py` and `fasterrgencalc.py` are shims too. Each submodule defines `__all__`. Subtle changes there have correctness implications.
 
 ## Architectural debt
 

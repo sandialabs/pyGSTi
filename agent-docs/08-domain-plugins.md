@@ -43,6 +43,8 @@ The two Paulis of a `C`/`A` `LocalStimErrorgenLabel` must be in string-sorted or
 
 Requires `stim` (try-imported with graceful degradation).
 
+The underlying analytical/numerical propagation and polynomial utilities live in [`tools/errorgenpropagation/`](../pygsti/tools/errorgenpropagation/), not in this package.
+
 This subpackage is too small to spend much time on architecturally. If you need to use it, read the two files; if you need to extend it, the class hierarchy is shallow and the code is recent enough to be readable.
 
 ## Key abstractions

@@ -1,26 +1,26 @@
+from itertools import product
+
 import numpy as np
 import stim
 
-from itertools import product
-
 from pygsti.algorithms.randomcircuit import create_random_circuit
-from pygsti.baseobjs.polynomial import Polynomial
-from pygsti.baseobjs import Label 
+from pygsti.baseobjs import Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel
+from pygsti.baseobjs.polynomial import Polynomial
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
-from pygsti.tools import errgenproptools as _eprop
-from pygsti.tools import errgenpolytools as _epoly
+from pygsti.tools import errorgenpropagation as _eprop
+from pygsti.tools.errorgenpropagation import polynomials as _epoly
 from pygsti.baseobjs import QubitSpace
 from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 
-from ..util import BaseCase
-from .test_errgenproptools import sample_error_rates_dict
+from ...util import BaseCase
+from .errgenprop_test_utils import sample_error_rates_dict
 
 
-class ErrgenPolyToolsTester(BaseCase):
+class SymbolicPolynomialTester(BaseCase):
 
     def setUp(self):
         num_qubits = 4
@@ -52,7 +52,7 @@ class ErrgenPolyToolsTester(BaseCase):
         self.test_tableau = self.test_ckt.convert_to_stim_tableau()
 
         self.errorgen_phases = self.errorgen_propagator.errorgen_transform_map(self.test_ckt)
-        self.errorgen_phases_no_spam = self.errorgen_propagator.errorgen_transform_map(self.test_ckt, include_spam=False)        
+        self.errorgen_phases_no_spam = self.errorgen_propagator.errorgen_transform_map(self.test_ckt, include_spam=False)
         self.errorgen_phases_by_layer = self.errorgen_propagator.errorgen_transform_maps(self.test_ckt)
         self.propagated_errorgens_bch1 = self.errorgen_propagator.propagate_errorgens_bch(self.test_ckt, bch_order=1)
         self.propagated_errorgens_bch2 = self.errorgen_propagator.propagate_errorgens_bch(self.test_ckt, bch_order=2)
@@ -67,7 +67,7 @@ class ErrgenPolyToolsTester(BaseCase):
         )
 
         self.errgen_to_var_map_no_spam, self.var_to_errgen_map_no_spam = _epoly.error_generator_to_polynomial_variable_maps(
-            self.errorgen_phases_no_spam, return_reverse=True, 
+            self.errorgen_phases_no_spam, return_reverse=True,
         )
 
         self.errgen_to_var_map_shared, self.var_to_errgen_map_shared = _epoly.error_generator_to_polynomial_variable_maps(
@@ -263,7 +263,6 @@ class ErrgenPolyToolsTester(BaseCase):
         )
         self.assertEqual(len(gates), len(ops))
 
-
     # ------------------------------------------------------------------
     # magnus polynomial correctness
     # ------------------------------------------------------------------
@@ -318,7 +317,6 @@ class ErrgenPolyToolsTester(BaseCase):
         )
         self.assertEqual(combined, self.first_order_magnus_polys)
 
-    
     # ------------------------------------------------------------------
     # probability correction polynomial correctness
     # ------------------------------------------------------------------
@@ -466,7 +464,6 @@ class ErrgenPolyToolsTester(BaseCase):
         )
         zero_poly = Polynomial({}, max_num_vars=next(iter(self.first_order_magnus_polys.values())).max_num_vars)
         self.assertEqual(bulk[0], zero_poly)
-
 
     # ------------------------------------------------------------------
     # second-order aggregated Magnus (only first order was covered)

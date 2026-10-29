@@ -35,7 +35,20 @@ from .matrixmod2 import *
 from .matrixtools import *
 from .mpitools import parallel_apply, mpi4py_comm
 from .mpitools import resolve_mpiexec, compute_blas_threads, write_mpi_runner_artifacts, build_slurm_script
-from .mptools import starmap_with_kwargs
+from .mptools import (
+    starmap_with_kwargs,
+    determine_num_workers,
+    available_cpu_count,
+    compute_2d_worker_grid,
+    SharedWorkerPool,
+    parallel_2d_grid_map,
+    lpt_partition,
+    parallel_pair_reduce,
+    get_available_system_memory,
+    warn_if_insufficient_memory,
+    measure_multiprocessing_ipc_latency,
+    resolve_pool_workers,
+)
 from .nameddict import NamedDict
 from .optools import *
 from .gatetools import *
@@ -52,8 +65,13 @@ def __getattr__(name):
     # pygsti.leakage.  Only fires for names not otherwise defined in this module.
     if name in _LEAKAGE_NAMES:
         return _get_leakage_shim(name)
+    if name == "errorgenpropagation":
+        import importlib as _importlib
+        mod = _importlib.import_module("pygsti.tools.errorgenpropagation")
+        globals()["errorgenpropagation"] = mod
+        return mod
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__():
-    return sorted(list(globals()) + list(_LEAKAGE_NAMES))
+    return sorted(list(globals()) + list(_LEAKAGE_NAMES) + ["errorgenpropagation"])

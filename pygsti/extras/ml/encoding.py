@@ -26,7 +26,7 @@ import stim as _stim
 from pygsti.errorgenpropagation import errorpropagator as _ep
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 from pygsti.extras.ml import errgentools as _tools
-from pygsti.tools import errgenproptools as _egptools
+from pygsti.tools import errorgenpropagation as _egptools
 from pygsti.circuits import Circuit as _Circuit
 import tqdm
 from multiprocessing import Pool

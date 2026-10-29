@@ -28,7 +28,7 @@ from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitE
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
-import pygsti.tools.errgenproptools as _eprop
+import pygsti.tools.errorgenpropagation as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
@@ -36,14 +36,101 @@ from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecati
 from pygsti.models.model import OpModel as _OpModel
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
+from pygsti.tools.mptools import (
+    determine_num_workers as _determine_num_workers,
+    SharedWorkerPool as _SharedWorkerPool,
+    warn_if_insufficient_memory as _warn_if_insufficient_memory,
+    resolve_pool_workers as _resolve_pool_workers,
+    _pool_scope,
+    WORKER_PROCESS_BASELINE_BYTES as _WORKER_PROCESS_BASELINE_BYTES,
+)
+import multiprocessing.pool as _mppool
 from itertools import islice
 
-from typing import Union, Optional, Literal, TYPE_CHECKING
+from typing import Union, Optional, Literal, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pygsti.circuits import Circuit as _Circuit
     from pygsti.baseobjs import Basis as _Basis
 
+
+def estimate_propagation_peak_memory(
+    n_qubits: int,
+    n_layers: int,
+    avg_errorgens_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> int:
+    """
+    Estimates the additional peak memory in bytes (beyond the calling process's existing
+    footprint) needed for single-circuit layer propagation.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit.
+    n_layers : int
+        Number of circuit layers (L).
+    avg_errorgens_per_layer : int
+        Average number of elementary error generator terms per layer (K).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
+    bytes_per_term = _eprop.measure_lse_entry_size(n_qubits)
+    layers_per_worker = max(1, n_layers // max(1, w))
+    worker_buffer = (layers_per_worker * avg_errorgens_per_layer * bytes_per_term) if w > 1 else 0
+    master_layers_bytes = n_layers * avg_errorgens_per_layer * bytes_per_term
+    total_bytes = master_base + master_layers_bytes + (w * worker_base) + (w * worker_buffer)
+    return int(total_bytes)
+
+
+def _should_parallelize_layer_prop(
+    n_qubits: int,
+    num_layers: int,
+    avg_terms_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> bool:
+    """
+    Internal helper: determines whether layer propagation should be parallelized across layer blocks.
+    """
+    workers = _determine_num_workers(num_workers)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
+        return False
+
+    forced = _eprop._forced_parallelism_mode("layer_prop")
+    if forced is not None:
+        return forced
+
+    min_depth = _eprop._MANUAL_PARALLEL_OVERRIDES.get("min_layer_prop_depth", None)
+    if min_depth is not None:
+        return num_layers >= min_depth
+
+    cutoffs = _eprop.DEFAULT_PARALLEL_THRESHOLDS[_eprop._qubit_scale_tier(n_qubits)]
+    return num_layers >= cutoffs['min_layer_prop_depth']
+
+
+def _prop_layer_chunk_worker(chunk_items):
+    """Module-level task runner for chunked layer propagation (picklable under spawn)."""
+    with _eprop._cyclic_gc_paused():
+        chunk_results = []
+        for idx, err_l, prop_l in chunk_items:
+            new_d = {}
+            for lbl, rate in err_l.items():
+                res = lbl.propagate_error_gen_tableau(prop_l, rate)
+                new_d[res[0]] = res[1]
+            chunk_results.append((idx, new_d))
+        return chunk_results
 
 
 class ErrorGeneratorPropagator:
@@ -105,7 +192,9 @@ class ErrorGeneratorPropagator:
 
     def eoc_error_channel(self, circuit: _Circuit, include_spam: bool=True, use_bch: bool=False,
                           bch_kwargs: dict=None, mx_basis: Union[_Basis, str]='pp', 
-                          circuit_conversion_kwargs: dict=None) -> _np.ndarray:
+                          circuit_conversion_kwargs: dict=None,
+                          num_workers: Union[int, str, None] = None,
+                          pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _np.ndarray:
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -137,6 +226,12 @@ class ErrorGeneratorPropagator:
             documentation for this method for additional information on supported arguments and
             values.
 
+        num_workers : int, str, or None, optional
+            Target worker count for parallel evaluation.
+
+        pool : Pool or SharedWorkerPool, optional
+            Existing worker pool to reuse.
+
         Returns
         -------
         eoc_error_channel : numpy.ndarray
@@ -145,13 +240,18 @@ class ErrorGeneratorPropagator:
         """
 
         if use_bch:
-            #should return a single dictionary of error generator rates
-            propagated_error_generator = self.propagate_errorgens_bch(circuit, **bch_kwargs, circuit_conversion_kwargs=circuit_conversion_kwargs)
+            kw = bch_kwargs.copy() if bch_kwargs is not None else {}
+            kw.setdefault('num_workers', num_workers)
+            kw.setdefault('pool', pool)
+            propagated_error_generator = self.propagate_errorgens_bch(circuit, circuit_conversion_kwargs=circuit_conversion_kwargs, **kw)
             #convert this to a process matrix
             return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
             
         else:
-            propagated_error_generators = self.propagate_errorgens(circuit, include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
+            propagated_error_generators = self.propagate_errorgens(
+                circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs,
+                num_workers=num_workers, pool=pool
+            )
             #loop though the propagated error generator layers and construct their error generators.
             #Then exponentiate
             exp_error_generators = []
@@ -232,7 +332,9 @@ class ErrorGeneratorPropagator:
 #
 
     def propagate_errorgens(self, circuit: _Circuit, include_spam: bool=True, 
-                            circuit_conversion_kwargs: dict=None):
+                            circuit_conversion_kwargs: dict=None,
+                            num_workers: Union[int, str, None] = None,
+                            pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -251,6 +353,13 @@ class ErrorGeneratorPropagator:
             method of the `Circuit` class to control the behavior of the conversion. Please see the
             documentation for this method for additional information on supported arguments and
             values.
+
+        num_workers : int, str, or None, optional
+            Target worker count (defaults to None for sequential fast-path; pass 'auto'
+            or an integer to enable parallel execution across layer blocks).
+
+        pool : Pool or SharedWorkerPool, optional
+            Existing worker pool to reuse.
 
         Returns
         -------
@@ -275,15 +384,34 @@ class ErrorGeneratorPropagator:
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
         errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
-        #propagate the errorgen_layers through the propagation_layers to get a list
-        #of end of circuit error generator dictionaries.
-        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
+
+        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+        if workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {workers}.")
+        n_q = len(circuit.line_labels)
+        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
+
+        # Strategic single-point memory check for layer propagation (evaluates sequential, pool, and worker configurations)
+        if len(errorgen_layers) > 1:
+            _warn_if_insufficient_memory(
+                estimate_propagation_peak_memory(n_q, len(errorgen_layers), avg_k, workers),
+                task_name="propagate_errorgens"
+            )
+
+        should_par = _should_parallelize_layer_prop(n_q, len(errorgen_layers), avg_k, num_workers=workers) if workers > 1 else False
+        pass_workers = workers if should_par else 1
+        propagated_errorgen_layers = self._propagate_errorgen_layers(
+            errorgen_layers, propagation_layers, include_spam=include_spam,
+            num_workers=pass_workers, pool=pool
+        )
 
         return propagated_errorgen_layers
         
 
     def propagate_errorgens_bch(self, circuit: _Circuit, bch_order: int=1, include_spam: bool=True, truncation_threshold: float=1e-14, 
-                                mode: Literal['magnus', 'pairwise']='magnus', circuit_conversion_kwargs: dict=None):
+                                mode: Literal['magnus', 'pairwise']='magnus', circuit_conversion_kwargs: dict=None,
+                                num_workers: Union[int, str, None] = None,
+                                pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.
@@ -322,6 +450,13 @@ class ErrorGeneratorPropagator:
             method of the `Circuit` class to control the behavior of the conversion. Please see the
             documentation for this method for additional information on supported arguments and
             values.
+
+        num_workers : int, str, or None, optional
+            Target worker count (defaults to None for sequential fast-path; pass 'auto'
+            or an integer to enable parallel execution across layer propagation and Magnus stages).
+
+        pool : Pool or SharedWorkerPool, optional
+            Existing worker pool to reuse across workflow stages.
         """
 
         if mode == 'pairwise':
@@ -333,24 +468,39 @@ class ErrorGeneratorPropagator:
         elif mode != 'magnus':
             raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
 
-        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
-        #if length one no need to do anything.
-        if len(propagated_errorgen_layers)==1:
-            return propagated_errorgen_layers[0]
-        
-        if mode == 'magnus':
-            assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
-            combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
+        # One pool shared by the propagation and Magnus stages. When the caller does not supply a
+        # pool, a lazy one is used: its workers start only if (and when) a stage decides that its
+        # workload merits parallelism, so an all-serial run never starts any processes, while e.g.
+        # a serial propagation followed by a parallel Magnus expansion starts the pool exactly once.
+        # (The deprecated pairwise mode has no parallel stage beyond propagation.)
+        with _pool_scope(num_workers, pool, prewarm_packages=_eprop.EGPROP_PREWARM_PACKAGES) as stage_pool:
+            propagated_errorgen_layers = self.propagate_errorgens(
+                circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs,
+                pool=stage_pool
+            )
+            #if length one no need to do anything.
+            if len(propagated_errorgen_layers)==1:
+                return propagated_errorgen_layers[0]
 
-        else:  # 'pairwise' (deprecated, see above)
-            assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
-            #iterate through in reverse order (the propagated layers are
-            #in circuit ordering and not matrix multiplication ordering at the moment)
-            #and combine the terms pairwise
-            combined_err_layer = propagated_errorgen_layers[-1]
-            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-                combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
-                                                                bch_order=bch_order, truncation_threshold=truncation_threshold)
+            if mode == 'magnus':
+                assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+                combined_err_layer = _eprop.magnus_expansion(
+                    propagated_errorgen_layers, magnus_order=bch_order,
+                    truncation_threshold=truncation_threshold,
+                    pool=stage_pool
+                )
+
+            else:  # 'pairwise' (deprecated, see above)
+                assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+                #iterate through in reverse order (the propagated layers are
+                #in circuit ordering and not matrix multiplication ordering at the moment)
+                #and combine the terms pairwise
+                combined_err_layer = propagated_errorgen_layers[-1]
+                for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                    combined_err_layer = _eprop.bch_approximation(
+                        combined_err_layer, propagated_errorgen_layers[i],
+                        bch_order=bch_order, truncation_threshold=truncation_threshold
+                    )
 
         return combined_err_layer
         
@@ -698,7 +848,9 @@ class ErrorGeneratorPropagator:
             errorgen_dicts_by_layer.append(errorgen_layer)
         return errorgen_dicts_by_layer
     
-    def _propagate_errorgen_layers(self, errorgen_layers, propagation_layers, include_spam=True):
+    def _propagate_errorgen_layers(self, errorgen_layers, propagation_layers, include_spam=True,
+                                   num_workers: Union[int, str, None] = None,
+                                   pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagates the error generator layers through each of the corresponding propagation layers
         (i.e. the clifford operations for the remainder of the circuit). This results in a list of 
@@ -723,6 +875,12 @@ class ErrorGeneratorPropagator:
             If True then include the error generators for state preparation and measurement
             are included in errogen_layers, and the state preparation error generator should
             be propagated through (the measurement one is simply appended at the end).
+
+        num_workers : int, str, or None, optional
+            Target worker count for parallel execution across layer chunks.
+
+        pool : Pool or SharedWorkerPool, optional
+            Existing worker pool to reuse.
         
         Returns
         -------
@@ -739,17 +897,47 @@ class ErrorGeneratorPropagator:
         else:
             stopping_idx = len(errorgen_layers)-1
 
-        fully_propagated_layers = []    
-        for i in range(stopping_idx):
-            err_layer = errorgen_layers[i]
-            prop_layer = propagation_layers[i]
-            new_error_dict=dict()
-            #iterate through dictionary of error generator coefficients and propagate each one.
-            for errgen_coeff_lbl in err_layer:
-                propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, err_layer[errgen_coeff_lbl])
-                new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
-            fully_propagated_layers.append(new_error_dict)
-        #add the final layers which didn't require actual propagation (since they were already at the end).
+        if stopping_idx <= 0:
+            return list(errorgen_layers)
+
+        # An explicit num_workers=1 (e.g. passed by `propagate_errorgens` after deciding that the
+        # workload does not merit parallelism) forces serial execution even when a pool is supplied.
+        if pool is None or num_workers == 1:
+            workers = _determine_num_workers(num_workers)
+        else:
+            workers = _resolve_pool_workers(pool)
+        if workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {workers}.")
+
+        if workers == 1 or num_workers is None and pool is None or stopping_idx < 2:
+            fully_propagated_layers = []    
+            for i in range(stopping_idx):
+                err_layer = errorgen_layers[i]
+                prop_layer = propagation_layers[i]
+                new_error_dict=dict()
+                #iterate through dictionary of error generator coefficients and propagate each one.
+                for errgen_coeff_lbl in err_layer:
+                    propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, err_layer[errgen_coeff_lbl])
+                    new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
+                fully_propagated_layers.append(new_error_dict)
+            #add the final layers which didn't require actual propagation (since they were already at the end).
+            fully_propagated_layers.extend(errorgen_layers[stopping_idx:])
+            return fully_propagated_layers
+
+        # Chunked parallel propagation across layer blocks
+        layer_items = [(i, errorgen_layers[i], propagation_layers[i]) for i in range(stopping_idx)]
+        chunk_size = (stopping_idx + workers - 1) // workers
+        chunks = [layer_items[i : i + chunk_size] for i in range(0, stopping_idx, chunk_size) if i < stopping_idx]
+
+        if pool is not None:
+            chunk_results = pool.map(_prop_layer_chunk_worker, chunks)
+        else:
+            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop.EGPROP_PREWARM_PACKAGES) as local_pool:
+                chunk_results = local_pool.map(_prop_layer_chunk_worker, chunks)
+
+        flat_results = [item for sub in chunk_results for item in sub]
+        flat_results.sort(key=lambda x: x[0])
+        fully_propagated_layers = [r[1] for r in flat_results]
         fully_propagated_layers.extend(errorgen_layers[stopping_idx:])
         return fully_propagated_layers
     
