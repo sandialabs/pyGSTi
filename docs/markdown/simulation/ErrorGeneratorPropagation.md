@@ -26,8 +26,8 @@ Please note: The implementation of the error generator propagation framework in 
 ```{code-cell} ipython3
 import pygsti
 import stim
-from pygsti.tools import errgenproptools as eprop
-from pygsti.tools import errgenpolytools as epoly
+from pygsti.tools import errorgenpropagation as eprop
+from pygsti.tools.errorgenpropagation import polynomials as epoly
 from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
@@ -121,7 +121,7 @@ This method returns a dictionary with the following structure: Keys are tuples o
 print(errorgen_transform_map[(_LSE('H', [stim.PauliString('XIII')]), 1)])
 ```
 
-For some purposes it can be useful to go another step further and identity which gate a particular error might be associated with in the original error model. For this purpose `errgenpolytools` has a helper function available called `errorgen_gate_contributors`, which takes the error model as its first argument.
+For some purposes it can be useful to go another step further and identity which gate a particular error might be associated with in the original error model. For this purpose `errorgenpropagation.polynomials` has a helper function available called `errorgen_gate_contributors`, which takes the error model as its first argument.
 
 ```{code-cell} ipython3
 print(epoly.errorgen_gate_contributors(error_model, _LSE('H', [stim.PauliString('XIII')]), c, layer_idx=1, include_spam=True))
@@ -164,7 +164,7 @@ Now you have an efficient representation for an approximation to the effective e
 
 We'll start off by demonstrating how to perform strong simulation using the results of error generator propagation to estimate the output probabilities for a desired computational basis state. 
 
-To do so we'll be making use of the function `approximate_stabilizer_probability` from the `errgenproptools` module. This function takes as input the following arguments:
+To do so we'll be making use of the function `approximate_stabilizer_probability` from the `errorgenpropagation` module. This function takes as input the following arguments:
 
 - errorgen_dict : A dictionary of elementary error generator coefficients and their corresponding rates (as outputted, for example, by `propagate_errorgens_bch`).
 - circuit : The circuit to compute the output probability for. This can by a pyGSTi `Circuit` object, or alternatively a `stim.Tableau`.
@@ -203,7 +203,7 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 
 Here we can see that with the combination of second-order BCH and second-order taylor approximations our estimated probability is accurate to well below a 1 percent relative error. By going out to higher-order in either approximation one can achieve even higher levels of accuracy.
 
-In addition to strong simulation of the output probabilities of computational basis states, it is also possible to compute approximate values for the expectation values of pauli observables. The main function for doing so is `approximate_stabilizer_pauli_expectation` from the `errgenproptools` module, the signature of which is nearly identical to that of `approximate_stabilizer_probability` described above, except taking instead a desired pauli observable to estimate the expectation value for. Here we'll again use the results of the second-order BCH approximation produced above and look are various order of the taylor series approximation for the pauli expectation value of 'XYZI' (the value for the ideal noise-free circuit is 1).
+In addition to strong simulation of the output probabilities of computational basis states, it is also possible to compute approximate values for the expectation values of pauli observables. The main function for doing so is `approximate_stabilizer_pauli_expectation` from the `errorgenpropagation` module, the signature of which is nearly identical to that of `approximate_stabilizer_probability` described above, except taking instead a desired pauli observable to estimate the expectation value for. Here we'll again use the results of the second-order BCH approximation produced above and look are various order of the taylor series approximation for the pauli expectation value of 'XYZI' (the value for the ideal noise-free circuit is 1).
 
 ```{code-cell} ipython3
 first_order_approximate_pauli_expectation = eprop.approximate_stabilizer_pauli_expectation(propagated_errorgen_layer_second_order, c, 'XYZI', order=1)
@@ -386,10 +386,10 @@ dense_end_of_circuit_errorgen_first_order_BCH = errorgen_propagator.errorgen_lay
 ```
 
 By default this returns the error generator in the normalized pauli-product basis, but this can be changed using the optional `mx_basis` kwarg.
-Note: There is another function called `errorgen_layer_to_matrix` available in the `errgenproptools` module with similar functionality to this method, but with a somewhat different interface. That function can be particularly useful in situations where you may want to compute a lot of dense error generator representations from the outputs of the error generator propagation framework, so check out the documentation of that function for more.
+Note: There is another function called `errorgen_layer_to_matrix` available in the `errorgenpropagation` module with similar functionality to this method, but with a somewhat different interface. That function can be particularly useful in situations where you may want to compute a lot of dense error generator representations from the outputs of the error generator propagation framework, so check out the documentation of that function for more.
 
 ### `approximate_stabilizer_probabilities`
-This one is straightforward. Above we showed the use of the function `approximate_stabilizer_probability` from the `errgenproptools` module for calculating approximate output probabilities for a given computational bitstring. If you happen to want *all* of the bit string probabilities you can save yourself a for loop by using the function `approximate_stabilizer_probabilities` from this module instead!
+This one is straightforward. Above we showed the use of the function `approximate_stabilizer_probability` from the `errorgenpropagation` module for calculating approximate output probabilities for a given computational bitstring. If you happen to want *all* of the bit string probabilities you can save yourself a for loop by using the function `approximate_stabilizer_probabilities` from this module instead!
 
 ```{code-cell} ipython3
 approximate_probabilities = eprop.approximate_stabilizer_probabilities(propagated_errorgen_layer_first_order, c, order=1)
@@ -399,7 +399,7 @@ print(approximate_probabilities)
 Note the returned values are given in right-LSB convention (i.e. '0000' -> '0001' ->'0010', etc.)
 
 ### `error_generator_commutator` and `error_generator_composition`
-These two functions from the `errgenproptools` module return the result of analytically computing the commutator and composition of two elementary error generators, respectively.
+These two functions from the `errorgenpropagation` module return the result of analytically computing the commutator and composition of two elementary error generators, respectively.
 
 ```{code-cell} ipython3
 errorgen_1 = _LSE('H', [stim.PauliString('X')])
@@ -452,5 +452,5 @@ canonicalize_errorgen_layer(noncanonical_layer)
 
 The C rate is unchanged, while the two A entries are the same generator written both ways and are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand. Here is the model-side situation it exists for: a `Gcphase` on qubits `(1, 0)` with an A error rate stored by the model under the pair `('YX', 'XY')`, which the propagator reports under the canonical key `A(XY, YX)` with the rate negated.
 
-There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
+There's a whole bunch of other functionality and utilities available, particularly in the `errorgenpropagation` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 

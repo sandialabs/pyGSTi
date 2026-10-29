@@ -21,7 +21,7 @@ As circuit depth, qubit count, or the number of terms in a noise model grows—p
 import pygsti
 import stim
 import numpy as np
-from pygsti.tools import errgenproptools as eprop
+from pygsti.tools import errorgenpropagation as eprop
 from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
@@ -68,10 +68,10 @@ All primary propagation and sensitivity functions accept two optional arguments 
 
 Functions supporting parallel execution include:
 - `ErrorGeneratorPropagator.propagate_errorgens` and `propagate_errorgens_bch`: Parallelizes circuit layer propagation across workers.
-- `errgenproptools.magnus_expansion` and `zassenhaus_formula`: Parallelizes pairwise layer commutators and outer accumulated commutators.
-- `errgenproptools.error_generator_taylor_expansion`: Parallelizes the products used to build the powers of the error generator.
-- `errgenproptools.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations`: Parallelizes computations across outcomes/observables while reusing intermediate results.
-- `errgenproptools.bulk_alpha` and `bulk_alpha_pauli`: Parallelizes across outcomes/observables and error generators.
+- `errorgenpropagation.magnus_expansion` and `zassenhaus_formula`: Parallelizes pairwise layer commutators and outer accumulated commutators.
+- `errorgenpropagation.error_generator_taylor_expansion`: Parallelizes the products used to build the powers of the error generator.
+- `errorgenpropagation.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations`: Parallelizes computations across outcomes/observables while reusing intermediate results.
+- `errorgenpropagation.bulk_alpha` and `bulk_alpha_pauli`: Parallelizes across outcomes/observables and error generators.
 
 ## Pipeline Pool Reuse with `SharedWorkerPool`
 
