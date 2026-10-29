@@ -40,7 +40,7 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
 
         verbosity : int or VerbosityPrinter

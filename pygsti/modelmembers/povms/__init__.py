@@ -16,6 +16,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 
+# from .basepovm import _BasePOVM  # TODO: rename to BasePOVM and import here?
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
 from .composedpovm import ComposedPOVM
@@ -26,7 +27,7 @@ from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
 from .marginalizedpovm import MarginalizedPOVM
-from .povm import POVM
+from .povm import POVM  # TODO: replace implementation with that of _BasePOVM ?
 from .staticeffect import StaticPOVMEffect
 from .staticpureeffect import StaticPOVMPureEffect
 from .tensorprodeffect import TensorProductPOVMEffect
@@ -37,6 +38,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.tools.exceptions import PrepareThyself
 from pygsti.baseobjs import Basis
 
 # Avoid circular import
@@ -528,10 +530,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                     
-                #Collect all ideal effects
+                #Collect all ideal effects.  Iterate over base_povm (built in both
+                #branches above) rather than base_items, which is left unset in the
+                #ComputationalBasisPOVM "easy case" branch.
                 base_dense_effects = []
-                for item in base_items:
-                    dense_effect = item[1].to_dense(on_space='HilbertSchmidt')
+                for _lbl, effect in base_povm.items():
+                    dense_effect = effect.to_dense(on_space='HilbertSchmidt')
                     base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
@@ -557,7 +561,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                     )
 
                     if degrees_of_freedom > errgen.num_params:
-                        warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        msg = \
+                        """
+                        POVM has more degrees of freedom than the available number of parameters,
+                        representation in this parameterization is not guaranteed.
+                        """
+                        warnings.warn(msg, PrepareThyself)
                     exp_errgen = _ExpErrorgenOp(errgen)
                     
                     num_errgens = errgen.num_params
@@ -612,7 +621,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                                         tol=1e-13) 
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                     raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
-                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x, rcond=None)[0]
                 errorgen.from_vector(errgen_vec)
                 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
@@ -635,6 +644,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
 
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
+        except Warning:
+            # A pyGSTi UserWarning subclass escalated to an exception by a
+            # caller's warning filter (e.g., `pytest -W error::PrepareThyself`).
+            # Don't silently swallow it as a "conversion failed" message —
+            # let it propagate so the caller sees the real diagnostic.
+            raise
         except Exception as e:
             error_msgs[to_type] = str(e)  # try next to_type
 

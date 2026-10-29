@@ -144,7 +144,8 @@ class TestScalableBenchmarks(BaseCase):
         mirroring_kwargs_dict = {'num_mcs_per_circ': num_mcs_per_circ,
                                  'num_ref_per_qubit_subset': num_ref_per_qubit_subset}
 
-        qk_circ = qiskit.circuit.library.QFT(6)
+        qk_circ = qiskit.QuantumCircuit(6)
+        qk_circ.append(qiskit.circuit.library.QFTGate(6), range(6))
         qk_circ = qiskit.transpile(qk_circ, backend=backend)
 
         test_edesign, mirror_edesign = qiskit_circuits_to_mirror_edesign([qk_circ],
@@ -204,7 +205,8 @@ class TestScalableBenchmarks(BaseCase):
                                  'num_ref_per_qubit_subset': num_ref_per_qubit_subset}
         transpiler_kwargs_dict = {'optimization_level': 2}
 
-        qk_circ = qiskit.circuit.library.QFT(6)
+        qk_circ = qiskit.QuantumCircuit(6)
+        qk_circ.append(qiskit.circuit.library.QFTGate(6), range(6))
 
         test_edesign, mirror_edesign = qiskit_circuits_to_fullstack_mirror_edesign([qk_circ],
                                                                                    qk_backend=backend,
@@ -280,7 +282,8 @@ class TestScalableBenchmarks(BaseCase):
         
 
 
-        qk_circ = qiskit.circuit.library.QFT(6)
+        qk_circ = qiskit.QuantumCircuit(6)
+        qk_circ.append(qiskit.circuit.library.QFTGate(6), range(6))
         qk_circ = qiskit.transpile(qk_circ, backend=backend)
 
         test_edesign, mirror_edesign = qiskit_circuits_to_subcircuit_mirror_edesign(

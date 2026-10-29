@@ -266,7 +266,7 @@ class GeneralMethodBase(object):
             self.model['Non-existent-key'] = np.zeros((4, 4), 'd')  # can't set things not in the model
 
     def test_raise_on_set_bad_prep_key(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             self.model.preps['foobar'] = [1.0 / np.sqrt(2), 0, 0, 0]  # bad key prefix
 
     def test_raise_on_get_bad_povm_key(self):
@@ -337,6 +337,22 @@ class GeneralMethodBase(object):
         #DEBUG print(); print(self.model.parameter_labels)
         self.assertEqual(self.model.num_params, 27)
         self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
+
+    def test_circuit_parameter_dependence_with_collected_parameters(self):
+        # Collecting parameters across gates makes a gate's gpindices an array, not a slice.
+        self.model.set_all_parameterizations("H+s")
+        self.model.collect_parameters([('Gx', 'X Hamiltonian error coefficient'),
+                                       ('Gy', 'Y Hamiltonian error coefficient')],
+                                      new_param_label='Over-rotation')
+        self.assertNotIsInstance(self.model['Gy'].gpindices, slice)
+
+        circuit = Circuit(['Gy'])
+        dependence = self.model.circuit_parameter_dependence([circuit])[circuit]
+        expected = set()
+        for member in (self.model['rho0'], self.model['Gy'], self.model['Mdefault']):
+            expected.update(member.gpindices_as_array().tolist())
+        self.assertEqual(dependence, sorted(expected))
+        self.assertIn(list(self.model.parameter_labels).index('Over-rotation'), dependence)
 
     def test_parameter_bounds(self):
         self.model.set_all_parameterizations("H+S")
@@ -627,12 +643,13 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
         # TODO is this needed?
         for opLabel in cp.operations:
-            self.assertArraysAlmostEqual(cp[opLabel], Tinv @ self.model[opLabel] @ T)
+            self.assertArraysAlmostEqual(cp[opLabel].to_dense(), Tinv @ self.model[opLabel].to_dense() @ T)
         for prepLabel in cp.preps:
-            self.assertArraysAlmostEqual(cp[prepLabel], Tinv @ self.model[prepLabel])
+            self.assertArraysAlmostEqual(cp[prepLabel].to_dense(), Tinv @ self.model[prepLabel].to_dense())
         for povmLabel in cp.povms:
             for effectLabel, eVec in cp.povms[povmLabel].items():
-                self.assertArraysAlmostEqual(eVec, np.transpose(T) @ self.model.povms[povmLabel][effectLabel])
+                self.assertArraysAlmostEqual(eVec.to_dense(),
+                                             np.transpose(T) @ self.model.povms[povmLabel][effectLabel].to_dense())
 
     def test_gpindices(self):
         # Test instrument construction with elements whose gpindices
@@ -645,7 +662,9 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         v = mdl.to_vector()
         Np = mdl.num_params
         gate_with_gpindices = FullArbitraryOp(np.identity(4, 'd'))
-        gate_with_gpindices[0, :] = v[0:4]
+        gate_arr = gate_with_gpindices.to_dense().copy()
+        gate_arr[0, :] = v[0:4]
+        gate_with_gpindices.set_dense(gate_arr)
         gate_with_gpindices.set_gpindices(np.concatenate(
             (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
@@ -661,7 +680,8 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
             self.model._check_paramvec(debug=True)  # param vec is now out of sync!
 
     def test_probs_warns_on_nan_in_input(self):
-        self.model['rho0'][:] = np.nan
+        nan_vec = np.full(self.model['rho0'].to_dense().shape, np.nan)
+        self.model['rho0'].set_dense(nan_vec)
         with self.assertWarns(Warning):
             self.model.probabilities(self.gatestring1)
 
@@ -674,11 +694,11 @@ class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
         self.model["Gi"] = Gi_test_matrix  # set operation matrix
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -687,7 +707,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         self.skipTest("TODO should probably warn user?")
@@ -798,3 +818,38 @@ class ModelEquivalenceTester(BaseCase):
                                                  lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
                                                  independent_gates=True, independent_spam=True, verbosity=2)
         self.check_model(mdl_cloud)
+
+class DefaultPOVMOnSubsetOfLinesTester(BaseCase):
+    # Issue #721: a circuit on a strict subset of a model's lines had no default
+    # POVM, even when the model has a single POVM that applies to it.
+
+    def setUp(self):
+        from pygsti.modelpacks import smq2Q_XYICNOT
+        self.model = smq2Q_XYICNOT.target_model()
+        self.circuit = Circuit([("Gypi2", 0), ("Gxpi2", 0)], line_labels=(0,))
+
+    def test_probabilities_match_explicit_povm(self):
+        explicit = Circuit([("Gypi2", 0), ("Gxpi2", 0), "Mdefault"], line_labels=(0,))
+        probs = self.model.probabilities(self.circuit)
+        expected = self.model.probabilities(explicit)
+        self.assertEqual(set(probs.keys()), set(expected.keys()))
+        for outcome, p in expected.items():
+            self.assertAlmostEqual(probs[outcome], p)
+
+    def test_complete_and_split_use_the_single_povm(self):
+        completed = self.model.complete_circuits([self.circuit])[0]
+        self.assertEqual(completed[-1], "Mdefault")
+        _, _, povm_lbl = self.model.split_circuits([self.circuit])[0]
+        self.assertEqual(povm_lbl, "Mdefault")
+
+    def test_no_default_for_lines_outside_the_model(self):
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((2,)))
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((0, 2)))
+        with self.assertRaises(ValueError):
+            self.model.complete_circuits([Circuit([], line_labels=(2,))])
+
+    def test_no_default_with_several_povms(self):
+        self.model.povms["M2"] = self.model.povms["Mdefault"].copy()
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((0,)))
+        with self.assertRaises(ValueError):
+            self.model.complete_circuits([self.circuit])

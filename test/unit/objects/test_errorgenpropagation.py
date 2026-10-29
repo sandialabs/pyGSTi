@@ -7,6 +7,7 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model, create_
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
+from pygsti.tools import errgenpolytools as _epoly
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
@@ -14,6 +15,11 @@ from math import floor
 from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
+import unittest
+import warnings
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import copy
+import pickle
 
 
 class ErrorgenPropTester(BaseCase):
@@ -47,11 +53,14 @@ class ErrorgenPropTester(BaseCase):
 
     def test_approx_propagation_probabilities_BCH(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
-        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
-        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
-        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
-        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
+        # exercises the deprecated 'pairwise' mode.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', pyGSTiDeprecationWarning)
+            probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
+            probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
+            probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
+            probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
+            probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
@@ -117,20 +126,6 @@ class ErrorgenPropTester(BaseCase):
         assert errorgen_input_output_map[(_LSE('S', (stim.PauliString("+X___"),)), 2)] == (_LSE('S', (stim.PauliString("+Z___"),)),  1.0)
         assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+X___"),)), 3)] == (_LSE('H', (stim.PauliString("+Z___"),)), -1.0)
 
-    def test_errorgen_gate_contributors(self):
-        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        test_1 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
-        assert test_1 == [Label(('Gypi2', 0))]
-    
-        test_2 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
-        assert test_2 == [Label(('Gypi2', 1))]
-
-        test_3 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
-        assert test_3 == [Label(('Gxpi2', 3))]
-
-        test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
-        assert test_4 == [Label(('Gcphase', 2, 3))]
-
     def test_explicit_model(self):
         
         target_model = smq2Q_XYCPHASE.target_model('full TP')
@@ -142,7 +137,7 @@ class ErrorgenPropTester(BaseCase):
 
         #make sure that the various methods don't die.
         propagated_errorgens = errorgen_propagator.propagate_errorgens(circuit_2Q)
-        gate_contributors = errorgen_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(noisy_model, LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
 
     def test_cloud_crosstalk_model(self):
         oq=['Gxpi2','Gypi2','Gzpi2']
@@ -160,7 +155,7 @@ class ErrorgenPropTester(BaseCase):
         mdl_cloudnoise = create_cloud_crosstalk_model(ps, lindblad_error_coeffs=lindblad_error_coeffs, errcomp_type="errorgens")
         errorgen_prop=ErrorGeneratorPropagator(mdl_cloudnoise)
         propagated_errorgens = errorgen_prop.propagate_errorgens(self.circuit)
-        gate_contributors = errorgen_prop.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(mdl_cloudnoise, LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
@@ -190,6 +185,360 @@ class LocalStimErrorgenLabelTester(BaseCase):
         propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
+    def test_type_idx(self):
+        from pygsti.errorgenpropagation.localstimerrorgen import _ERRORGEN_TYPE_INDICES
+        self.assertEqual(_ERRORGEN_TYPE_INDICES, {'H': 0, 'S': 1, 'C': 2, 'A': 3})
+        for typ, bels in [('H', ['XI']), ('S', ['XI']), ('C', ['XI', 'YI']), ('A', ['XI', 'YI'])]:
+            lse = _LSE.cast((typ, bels))
+            self.assertEqual(lse.type_idx, _ERRORGEN_TYPE_INDICES[typ])
+            self.assertEqual(copy.copy(lse).type_idx, lse.type_idx)
+            self.assertEqual(copy.deepcopy(lse).type_idx, lse.type_idx)
+            self.assertEqual(pickle.loads(pickle.dumps(lse)).type_idx, lse.type_idx)
+        with self.assertRaises(ValueError):
+            _LSE('Q', [stim.PauliString('XI')])
+
+    def test_hash_and_equality(self):
+        # equal labels built independently compare equal and hash equal; H_P and S_P (same Pauli)
+        # must differ in both (the hash string carries the type letter); other objects are unequal.
+        a = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
+        b = _LSE.cast(('C', ['XX', 'YY']))
+        self.assertEqual(a, b)
+        self.assertEqual(hash(a), hash(b))
+        self.assertEqual(len({a, b}), 1)
+        h = _LSE('H', [stim.PauliString('XX')])
+        s = _LSE('S', [stim.PauliString('XX')])
+        self.assertNotEqual(h, s)
+        self.assertNotEqual(hash(h), hash(s))
+        self.assertNotEqual(a, _LSE('A', [stim.PauliString('XX'), stim.PauliString('YY')]))
+        self.assertNotEqual(a, LocalElementaryErrorgenLabel('C', ['XX', 'YY']))
+        self.assertFalse(a == ('C', ('XX', 'YY')))
+        # labels carrying propagation metadata are still equal to their plain counterpart.
+        self.assertEqual(_LSE('H', [stim.PauliString('XX')], circuit_time=3, label='foo'), h)
+
+    def test_unpickle_legacy_states(self):
+        # Pickles written by older versions of LocalStimErrorgenLabel lack attributes added
+        # since. Emulate them by editing the instance __dict__ before pickling (the default
+        # reduce protocol pickles __dict__ verbatim) and check that __setstate__ migrates them.
+        # Use a propagated label so that the stored pre-propagation initial_label differs from
+        # the label itself and its preservation can be checked.
+        original = _LSE('A', [stim.PauliString('XI'), stim.PauliString('YI')])
+        propagated, sign = original.propagate_error_gen_tableau(stim.Tableau.from_named_gate('H') + stim.Tableau(1), 1.0)
+        self.assertNotEqual(propagated, original)
+        self.assertEqual(propagated.initial_label, original.to_local_eel())
+        fresh_state = dict(propagated.__dict__)
+
+        def roundtrip(state):
+            legacy = copy.copy(propagated)
+            legacy.__dict__.clear()
+            legacy.__dict__.update(state)
+            return pickle.loads(pickle.dumps(legacy))
+
+        # (1) state written before `type_idx` existed.
+        state = dict(fresh_state)
+        del state['type_idx']
+        restored = roundtrip(state)
+        self.assertEqual(restored.type_idx, propagated.type_idx)
+
+        # (2) state written before `initial_label` became a lazy property (plain attribute,
+        #     always materialized) and before `type_idx` existed.
+        state = dict(fresh_state)
+        del state['type_idx']
+        state['initial_label'] = state.pop('_initial_label')
+        restored = roundtrip(state)
+        self.assertEqual(restored.type_idx, propagated.type_idx)
+        self.assertEqual(restored.initial_label, original.to_local_eel())
+
+        # (3) as (2), and additionally without the cached hashable string representations.
+        del state['_hashable_basis_element_labels']
+        del state['_hashable_string_rep']
+        restored = roundtrip(state)
+        self.assertEqual(restored._hashable_basis_element_labels, propagated._hashable_basis_element_labels)
+        self.assertEqual(restored.initial_label, original.to_local_eel())
+
+        # (4) state with the older format of the hash/equality string (type letter used as the
+        #     joiner, so absent for single-index labels): it must be rebuilt, not trusted.
+        state = dict(fresh_state)
+        state['_hashable_string_rep'] = state['errorgen_type'].join(state['_hashable_basis_element_labels'])
+        restored = roundtrip(state)
+        self.assertEqual(restored._hashable_string_rep, propagated._hashable_string_rep)
+
+        # (5) state written before the cached support mask existed (or pickled before the mask
+        #     was first built): it must be built on demand.
+        state = dict(fresh_state)
+        self.assertNotIn('_support_mask', state)
+        restored = roundtrip(state)
+        self.assertEqual(restored.support_mask, propagated.support_mask)
+        self.assertIn('_support_mask', restored.__dict__)
+
+    def test_support_mask(self):
+        from pygsti.errorgenpropagation import localstimerrorgen as _lse_mod
+        # bit q of the mask is set iff some basis element label is non-identity on qubit q.
+        self.assertEqual(_LSE.cast(('H', ['XI'])).support_mask, 0b01)
+        self.assertEqual(_LSE.cast(('S', ['IZ'])).support_mask, 0b10)
+        self.assertEqual(_LSE.cast(('C', ['IY', 'XI'])).support_mask, 0b11)
+        self.assertEqual(_LSE.cast(('A', ['IIX', 'IIZ'])).support_mask, 0b100)
+        self.assertEqual(_LSE.cast(('H', ['I' * 70 + 'Y' + 'I' * 29])).support_mask, 1 << 70)
+        # the mask is built lazily, cached, and survives copies and pickling.
+        lbl = _LSE.cast(('C', ['IY', 'XI']))
+        self.assertNotIn('_support_mask', lbl.__dict__)
+        self.assertEqual(lbl.support_mask, 0b11)
+        self.assertEqual(lbl.__dict__['_support_mask'], 0b11)
+        for other in [copy.copy(lbl), copy.deepcopy(lbl), pickle.loads(pickle.dumps(lbl))]:
+            self.assertEqual(other.support_mask, 0b11)
+        # the pure-python builder and the one in use (cython when built) agree with an
+        # independent construction from stim's `pauli_indices`, for random labels of all
+        # types at a range of qubit counts (including the 64-bit chunk boundaries).
+        rng = np.random.default_rng(0)
+        for n in (1, 2, 3, 63, 64, 65, 100, 129):
+            for _ in range(25):
+                typ = rng.choice(['H', 'S', 'C', 'A'])
+                bels = []
+                for _ in range(1 if typ in 'HS' else 2):
+                    s = ['I'] * n
+                    for q in rng.choice(n, size=rng.integers(1, n + 1), replace=False):
+                        s[q] = rng.choice(['X', 'Y', 'Z'])
+                    bels.append(stim.PauliString(''.join(s)))
+                lbl = _LSE(typ, bels)
+                expected = 0
+                for p in bels:
+                    for q in p.pauli_indices():
+                        expected |= 1 << q
+                self.assertEqual(lbl.support_mask, expected)
+                self.assertEqual(_lse_mod._slow_support_mask(lbl._hashable_basis_element_labels), expected)
+                self.assertEqual(_lse_mod.support_mask_from_strings(lbl._hashable_basis_element_labels), expected)
+
+
+class CanonicalLabelOrderTester(BaseCase):
+    """The two basis element labels of every C/A `LocalStimErrorgenLabel` are in canonical
+    (string-sorted) order. A model embedding a two-qubit gate into reversed target qubits
+    produces local coefficient labels in the *other* order (e.g. C(XI, IX)); the propagation
+    module must reorder them where they enter it, negating the rate of a reordered A label
+    (A_{Q,P} = -A_{P,Q}), so that a generator is never held under two keys downstream."""
+
+    @staticmethod
+    def _is_canonical(lbl):
+        strs = lbl._hashable_basis_element_labels
+        return len(strs) == 1 or strs[0] < strs[1]
+
+    def setUp(self):
+        from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
+        pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
+        rates = random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        self.model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
+        self.circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
+        self.propagator = ErrorGeneratorPropagator(self.model)
+        self.model_local_coeffs = self.model.circuit_layer_operator(self.circuit[0]).errorgen_coefficients(label_type='local')
+
+    def test_model_labels_are_not_canonical(self):
+        #the premise of the other tests: the model's local labels for the reversed-target gate are out of order.
+        noncanonical = [lbl for lbl, rate in self.model_local_coeffs.items()
+                        if rate != 0 and len(lbl.basis_element_labels) == 2 and lbl.basis_element_labels[1] < lbl.basis_element_labels[0]]
+        self.assertGreater(len(noncanonical), 0)
+        self.assertTrue(any(lbl.errorgen_type == 'A' for lbl in noncanonical))
+
+    def test_construct_errorgen_layers_canonical_and_exact(self):
+        layers = self.propagator.construct_errorgen_layers(self.circuit, 2, include_spam=True)
+        self.assertEqual(len(layers), 5)
+        for layer in layers:
+            for lbl in layer:
+                self.assertTrue(self._is_canonical(lbl), f'{lbl} not canonical')
+                #the pre-propagation label recorded on the label is the canonical form too
+                self.assertEqual(_LSE.cast(lbl.initial_label), lbl)
+        #the reordering (with the A sign flip) does not change the error generator: compare the dense
+        #matrix of the layer with that of the model's own labels, built without any reordering.
+        raw = {_LSE(lbl.errorgen_type, [stim.PauliString(b) for b in lbl.basis_element_labels]): rate
+               for lbl, rate in self.model_local_coeffs.items() if rate != 0}
+        self.assertFalse(all(self._is_canonical(lbl) for lbl in raw))
+        for layer_idx in (1, 3):  # the two Gcphase layers; 3 is the last gate layer, which is never propagated
+            self.assertEqual(len(layers[layer_idx]), len(raw))
+            self.assertArraysAlmostEqual(self.propagator.errorgen_layer_dict_to_errorgen(layers[layer_idx]),
+                                         self.propagator.errorgen_layer_dict_to_errorgen(raw))
+        #every A label that was reordered has its rate negated
+        for lbl, rate in self.model_local_coeffs.items():
+            if lbl.errorgen_type == 'A' and rate != 0 and lbl.basis_element_labels[1] < lbl.basis_element_labels[0]:
+                key = _LSE.cast(('A', lbl.basis_element_labels[::-1]))
+                self.assertEqual(layers[1][key], -rate)
+
+    def test_propagated_and_transform_map_keys_canonical(self):
+        layers = self.propagator.construct_errorgen_layers(self.circuit, 2, include_spam=True)
+        for order in (1, 2):
+            propagated = self.propagator.propagate_errorgens_bch(self.circuit, bch_order=order)
+            self.assertTrue(all(self._is_canonical(lbl) for lbl in propagated))
+        transform_map = self.propagator.errorgen_transform_map(self.circuit, include_spam=True)
+        for (input_lbl, layer_idx), (output_lbl, phase) in transform_map.items():
+            self.assertIn(input_lbl, layers[layer_idx])
+            self.assertTrue(self._is_canonical(output_lbl))
+            self.assertIn(phase, (1.0, -1.0))
+
+    def test_fixed_layer_is_canonicalized(self):
+        #non-canonical LEEL keys, including both orders of the same C label
+        layer = {LocalElementaryErrorgenLabel('A', ('YI', 'IX')): 2.0, LocalElementaryErrorgenLabel('C', ('YI', 'IX')): 3.0,
+                 LocalElementaryErrorgenLabel('C', ('IX', 'YI')): 1.0, LocalElementaryErrorgenLabel('H', ('XI',)): 5.0}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=layer)
+        fixed = prop.fixed_errorgen_layer
+        self.assertEqual(fixed, {_LSE.cast(('A', ('IX', 'YI'))): -2.0, _LSE.cast(('C', ('IX', 'YI'))): 4.0, _LSE.cast(('H', ('XI',))): 5.0})
+        #global labels, with sslbls given as an int
+        glayer = {GlobalElementaryErrorgenLabel('A', ('XY', 'YX'), (1, 0)): 1.0}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=glayer, state_space_labels=2)
+        self.assertTrue(all(self._is_canonical(lbl) for lbl in prop.fixed_errorgen_layer))
+
+    def test_canonicalize_errorgen_layer(self):
+        from pygsti.errorgenpropagation.localstimerrorgen import canonicalize_errorgen_layer
+        #already-canonical LSE keys: the same object comes back
+        ok = {_LSE.cast(('H', ('XI',))): 1.0, _LSE.cast(('C', ('IX', 'YI'))): 1.0}
+        self.assertIs(canonicalize_errorgen_layer(ok), ok)
+        self.assertEqual(canonicalize_errorgen_layer({}), {})
+        #LSE keys built directly out of order (outside the contract) are repaired and merged
+        bad = {_LSE('A', [stim.PauliString('YI'), stim.PauliString('IX')]): 2.0,
+               _LSE('A', [stim.PauliString('IX'), stim.PauliString('YI')]): 0.5}
+        self.assertEqual(canonicalize_errorgen_layer(bad), {_LSE.cast(('A', ('IX', 'YI'))): -1.5})
+        #LEEL and GEEL keys
+        leel = {LocalElementaryErrorgenLabel('C', ('ZI', 'IZ')): 1.0, LocalElementaryErrorgenLabel('S', ('ZZ',)): 2.0}
+        self.assertEqual(canonicalize_errorgen_layer(leel), {_LSE.cast(('C', ('IZ', 'ZI'))): 1.0, _LSE.cast(('S', ('ZZ',))): 2.0})
+        geel = {GlobalElementaryErrorgenLabel('A', ('XI', 'IY'), (1, 0)): 1.0}  # = A(IX, YI) on qubits (0, 1)
+        with self.assertRaises(AssertionError):
+            canonicalize_errorgen_layer(geel)
+        self.assertEqual(canonicalize_errorgen_layer(geel, sslbls=(0, 1)), {_LSE.cast(('A', ('IX', 'YI'))): 1.0})
+        geel = {GlobalElementaryErrorgenLabel('A', ('IY', 'XI'), (1, 0)): 1.0}  # = A(YI, IX): reordered, sign flipped
+        self.assertEqual(canonicalize_errorgen_layer(geel, sslbls=(0, 1)), {_LSE.cast(('A', ('IX', 'YI'))): -1.0})
+
+    def test_cast_rejects_noncanonical_labels(self):
+        with self.assertRaises(ValueError):
+            _LSE.cast(('A', ('YI', 'IX')))
+        with self.assertRaises(ValueError):
+            _LSE.cast(LocalElementaryErrorgenLabel('C', ('ZI', 'IZ')))
+        #canonical and single-index labels are fine, as is an already-built label
+        self.assertEqual(_LSE.cast(('C', ('IZ', 'ZI'))).errorgen_type, 'C')
+        lbl = _LSE('A', [stim.PauliString('YI'), stim.PauliString('IX')])
+        self.assertIs(_LSE.cast(lbl), lbl)
+        #pickling does not go through cast
+        self.assertEqual(pickle.loads(pickle.dumps(lbl)), lbl)
+
+
+class FixedLayerErrorgenPropTester(BaseCase):
+    """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,
+    validation, SPAM layer counts, copy/aliasing behavior, and the (currently broken)
+    matrix output path in fixed-layer mode.
+    """
+
+    def setUp(self):
+        # a 2-qubit local-label fixed error generator layer
+        self.fixed_local = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['ZZ']): 0.02,
+        }
+        self.empty_circuit = Circuit([], line_labels=(0, 1))
+        self.two_layer_circuit = Circuit([[('Gxpi2', 0)], [('Gxpi2', 1)]], line_labels=(0, 1))
+
+    # ------------------------------------------------------------------
+    # construction + label casting
+    # ------------------------------------------------------------------
+
+    def test_construct_with_local_labels_casts_to_lse(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        self.assertIsNone(prop.model)
+        # keys are cast to LocalStimErrorgenLabel, rates preserved.
+        self.assertTrue(all(isinstance(k, _LSE) for k in prop.fixed_errorgen_layer))
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('H', [stim.PauliString('XX')])], 0.01)
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('S', [stim.PauliString('ZZ')])], 0.02)
+
+    def test_construct_with_global_labels_int_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=2)
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    def test_construct_with_global_labels_list_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=[0, 1])
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    # ------------------------------------------------------------------
+    # constructor validation
+    # ------------------------------------------------------------------
+
+    def test_cannot_specify_both_model_and_fixed_layer(self):
+        model = smq2Q_XYCPHASE.target_model('full TP')
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(model=model, fixed_errorgen_layer=self.fixed_local)
+
+    def test_must_specify_model_or_fixed_layer(self):
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator()
+
+    def test_global_labels_require_state_space_labels(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global)
+
+    def test_mixed_width_labels_raise(self):
+        mixed = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['Z']): 0.02,
+        }
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=mixed)
+
+    # ------------------------------------------------------------------
+    # construct_errorgen_layers behavior
+    # ------------------------------------------------------------------
+
+    def test_circuit_width_mismatch_raises(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)  # 2-qubit support
+        three_qubit_circuit = Circuit([], line_labels=(0, 1, 2))
+        with self.assertRaises(AssertionError):
+            prop.construct_errorgen_layers(three_qubit_circuit, 3, include_spam=True)
+
+    def test_spam_layer_counts(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # empty circuit: 0 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)), 2)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=False)), 0)
+        # depth-2 circuit: 2 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)), 4)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=False)), 2)
+
+    def test_each_layer_matches_fixed_layer(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        for layer in layers:
+            self.assertEqual(layer, prop.fixed_errorgen_layer)
+
+    def test_layers_are_independent_copies(self):
+        # the per-layer .copy() must keep layers (and the stored fixed layer) from aliasing.
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        key = next(iter(layers[0]))
+        layers[0][key] = 999.0
+        self.assertNotEqual(layers[1][key], 999.0)
+        self.assertNotEqual(prop.fixed_errorgen_layer[key], 999.0)
+
+    def test_empty_fixed_layer_constructs_empty_layers(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer={})
+        self.assertEqual(prop.fixed_errorgen_layer, {})
+        layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)
+        self.assertEqual(layers, [{}, {}])
+
+    def test_fixed_rate_overrides_all_rates(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # fixed_rate=None keeps the stored rates.
+        default_layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=None)
+        self.assertEqual(set(default_layers[0].values()), {0.01, 0.02})
+        # fixed_rate=1 sets every rate to 1.
+        ones = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=1)
+        self.assertEqual(set(ones[0].values()), {1})
+        # fixed_rate=0 sets every rate to 0 (the `is not None` behavior, not falsy fall-through).
+        zeros = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=0)
+        self.assertEqual(set(zeros[0].values()), {0})
+        self.assertEqual(len(zeros[0]), len(prop.fixed_errorgen_layer))
+
+
+    def test_eoc_channel_fixed_errorgen(self):
+        #confirm dense EOC channel array works with fixed error gener
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        channel = prop.eoc_error_channel(self.empty_circuit)
+        self.assertEqual(channel.shape, (4 ** 2, 4 ** 2))
+
+
 #Helper Functions:
 def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14, bch_mode='magnus'):
     #get the eoc error channel, and the process matrix for the ideal circuit:
@@ -209,7 +558,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
     for i, effect in enumerate(ideal_meas.values()):
         dense_effect = effect.to_dense().copy()
         dense_prep = ideal_prep.to_dense().copy()
-        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
+        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1, -1)), eoc_channel, ideal_channel, dense_prep.reshape((-1, 1))]).item()
     return prob_vec
 
 def probabilities_fwdsim(noise_model, circuit):

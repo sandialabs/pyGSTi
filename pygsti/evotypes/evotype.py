@@ -1,4 +1,6 @@
+from __future__ import annotations
 import importlib as _importlib
+from typing import Union, Literal
 
 from . import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -23,6 +25,10 @@ class Evotype(object):
         in order to get a performance gain.
     """
     default_evotype = None
+    Castable = Union['Evotype', Literal[
+        'default', 'chp', 'densitymx', 'densitymx_slow',
+        'stabilizer', 'stabilizer_slow', 'statevec', 'statevec_slow'
+    ]]
 
     _reptype_to_attrs = {
         'dense superop': 'OpRepDenseSuperop',
@@ -34,7 +40,6 @@ class Evotype(object):
         'sum': 'OpRepSum',
         'clifford': 'OpRepClifford',
         'repeated': 'OpRepRepeated',
-        'standard': 'OpRepStandard',
         'sparse superop': 'OpRepSparse',
         'lindblad errorgen': 'OpRepLindbladErrorgen',
         'dense state': 'StateRepDense',
@@ -51,7 +56,7 @@ class Evotype(object):
     }
 
     @classmethod
-    def cast(cls, obj, default_prefer_dense_reps=None, state_space=None):
+    def cast(cls, obj: Evotype.Castable, default_prefer_dense_reps=None, state_space=None):
         """
         Cast the specified object to an Evotype with options for default Evotype
         handling.
@@ -168,9 +173,6 @@ class Evotype(object):
 
     def create_repeated_rep(self, rep_to_repeat, num_repetitions, state_space):
         return self.module.OpRepRepeated(rep_to_repeat, num_repetitions, state_space)
-
-    def create_standard_rep(self, standard_name, super_basis, state_space):
-        return self.module.OpRepStandard(standard_name, super_basis, state_space)
 
     def create_sparse_rep(self, data, indices, indptr, state_space):
         return self.module.OpRepSparse(data, indices, indptr, state_space)

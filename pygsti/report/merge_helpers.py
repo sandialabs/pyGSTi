@@ -41,39 +41,27 @@ def _read_contents(filename):
     -------
     str
     """
-    contents = None
-    try:  # on Windows using python3 open can fail when trying to read text files. encoding fixes this
-        f = open(str(filename))
+    with open(filename, 'r', encoding='utf-8') as f:
         contents = f.read()
-    except UnicodeDecodeError:
-        f = open(str(filename), encoding='utf-8')  # try this, but not available in python 2.7!
-        contents = f.read()
-
-    f.close()
-
-    try:  # to convert to unicode since we use unicode literals
-        contents = contents.decode('utf-8')
-    except AttributeError: pass  # Python3 case when unicode is read in natively (no need to decode)
-
     return contents
 
 
-def insert_resource(connected, online_url, offline_filename,
+def insert_resource(enable_offline_mode, online_url, offline_filename,
                     integrity=None, crossorigin=None):
     """
     Return the HTML used to insert a resource into a larger HTML file.
 
-    When `connected==True`, an internet connection is assumed and
+    When `enable_offline_mode==False`, an internet connection is assumed and
     `online_url` is used if it's non-None; otherwise `offline_filename` (assumed
     to be relative to the "templates/offline" folder within pyGSTi) is inserted
-    inline.  When `connected==False` an offline folder is assumed to be present
+    inline.  When `enable_offline_mode==True` an offline folder is assumed to be present
     in the same directory as the larger HTML file, and a reference to
     `offline_filename` is inserted.
 
     Parameters
     ----------
-    connected : bool
-        Whether an internet connection should be assumed.  If False, then an
+    enable_offline_mode : bool
+        Whether an internet connection should be assumed.  If True, then an
         'offline' folder is assumed to be present in the output HTML's folder.
 
     online_url : str
@@ -96,14 +84,14 @@ def insert_resource(connected, online_url, offline_filename,
     -------
     str
     """
-    if connected:
+    if not enable_offline_mode:
         if online_url:
             url = online_url
         else:
             #insert resource inline, since we don't want
-            # to depend on offline/ directory when connected=True
+            # to depend on offline/ directory when enable_offline_mode=False
             assert(offline_filename), \
-                "connected=True without `online_url` requires offline filename!"
+                "enable_offline_mode=False without `online_url` requires offline filename!"
             absname = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                     "templates", "offline", offline_filename)
 
@@ -118,13 +106,13 @@ def insert_resource(connected, online_url, offline_filename,
                 raise ValueError("Unknown resource type for %s" % offline_filename)
 
     else:
-        assert(offline_filename), "connected=False requires offline filename"
+        assert(offline_filename), "enable_offline_model=True requires offline filename"
         url = "offline/" + offline_filename
 
     if url.endswith("js"):
 
         tag = '<script src="%s"' % url
-        if connected:
+        if not enable_offline_mode:
             if integrity: tag += ' integrity="%s"' % integrity
             if crossorigin: tag += ' crossorigin="%s"' % crossorigin
         tag += '></script>'
@@ -480,7 +468,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
 
 
 def merge_jinja_template(qtys, output_filename, template_dir=None, template_name='main.html',
-                         auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
+                         auto_open=False, precision=None, link_to=None, enable_offline_mode=False, toggles=None,
                          render_math=True, resizable=True, autosize='none', verbosity=0):
     """
     Renders `qtys` and merges them into a single HTML file `output_filename`.
@@ -518,8 +506,8 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
         create and include links to Latex, PDF, and Python pickle
         files, respectively.
 
-    connected : bool, optional
-        Whether an internet connection should be assumed.  If False, then an
+    enable_offline_mode : bool, optional
+        Whether an internet connection should be assumed.  If True, then an
         'offline' folder is assumed to be present in the output HTML's folder.
 
     toggles : dict, optional
@@ -551,7 +539,7 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
-    if not connected:
+    if enable_offline_mode:
         rsync_offline_dir(str(out_path))
 
     if link_to is not None:
@@ -584,8 +572,9 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
 
     # Render main page template to output path
     template = env.get_template(template_name)
-    with open(str(output_filename), 'w') as outfile:
-        outfile.write(template.render(render_params))
+    with open(str(output_filename), 'w', encoding='utf-8') as outfile:
+        contents = template.render(render_params)
+        outfile.write(contents)
 
     if auto_open:
         url = 'file://' + _os.path.abspath(str(output_filename))
@@ -593,7 +582,7 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
 
 
 def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name='main.html',
-                             auto_open=False, precision=None, link_to=None, connected=False, toggles=None,
+                             auto_open=False, precision=None, link_to=None, enable_offline_mode=False, toggles=None,
                              render_math=True, resizable=True, autosize='none', embed_figures=True, verbosity=0):
     """
     Renders `qtys` and merges them into the HTML files under `template_dir`, saving the output under `output_dir`.
@@ -629,8 +618,8 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
         create and include links to Latex, PDF, and Python pickle
         files, respectively.
 
-    connected : bool, optional
-        Whether an internet connection should be assumed.  If False, then an
+    enable_offline_mode : bool, optional
+        Whether an internet connection should be assumed. If True, then an
         'offline' folder is assumed to be present in the output HTML's folder.
 
     toggles : dict, optional
@@ -676,7 +665,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
     static_path = out_path / 'offline'
 
     #Copy offline directory into position
-    if not connected:
+    if enable_offline_mode:
         rsync_offline_dir(output_dir)
 
     if embed_figures is False or link_to is not None:
@@ -684,7 +673,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
         figDir.mkdir(exist_ok=True)
 
         if embed_figures is False:
-            with open(str(figDir / 'test.html'), 'w') as f:
+            with open(str(figDir / 'test.html'), 'w', encoding='utf-8') as f:
                 f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
@@ -715,7 +704,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
     # Render main page template to output path
     template = env.get_template(template_name)
     outputFilename = str(out_path / template_name)
-    with open(outputFilename, 'w') as outfile:
+    with open(outputFilename, 'w', encoding='utf-8') as outfile:
         outfile.write(template.render(render_params))
 
     if auto_open:
@@ -839,7 +828,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
                 (("true" if val else "false"), toggleNm)
 
     template = ''
-    with open(template_filename, 'r') as templatefile:
+    with open(template_filename, 'r', encoding='utf-8') as templatefile:
         template = templatefile.read()
     template = template.replace("{", "{{").replace("}", "}}")  # double curly braces (for format processing)
     # Replace template field markers with `str.format` fields.
@@ -848,7 +837,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
     # Replace str.format fields with values and write to output file
     filled_template = template.format_map(qtys_latex)
 
-    with open(output_filename, 'w') as outputfile:
+    with open(output_filename, 'w', encoding='utf-8') as outputfile:
         outputfile.write(filled_template)
 
 
@@ -880,7 +869,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
     Raises
     ------
     subprocess.CalledProcessException
-        If the call to the process comiling the PDF returns non-zero exit
+        If the call to the process compiling the PDF returns non-zero exit
         status.
     """
     report_dir = _os.path.dirname(report_filename)

@@ -9,11 +9,14 @@ Defines the TPInstrument class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+
 import collections as _collections
 import numpy as _np
 
 from pygsti.modelmembers.instruments.tpinstrumentop import TPInstrumentOp as _TPInstrumentOp
 from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.torchable import StackedMemberDictTorchable as _StackedMemberDictTorchable
 from pygsti.modelmembers import operations as _op
 
 from pygsti.evotypes import Evotype as _Evotype
@@ -24,7 +27,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
+class TPInstrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     """
     A trace-preservng quantum instrument.
 
@@ -94,18 +97,24 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
             assert(len(matrix_list) > 0 or state_space is not None), \
                 "Must specify `state_space` when there are no instrument members!"
-            state_space = _statespace.default_space_for_dim(matrix_list[0][1].shape[0]) if (state_space is None) \
-                else _statespace.StateSpace.cast(state_space)
+            first_v = matrix_list[0][1]
+            first_arr = first_v.to_dense('minimal') if hasattr(first_v, 'to_dense') else first_v
+            if state_space is None:
+                state_space = _statespace.default_space_for_dim(first_arr.shape[0])
+            else:
+                state_space = _statespace.StateSpace.cast(state_space)
             evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
-            MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
+            # Convert any modelmember values to dense arrays first
+            dense_list = [(k, (v.to_dense('minimal') if hasattr(v, 'to_dense') else v)) for k, v in matrix_list]
+            MT_mx = sum(arr for _, arr in dense_list)  # sum-of-instrument-members matrix
             MT = _op.FullTPOp(MT_mx, None, evotype, state_space)
             self.param_ops.append(MT)
 
             dim = MT.dim
-            for k, v in matrix_list[:-1]:
-                Di = _op.FullArbitraryOp(v - MT_mx, None, evotype, state_space)
+            for k, arr in dense_list[:-1]:
+                Di = _op.FullArbitraryOp(arr - MT_mx, None, evotype, state_space)
                 assert(Di.dim == dim)
                 self.param_ops.append(Di)
 
@@ -200,7 +209,8 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         # param_ops and I don't this will unpickle correctly.  Instead, just
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
-        op_matrices = [(lbl, _np.asarray(val)) for lbl, val in self.items()]
+        op_matrices = [(lbl, val.to_dense('minimal') if hasattr(val, 'to_dense') else _np.asarray(val))
+                       for lbl, val in self.items()]
         return (TPInstrument, (op_matrices, self.evotype, self.state_space, []),
                 {'init_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
 
@@ -273,7 +283,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         int
         """
-        return sum([g.size for g in self.values()])
+        return sum([g.dim**2 for g in self.values()])
 
     @property
     def num_params(self):  # same as in Instrument CONSOLIDATE?
@@ -332,6 +342,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
         self.dirty = dirty_value
+
+    # stateless_data/torch_base: inherited from StackedMemberDictTorchable. Bakes per-member
+    # (TPInstrumentOp) stateless data plus each member's slice of this instrument's parameter vector
+    # (self._submember_rpindices; the shared MT params make these slices overlap across members).
+    # Member order matches self.keys(), which the forward simulator uses (independently, via the
+    # live TPInstrument) to map torch_base's stacked tensor back to per-outcome op labels.
 
     def transform_inplace(self, s):
         """

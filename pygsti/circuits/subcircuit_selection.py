@@ -11,35 +11,37 @@ Utility functions for subcircuit selection
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING
+from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     try:
         import qiskit
-    except:
+    except ImportError:
         pass
 
-import warnings as _warnings
-from collections import Counter as _Counter, defaultdict as _defaultdict
-import itertools as _itertools
+from collections import defaultdict as _defaultdict
 import networkx as _nx
 
 import tqdm as _tqdm
 
 import numpy as _np
-import json as _json
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
+# Re-exported for backwards compatibility: this used to be defined here.
+from pygsti.tools.graphs import random_connected_subgraph
+
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
 
-
+@runtime_checkable
 class HasGetMethod(Protocol):
-    def get(gate_name: str, qubits: List[int]) -> float:
-        pass
+    def get(self, gate_name: str, qubits: List[int]) -> float:
+        ...
+
 
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
@@ -113,16 +115,8 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         A FreeformDesign object containing the sampled subcircuits and auxiliary
         information, including a circuit ID and depth.
     """
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("Subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object "
-            "is designed for qiskit version 2.1.1 "
-            "and may not function properly for your qiskit version, which is " + qiskit.__version__)
-    except:
-        _warnings.warn('Qiskit is required if using a CouplingMap or InstructionDurations object '
-        'for subcircuit selection, and does not appear to be installed.')
-    
+    _check_qiskit_version('sample_subcircuits()', required=False)
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
@@ -249,15 +243,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         the number of dangling gates in each subcircuit and the indices of added layers.
     """
 
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("Simple subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object "
-            "is designed for qiskit version 2.1.1 "
-            "and may not function properly for your qiskit version, which is " + qiskit.__version__)
-    except:
-        _warnings.warn('Qiskit is required if using a CouplingMap or InstructionDurations object '
-        'for simple subcircuit selection, and does not appear to be installed.')
+    qiskit = _check_qiskit_version('simple_weighted_subcirc_selection()', required=False)
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
@@ -312,13 +298,10 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         layer_durations = []
 
         if use_qiskit_for_instruction_durations is None:
-            try:
-                if isinstance(instruction_durations, qiskit.transpiler.InstructionDurations):
-                    use_qiskit_for_instruction_durations = True
-                    gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions() 
-                else:
-                    use_qiskit_for_instruction_durations = False
-            except:
+            if qiskit is not None and isinstance(instruction_durations, qiskit.transpiler.InstructionDurations):
+                use_qiskit_for_instruction_durations = True
+                gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions()
+            else:
                 use_qiskit_for_instruction_durations = False
 
 
@@ -352,14 +335,13 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
             G.add_edges_from(coupling_map)
             qubit_subset = random_connected_subgraph(G, width, rand_state)
 
-        else: # likely the coupling_map is a CouplingMap instance    
-            try:
-                if not isinstance(coupling_map, qiskit.transpiler.CouplingMap):
-                    raise RuntimeError("If `coupling_map` is not 'all-to-all, 'linear', or a list," \
-                    "it must be a qiskit CouplingMap object.")
-            except:
-                raise ImportError('Qiskit is required when providing a CouplingMap for subcircuit selection,' \
-                'and does not appear to be installed.')
+        else: # likely the coupling_map is a CouplingMap instance
+            if qiskit is None:
+                raise ImportError('Qiskit is required when providing a CouplingMap for subcircuit selection, '
+                                  'and does not appear to be installed.')
+            if not isinstance(coupling_map, qiskit.transpiler.CouplingMap):
+                raise RuntimeError("If `coupling_map` is not 'all-to-all', 'linear', or a list, "
+                                   "it must be a qiskit CouplingMap object.")
 
             edges = []
             for cs in coupling_map:
@@ -516,7 +498,7 @@ def greedy_growth_subcirc_selection(full_circ: _Circuit,
         the compiled depth of each subcircuit and the start and end layers of each subcircuit.
     """
 
-    # TODO: sample until success wuth some upper bound on the number of samples that can be taken?
+    # TODO: sample until success with some upper bound on the number of samples that can be taken?
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
@@ -708,6 +690,11 @@ def _greedy_growth_subcirc(circ: _Circuit,
         # Can probably do something even better here, but this may be good enough
         remaining_qubits = set(circ.line_labels) - qubit_subset
         remaining_2q_gate_counts = {q: 0 for q in remaining_qubits}
+        # `_layer_components` indexes top-level layers (`num_layers`), but we want to count
+        # gates in every executed layer (`depth`).  Those differ only when the circuit
+        # retains a CircuitLabel, so expand just in that case.
+        if remaining_width_circ.depth != remaining_width_circ.num_layers:
+            remaining_width_circ = remaining_width_circ.expand_subcircuits()
         for layer_idx in range(remaining_width_circ.depth):
             for op in remaining_width_circ._layer_components(layer_idx):
                 for q in op.qubits:
@@ -744,66 +731,6 @@ def _greedy_growth_subcirc(circ: _Circuit,
 
     # Return circuit + dropped gates/physical depth for external selection
     return _Circuit(subcirc_layers, line_labels=qubit_subset), total_dropped_gates, physical_depth, (start, end)
-
-
-def random_connected_subgraph(G: _nx.Graph,
-                              width: int,
-                              rand_state: Optional[_np.random.RandomState] = None
-                              ) -> Union[Set[int], Set[str]]:
-    """
-    Generates a random set of nodes that form a 
-    connected subgraph of a specified width from a given graph.
-
-    Parameters
-    -------------
-    G : networkx.Graph
-        The graph from which to generate the connected subgraph.
-    width : int
-        The target width of the subgraph to be generated.
-    rand_state : Optional[_np.random.RandomState]
-        A random state for reproducibility. Default is None.
-
-    Returns
-    --------
-    set[int or str]
-        A set of nodes representing the generated connected subgraph.
-    """
-
-    if rand_state is None:
-        rand_state = _np.random.RandomState()
-
-    # pick a random starting node
-    starting_node = rand_state.choice(G.nodes)
-
-    used_nodes = set([starting_node])
-
-    plausible_growth_nodes = set([starting_node])
-
-    for i in range(width - 1):
-        valid_node_found = False
-        while valid_node_found == False and len(plausible_growth_nodes):
-            growth_node = rand_state.choice(list(plausible_growth_nodes))
-            neighbors = set(G.neighbors(growth_node))
-            new_neighbors = neighbors.difference(used_nodes)
-
-            if len(new_neighbors):
-                new_node = rand_state.choice(list(new_neighbors))
-                used_nodes.add(new_node)
-                plausible_growth_nodes.add(new_node)
-                valid_node_found = True
-
-            else:
-                plausible_growth_nodes.remove(growth_node)
-        
-        if valid_node_found == False: # we exited because all possible nodes where the graph could be extended have been exhausted
-            raise RuntimeError(f'Could not generate a subgraph with {width} nodes')
-            # failure should only occur if the initial node is on a connected component of the graph with less nodes than 'width'.
-
-        
-    assert len(used_nodes) == width, f'set of selected nodes has length {used_nodes} but should have length {width}'
-    assert _nx.is_connected(G.subgraph(used_nodes)), f'subgraph on nodes {used_nodes} should be connected but is not'
-
-    return used_nodes
 
 
 

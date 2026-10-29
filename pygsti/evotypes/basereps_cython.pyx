@@ -68,38 +68,89 @@ cdef class PolynomialRep:
             coeffs[indx] = <double complex>c
         self.c_polynomial = new PolynomialCRep(coeffs, max_num_vars, vindices_per_int)
 
+    #def mapvec_indices_inplace(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] mapfn_as_vector):
+    #    cdef INT* mapfv = <INT*> mapfn_as_vector.data
+    #    cdef INT indx, nxt, i, m, k, new_i, new_indx;
+    #    cdef INT divisor = self.c_polynomial._max_num_vars + 1
+    #
+    #    cdef PolynomialVarsIndex new_PolynomialVarsIndex
+    #    cdef unordered_map[PolynomialVarsIndex, complex] new_coeffs
+    #    cdef vector[INT].iterator vit
+    #    cdef unordered_map[PolynomialVarsIndex, complex].iterator it = self.c_polynomial._coeffs.begin()
+    #
+    #    while(it != self.c_polynomial._coeffs.end()): # for each coefficient
+    #        i_vec = deref(it).first._parts  # the vector[INT] beneath this PolynomialVarsIndex
+    #        new_PolynomialVarsIndex = PolynomialVarsIndex(i_vec.size())
+    #
+    #        #map i_vec -> new_PolynomialVarsIndex
+    #        vit = i_vec.begin(); k = 0
+    #        while(vit != i_vec.end()):
+    #            indx = deref(vit)
+    #            new_indx = 0; m=1
+    #            while indx != 0:
+    #                nxt = indx // divisor
+    #                i = indx - nxt * divisor
+    #                indx = nxt
+    #
+    #                # i-1 is variable index (the thing we map)
+    #                new_i = mapfv[i-1]+1
+    #                new_indx += new_i * m
+    #                m *= divisor
+    #
+    #            new_PolynomialVarsIndex._parts[k] = new_indx
+    #            inc(vit); k += 1
+    #        new_coeffs[new_PolynomialVarsIndex] = deref(it).second
+    #        inc(it)
+    #
+    #    self.c_polynomial._coeffs.swap(new_coeffs)
+
     def mapvec_indices_inplace(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] mapfn_as_vector):
+        """
+        In-place remap of variable indices using a vector map, with commutative
+        canonicalization and collision-safe accumulation.
+
+        This implementation:
+        - decodes each packed key to variable indices via C++ int_to_vinds
+        - applies the map to each variable index
+        - sorts the mapped indices (commutative canonical form)
+        - re-encodes via C++ vinds_to_int
+        - accumulates coefficients when multiple terms map to the same monomial
+        """
         cdef INT* mapfv = <INT*> mapfn_as_vector.data
-        cdef INT indx, nxt, i, m, k, new_i, new_indx;
-        cdef INT divisor = self.c_polynomial._max_num_vars + 1
 
-        cdef PolynomialVarsIndex new_PolynomialVarsIndex
         cdef unordered_map[PolynomialVarsIndex, complex] new_coeffs
-        cdef vector[INT].iterator vit
-        cdef unordered_map[PolynomialVarsIndex, complex].iterator it = self.c_polynomial._coeffs.begin()
+        cdef unordered_map[PolynomialVarsIndex, complex].iterator it
+        cdef unordered_map[PolynomialVarsIndex, complex].iterator it_found
 
-        while(it != self.c_polynomial._coeffs.end()): # for each coefficient
-            i_vec = deref(it).first._parts  # the vector[INT] beneath this PolynomialVarsIndex
-            new_PolynomialVarsIndex = PolynomialVarsIndex(i_vec.size())
+        cdef vector[INT] vs
+        cdef PolynomialVarsIndex new_key
+        cdef INT j, n
+        cdef INT old_vi
 
-            #map i_vec -> new_PolynomialVarsIndex
-            vit = i_vec.begin(); k = 0
-            while(vit != i_vec.end()):
-                indx = deref(vit)
-                new_indx = 0; m=1
-                while indx != 0:
-                    nxt = indx // divisor
-                    i = indx - nxt * divisor
-                    indx = nxt
+        it = self.c_polynomial._coeffs.begin()
+        while it != self.c_polynomial._coeffs.end():
+            # Decode old key -> variable indices
+            vs = self.c_polynomial.int_to_vinds(deref(it).first)
 
-                    # i-1 is variable index (the thing we map)
-                    new_i = mapfv[i-1]+1
-                    new_indx += new_i * m
-                    m *= divisor
+            # Map indices IN-PLACE using operator[]
+            n = <INT>vs.size()
+            for j in range(n):
+                old_vi = vs[j]
+                vs[j] = mapfv[old_vi]
 
-                new_PolynomialVarsIndex._parts[k] = new_indx
-                inc(vit); k += 1
-            new_coeffs[new_PolynomialVarsIndex] = deref(it).second
+            # Canonicalize (commutative)
+            stdsort(vs.begin(), vs.end())
+
+            # Re-encode
+            new_key = self.c_polynomial.vinds_to_int(vs)
+
+            # Accumulate collisions
+            it_found = new_coeffs.find(new_key)
+            if it_found != new_coeffs.end():
+                deref(it_found).second = deref(it_found).second + deref(it).second
+            else:
+                new_coeffs[new_key] = deref(it).second
+
             inc(it)
 
         self.c_polynomial._coeffs.swap(new_coeffs)

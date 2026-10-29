@@ -10,19 +10,43 @@ Utility functions for working with Basis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
+
+import sys as _sys
 from functools import partial, lru_cache
 
 import numpy as _np
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
+from pygsti.baseobjs import _compatibility as _compat
+
+
+def is_cvxpy_expression(obj) -> bool:
+    """
+    Whether `obj` is a CVXPY `Expression`.
+
+    Returns False whenever cvxpy is not installed, and -- more usefully -- whenever
+    cvxpy has simply not been imported yet. This check is preferred since cvxpy 
+    imports can be expensive.
+
+    Parameters
+    ----------
+    obj : object
+        The object to test.
+
+    Returns
+    -------
+    bool
+    """
+    cvxpy = _sys.modules.get('cvxpy')
+    return cvxpy is not None and isinstance(obj, cvxpy.Expression)
 
 from typing import Literal
 
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
-    Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.
+    Get the elements of the specified basis-type which spans the density-matrix space given by `dim`.
 
     Parameters
     ----------
@@ -192,14 +216,20 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
-        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
-        # with some/all args being sparse:
         ret = toMx @ (mx @ fromMx)
     else:  # isVec
         ret = toMx @ mx
 
     if not to_basis.real:
         return ret
+
+    if is_cvxpy_expression(ret):
+        # A symbolic expression has no numerically-inspectable imaginary part, so the
+        # `expect_real` check below cannot be performed (and would silently pass, since
+        # `numpy.imag` returns 0 for objects with no `.imag`).  `to_basis.real` says the
+        # result is real for any Hermiticity-preserving input, so project symbolically.
+        import cvxpy as _cp
+        return _cp.real(ret) if ret.is_complex() else ret
 
     if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
@@ -257,7 +287,7 @@ def create_basis_pair(mx, from_basis, to_basis):
 
 def create_basis_for_matrix(mx, basis):
     """
-    Construct a Basis object with type given by `basis` and dimension approprate for transforming `mx`.
+    Construct a Basis object with type given by `basis` and dimension appropriate for transforming `mx`.
 
     Dimension is taken from `mx` (if it's not given by `basis`) that is `sqrt(mx.shape[0])`.
 
@@ -437,7 +467,7 @@ def state_to_stdmx(state_vec):
         A density matrix of shape (d,d), corresponding to the pure state
         given by the length-`d` array, `state_vec`.
     """
-    st_vec = state_vec.view(); st_vec.shape = (len(st_vec), 1)  # column vector
+    st_vec = state_vec.view(); st_vec = _compat.reshape_no_copy(st_vec, (len(st_vec), 1))  # column vector
     dm_mx = _np.kron(_np.conjugate(_np.transpose(st_vec)), st_vec)
     return dm_mx  # density matrix in standard (sigma-z) basis
 
@@ -468,12 +498,14 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     Parameters
     ----------
     v : numpy array
-        The vector length 4 or 16 respectively.
+        The vector, of length `basis.size`; a column vector of shape
+        `(basis.size, 1)` is also accepted. To convert a state or effect
+        ModelMember, pass `member.to_dense()`.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis
         The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
         Pauli-product (pp), and Qutrit (qt).  If a Basis object, then the basis
-        matrices are contained therein, and its dimension is checked to match `v`.
+        matrices are contained therein, and its size is checked to match `v`.
 
     keep_complex : bool, optional
         If True, leave the final (output) array elements as complex numbers when
@@ -486,13 +518,17 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     numpy array
         The matrix, 2x2 or 4x4 depending on nqubits
     """
-    if not isinstance(basis, _basis.Basis):
-        basis = _basis.BuiltinBasis(basis, len(v))
+    if not isinstance(v, _np.ndarray):
+        msg = f"`v` must be a numpy.ndarray, not {type(v).__name__}."
+        if hasattr(v, 'to_dense'):
+            msg += " Pass `v.to_dense()` instead."
+        raise TypeError(msg)
     v = v.ravel()
+    if not isinstance(basis, _basis.Basis):
+        basis = _basis.BuiltinBasis(basis, v.size)
+    if v.size != basis.size:
+        raise ValueError(f"`v` has {v.size} entries, but the basis has {basis.size} elements.")
     ret = _np.zeros(basis.elshape, 'complex')
-    if v.ndim > 1:
-        assert v.size == v.shape[0]
-        v = v.ravel()
     for i, mx in enumerate(basis.elements):
         if keep_complex:
             ret += v[i] * mx

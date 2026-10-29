@@ -1,7 +1,7 @@
 """
 Routines for converting python objects to HTML.
 
-Parallel rountines as latex.py has for latex conversion.
+Parallel routines as latex.py has for latex conversion.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

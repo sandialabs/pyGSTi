@@ -28,41 +28,107 @@ class POVMRep(_basereps.POVMRep):
         super(POVMRep, self).__init__()
 
     def _run_chp_ops(self, chp_ops):
-        chp_program = '\n'.join(chp_ops)
-        if len(chp_program) > 0: chp_program += '\n'
-        chpexe = _chpexe_path()
-        #print("CHP program input (debug):\n", chp_program)
+        import pygsti.evotypes.chp as _chp_mod
 
-        fd, path = _tf.mkstemp()
-        try:
-            with _os.fdopen(fd, 'w') as tmp:
-                tmp.write('#\n')
-                tmp.write(chp_program)
+        # Determine which backend to use
+        chpexe = _chp_mod.chpexe
+        use_chp_sim = False
+        if chpexe is not None and str(chpexe) == "chp_sim":
+            use_chp_sim = True
+        elif chpexe is None:
+            try:
+                import chp_sim
+                use_chp_sim = True
+            except ImportError:
+                pass
 
-            # Run CHP
-            process = _sp.Popen([f'{chpexe.resolve()}', f'{path}'], stdout=_sp.PIPE, stderr=_sp.PIPE)
-            # TODO: Handle errors?
-            out, err = process.communicate()
-        finally:
-            #with open(path) as f:  # for debugging REMOVE
-            #    print("CHP program dump (debug):")
-            #    print(f.read())
-            _os.remove(path)
+        if use_chp_sim:
+            import chp_sim
 
-        # Extract outputs
-        #print("CHP program out (debug): ", out.decode('utf-8'))
-        pattern = _re.compile(r'Outcome of measuring qubit (\d+): (\d)( ?\S*)')
-        matched_values = []  # elements = (qubit_index, outcome, '(random)' or '') tuples
-        for match in pattern.finditer(out.decode('utf-8')):
-            matched_values.append((int(match.group(1)), match.group(2), match.group(3)))
+            # Find the maximum qubit index to initialize ChpSimulator
+            max_qubit_idx = -1
+            parsed_ops = []
+            for op in chp_ops:
+                op = op.strip()
+                if not op or op.startswith('#'):
+                    continue
+                parts = op.split()
+                if not parts:
+                    continue
+                cmd = parts[0]
+                args = []
+                for part in parts[1:]:
+                    try:
+                        args.append(int(part))
+                    except ValueError:
+                        pass
+                if args:
+                    max_qubit_idx = max(max_qubit_idx, *args)
+                parsed_ops.append((cmd, args))
 
-        # Sorting orders matches by qubit index.
-        # TODO: Could have multiple measurements for each qubit...
-        assert(len(set([mv[0] for mv in matched_values])) == len(matched_values)), \
-            "Cannot currently handle more than one measurement per qubit"
-        outcomes = [mv[1] for mv in sorted(matched_values)]
-        random_flags = [bool(mv[2] == ' (random)') for mv in sorted(matched_values)]
-        return outcomes, random_flags
+            num_qubits = max(1, max_qubit_idx + 1)
+            sim = chp_sim.ChpSimulator(num_qubits)
+
+            measurements = []
+            for cmd, args in parsed_ops:
+                if cmd == 'h':
+                    sim.hadamard(args[0])
+                elif cmd == 'p':
+                    sim.phase(args[0])
+                elif cmd == 'c':
+                    sim.cnot(args[0], args[1])
+                elif cmd == 'm':
+                    qubit = args[0]
+                    res = sim.measure(qubit)
+                    measurements.append((qubit, res))
+
+            # Ensure no more than one measurement per qubit, matching standard CHP
+            measured_qubits = [qubit for qubit, _ in measurements]
+            assert len(set(measured_qubits)) == len(measured_qubits), \
+                "Cannot currently handle more than one measurement per qubit"
+
+            # Sort measurement results by qubit index (matching C# CHP program's output sorting)
+            sorted_measurements = sorted(measurements, key=lambda x: x[0])
+            outcomes = ['1' if res.value else '0' for _, res in sorted_measurements]
+            random_flags = [not res.determined for _, res in sorted_measurements]
+            return outcomes, random_flags
+
+        else:
+            chp_program = '\n'.join(chp_ops)
+            if len(chp_program) > 0: chp_program += '\n'
+            chpexe = _chpexe_path()
+            #print("CHP program input (debug):\n", chp_program)
+    
+            fd, path = _tf.mkstemp()
+            try:
+                with _os.fdopen(fd, 'w') as tmp:
+                    tmp.write('#\n')
+                    tmp.write(chp_program)
+    
+                # Run CHP
+                process = _sp.Popen([f'{chpexe.resolve()}', f'{path}'], stdout=_sp.PIPE, stderr=_sp.PIPE)
+                # TODO: Handle errors?
+                out, err = process.communicate()
+            finally:
+                #with open(path) as f:  # for debugging REMOVE
+                #    print("CHP program dump (debug):")
+                #    print(f.read())
+                _os.remove(path)
+    
+            # Extract outputs
+            #print("CHP program out (debug): ", out.decode('utf-8'))
+            pattern = _re.compile(r'Outcome of measuring qubit (\d+): (\d)( ?\S*)')
+            matched_values = []  # elements = (qubit_index, outcome, '(random)' or '') tuples
+            for match in pattern.finditer(out.decode('utf-8')):
+                matched_values.append((int(match.group(1)), match.group(2), match.group(3)))
+    
+            # Sorting orders matches by qubit index.
+            # TODO: Could have multiple measurements for each qubit...
+            assert(len(set([mv[0] for mv in matched_values])) == len(matched_values)), \
+                "Cannot currently handle more than one measurement per qubit"
+            outcomes = [mv[1] for mv in sorted(matched_values)]
+            random_flags = [bool(mv[2] == ' (random)') for mv in sorted(matched_values)]
+            return outcomes, random_flags
 
 
 class ComputationalPOVMRep(POVMRep):

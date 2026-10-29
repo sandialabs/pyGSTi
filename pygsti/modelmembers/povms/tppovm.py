@@ -14,12 +14,9 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
@@ -102,7 +99,7 @@ class TPPOVM(_BasePOVM, _Torchable):
         vec = _np.concatenate(effect_vecs)
         return vec
 
-    def stateless_data(self) -> Tuple[int, _np.ndarray]:
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int, _np.ndarray]:
         num_effects = len(self)
         complement_effect = self[self.complement_label]
         identity = complement_effect.identity.to_vector()
@@ -110,6 +107,7 @@ class TPPOVM(_BasePOVM, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
+        _torch = _import_torch()
         num_effects, identity = sd
         dim = identity.size
 
@@ -123,7 +121,7 @@ class TPPOVM(_BasePOVM, _Torchable):
             warnings.warn('Unexpected normalization!') 
 
         identity = identity.reshape((1, -1)) # make into a row vector
-        t_identity = _torch.from_numpy(identity)
+        t_identity = _torch.from_numpy(identity).to(dtype=t_param.dtype, device=t_param.device)
         t_param_mat = t_param.reshape((num_effects - 1, dim))
         t_func = t_identity - t_param_mat.sum(axis=0, keepdim=True)
         t = _torch.row_stack((t_param_mat, t_func))

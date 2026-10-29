@@ -62,7 +62,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
     @classmethod
     def _array_types_for_method(cls, method_name):
-        # give array types for this method because it's currently used publically in objective function's hessian
+        # give array types for this method because it's currently used publicly in objective function's hessian
         if method_name == '_iter_atom_hprobs_by_rectangle':
             return ('abb', 'abb') + cls._array_types_for_method('_bulk_fill_hprobs_dprobs_atom')
         if method_name == '_bulk_fill_hprobs_dprobs_atom':
@@ -349,12 +349,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
         derivative of a time-dependent quantity.  In particular, it distributes the
         computation among the subtrees of `eval_tree` and relies on the caller to supply
         "compute_cache" and "compute_dcache" functions which just need to compute the
-        quantitiy being filled and its derivative given a sub-tree and a parameter-slice.
+        quantity being filled and its derivative given a sub-tree and a parameter-slice.
 
         Parameters
         ----------
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         dataset : DataSet
@@ -377,7 +377,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
             number of model parameters.
 
         deriv_fill_fn : function
-            a function used to compute the objective funtion jacobian.
+            a function used to compute the objective function jacobian.
 
         array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled

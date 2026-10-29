@@ -6,7 +6,7 @@ from pygsti.algorithms import core
 from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit, CircuitList
 from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction
+    PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from . import fixtures
 from ..util import BaseCase
 
@@ -117,7 +117,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_regularize_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -130,7 +130,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -143,7 +143,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_SPAM_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -156,7 +156,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_SPAM_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -173,16 +173,16 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         
         aliased_list = [
             Circuit([
-                (x if x != Label(('Gxpi2',0)) else Label("GA1")) for x in mdl
+                (x if x != Label(('Gxpi2',0)) else Label("Ga1")) for x in mdl
             ], line_labels = (0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels= (0,))}
+        aliases = {Label('Ga1'): Circuit([Label('Gxpi2',0)], line_labels= (0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
         print(list(aliased_list))
 
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations['Ga1'] = self.mdl_clgst.operations['Gxpi2',0]
         aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
@@ -201,8 +201,38 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         )
         # TODO assert correctness
 
+    def test_iterative_gst_honors_customlm_first_fditer(self):
+        # CustomLMOptimizer is deprecated but keeps first_fditer: the first fit, and only the
+        # first, runs its first iteration with finite differences.
+        from unittest import mock
+        from pygsti.optimize import customlm
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = customlm.CustomLMOptimizer(maxiter=2, first_fditer=1)
+        with mock.patch.object(customlm, 'custom_leastsq', wraps=customlm.custom_leastsq) as spy:
+            core.run_iterative_gst(self.ds, self.mdl_clgst, self.lsgstStrings[0:2], optimizer=optimizer,
+                                   iteration_objfn_builders=['chi2'], final_objfn_builders=[],
+                                   resource_alloc=None)
+        self.assertEqual([c.kwargs['num_fd_iters'] for c in spy.call_args_list], [1, 0])
+
+    def test_iterative_gst_fills_customlm_first_fditer_none(self):
+        # first_fditer=None means "fill with default": 1 on the matrix simulator, 0 otherwise.
+        from unittest import mock
+        from pygsti.optimize import customlm
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = customlm.CustomLMOptimizer(maxiter=2, first_fditer=None)
+        for sim, expected in (('matrix', [1, 0]), ('map', [0, 0])):
+            mdl = self.mdl_clgst.copy()
+            mdl.sim = sim
+            with mock.patch.object(customlm, 'custom_leastsq', wraps=customlm.custom_leastsq) as spy:
+                core.run_iterative_gst(self.ds, mdl, self.lsgstStrings[0:2], optimizer=optimizer,
+                                       iteration_objfn_builders=['chi2'], final_objfn_builders=[],
+                                       resource_alloc=None)
+            self.assertEqual([c.kwargs['num_fd_iters'] for c in spy.call_args_list], expected, sim)
+
     def test_do_iterative_mc2gst_regularize_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -218,7 +248,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_iterative_mc2gst_use_freq_weighted_chi2(self):
-        obj_builder = FreqWeightedChi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
             name='freq-weighted-chi2',
             description="Sum of chi^2",
             regularization={'min_freq_clip_for_weighting': 1e-4}
@@ -269,7 +299,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mlgst_CPTP_penalty_factor(self):
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -283,7 +313,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mlgst_SPAM_penalty_factor(self):
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -302,7 +332,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # FUTURE: see what we can do in custom LM about scaling large
         # jacobians...
         #self.skipTest("Ignore for now.")
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -319,14 +349,14 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     def test_do_mlgst_alias_model(self):
         aliased_list = [
             Circuit([
-                (x if x != Label('Gxpi2',0) else Label("GA1")) for x in mdl
+                (x if x != Label('Gxpi2',0) else Label("Ga1")) for x in mdl
             ], line_labels=(0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels=(0,))}
+        aliases = {Label('Ga1'): Circuit([Label('Gxpi2',0)], line_labels=(0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations['Ga1'] = self.mdl_clgst.operations['Gxpi2',0]
         aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
@@ -356,7 +386,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     #     )
 
     def test_do_iterative_mlgst_use_freq_weighted_chi2(self):
-        obj_builder = FreqWeightedChi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
             name='freq-weighted-chi2',
             description="Sum of chi^2",
             regularization={'min_freq_clip_for_weighting': 1e-4}
@@ -404,7 +434,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     # XXX if this function needs explicit coverage, it should be public!
     def test_do_mlgst_base_forcefn_grad(self):
         forcefn_grad = np.ones((1, self.mdl_clgst.num_params), 'd')
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -451,3 +481,74 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
 
         #Make sure we get the same result in both cases.
         self.assertArraysAlmostEqual(models[-1].to_vector(), models1[-1].to_vector())
+    def test_iterative_gst_generator_optimizers_list(self):
+        
+        #Test that passing a different optimizer per iteration works as intended
+        optimizers = [] 
+        tols = [1e1, 1e-8]
+        maxiters = [10, 150]
+
+        #First create substantially different optimizers
+        for i in range(len(self.lsgstStrings)):
+            optimizers.append({'tol': tols[i], 'maxiter':maxiters[i]})
+
+        assert len(self.lsgstStrings) == len(tols), f' If you change {self.lsgstStrings=}, this unit test must be modified to account for it'
+        
+        generator_optimizers = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=optimizers,
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+
+        models1 = []
+        models0 = []
+        #loop over all iterations
+        for j in range(0,len(self.lsgstStrings)):
+
+            models0.append(next(generator_optimizers)[0])
+
+            #create a gst generator for the iteration that we are in,
+            #to be compared with generator
+            generator_step = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer={'tol':tols[j], 'maxiter':maxiters[j]},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0,
+            starting_index=j
+            )
+            
+            models1.append(next(generator_step)[0])
+            
+            self.assertArraysAlmostEqual(models0[-1].to_vector(), models1[-1].to_vector())
+
+    def test_iterative_gst_generator_optimizer_single_item_list(self):
+
+        # we also test use case of optimzer=[optimizer] being equivalent to optimzer=optimizer
+        
+        optimizer =  {'tol': 1e1, 'maxiter':10}
+        generator_single_item_optimizers0 = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=[optimizer],
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+        generator_single_item_optimizers1 = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=optimizer,
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+
+        models0 = []
+        models1 = []
+        for j in range(0,len(self.lsgstStrings)):
+
+            models0.append(next(generator_single_item_optimizers0)[0])
+            models1.append(next(generator_single_item_optimizers1)[0])
+            self.assertArraysAlmostEqual(models0[-1].to_vector(), models1[-1].to_vector())
+        

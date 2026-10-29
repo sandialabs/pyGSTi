@@ -9,6 +9,8 @@ Defines the OpFactory class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
+from __future__ import annotations
 import numpy as _np
 
 from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
@@ -25,8 +27,15 @@ from pygsti.baseobjs import basis as _basis
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.tools import optools as _ot
 
+from typing import TYPE_CHECKING
 
-def op_from_factories(factory_dict, lbl):
+if TYPE_CHECKING:
+    from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+    from pygsti.evotypes.evotype import Evotype
+    from pygsti.baseobjs.statespace import StateSpace
+
+
+def op_from_factories(factory_dict: dict[_Lbl, OpFactory], lbl: _Lbl) -> _LinearOperator:
     """
     Create an operator for `lbl` from the factories in `factory_dict`.
 
@@ -95,7 +104,7 @@ class OpFactory(_gm.ModelMember):
         The evolution type of the operation(s) this factory builds.
     """
 
-    def __init__(self, state_space, evotype):
+    def __init__(self, state_space: StateSpace.Castable, evotype: Evotype.Castable):
         #self._paramvec = _np.zeros(nparams, 'd')
         state_space = _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype, state_space=state_space)
@@ -262,7 +271,7 @@ class EmbeddedOpFactory(OpFactory):
         this factory produces.
     """
 
-    def __init__(self, state_space, target_labels, factory_to_embed):
+    def __init__(self, state_space: StateSpace.Castable, target_labels, factory_to_embed):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory = factory_to_embed
         self.target_labels = target_labels
@@ -432,7 +441,7 @@ class EmbeddingOpFactory(OpFactory):
         is raised.
     """
 
-    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None, allowed_sslbls_fn=None):
+    def __init__(self, state_space: StateSpace.Castable, factory_or_op_to_embed, num_target_labels=None, allowed_sslbls_fn=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
@@ -790,7 +799,7 @@ class UnitaryOpFactory(OpFactory):
         The evolution type of the operation(s) this factory builds.
     """
 
-    def __init__(self, fn, state_space, superop_basis="pp", evotype="densitymx"):
+    def __init__(self, fn, state_space: StateSpace.Castable, superop_basis="pp", evotype="densitymx"):
         state_space = _statespace.StateSpace.cast(state_space)
         self.basis = _basis.Basis.cast(superop_basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 

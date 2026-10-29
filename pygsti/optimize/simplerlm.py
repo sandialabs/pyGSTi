@@ -11,8 +11,8 @@ Custom implementation of the Levenberg-Marquardt Algorithm (but simpler than cus
 #***************************************************************************************************
 
 import os as _os
-import signal as _signal
 import time as _time
+import warnings as _warnings
 
 import numpy as _np
 import scipy as _scipy
@@ -22,17 +22,22 @@ from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.objectivefns.objectivefns import Chi2Function, TimeIndependentMDCObjectiveFunction
-from typing import Callable
 
-#Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
-if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
-    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
+from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
+_install_sigint_handler()
 
 #constants
 _MACH_PRECISION = 1e-12
+
+#: Shift applied to the coordinates of a degenerate starting point (see `simplish_leastsq`). A forward
+#: difference with step 1e-7 along e_j is a central difference at x + 5e-8 e_j, so this value recovers
+#: the old behavior of finite differences at the initial (degenerate) point with step size 1e-7.
+JAC_SHIFT = 5e-8
+
+#: A Jacobian column whose norm is at most this fraction of the largest column norm counts as zero.
+ZERO_COLUMN_RTOL = 1e-10
 
 
 class OptimizerResult(object):
@@ -52,7 +57,7 @@ class OptimizerResult(object):
         vector of objective function values.
 
     opt_jtj : numpy.ndarray, optional
-        the optimial `dot(transpose(J),J)` value, where `J`
+        the optimal `dot(transpose(J),J)` value, where `J`
         is the Jacobian matrix.  This may be useful for computing
         approximate error bars.
 
@@ -117,26 +122,26 @@ class SimplerLMOptimizer(Optimizer):
     Parameters
     ----------
     maxiter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     maxfev : int, optional
         The maximum function evaluations.
 
     tol : float or dict, optional
         The tolerance, specified as a single float or as a dict
-        with keys `{'relx', 'relf', 'jac', 'maxdx'}`.  A single
+        with keys `{'relx', 'relf', 'f', 'jac', 'maxdx'}`.  A single
         float sets the `'relf'` and `'jac'` elemments and leaves
-        the others at their default values.
+        the others at their default values.  A dict need not specify
+        all keys; missing keys take the values a float `tol` would
+        have produced with `tol=1e-6`.
 
-    fditer : int optional
-        Internally compute the Jacobian using a finite-difference method
-        for the first `fditer` iterations.  This is useful when the initial
-        point lies at a special or singular point where the analytic Jacobian
-        is misleading.
+    fditer : int, optional
+        Deprecated and ignored. A starting point whose Jacobian has zero
+        columns is handled by evaluating the first iteration's Jacobian at a
+        shifted point (see :func:`simplish_leastsq`).
 
     first_fditer : int, optional
-        Number of finite-difference iterations applied to the first
-        stage of the optimization (only).  Unused.
+        Deprecated and ignored, like `fditer`.
 
     init_munu : tuple, optional
         If not None, a (mu, nu) tuple of 2 floats giving the initial values
@@ -173,6 +178,12 @@ class SimplerLMOptimizer(Optimizer):
         by the objective function's `.terms()` and `.lsvec()` methods (`'normal'` mode) or the
         "per-circuit quantities" computed by the objective function's `.percircuit()` and
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
+
+    linesearch : dict, optional
+        Controls the optional backtracking-to-argmin line search performed on a trial
+        LM step when it looks untrusted.  See `simplish_leastsq`'s `linesearch` parameter
+        for the recognized keys (`'mode'`, `'beta'`, `'max_evals'`, `'kappa'`) and their
+        defaults; missing keys (or a `None` dict) take those defaults.
     """
 
     @classmethod
@@ -180,23 +191,32 @@ class SimplerLMOptimizer(Optimizer):
         if isinstance(obj, cls):
             return obj
         if obj:
-            try:
-                return cls(**obj)
-            except:
-                from pygsti.optimize.customlm import CustomLMOptimizer
-                return CustomLMOptimizer(**obj)
+            return cls(**obj)
         return cls()
 
-    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, init_munu="auto", oob_check_interval=0,
-                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=None, first_fditer=None, init_munu="auto", oob_check_interval=0,
+                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal",
+                 linesearch=None):
 
         super().__init__()
-        if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        for name, value in (('fditer', fditer), ('first_fditer', first_fditer)):
+            if value is not None:
+                _warnings.warn(f"SimplerLMOptimizer's `{name}` argument is deprecated and ignored: when the "
+                               "starting point's Jacobian has zero columns, the first iteration now evaluates the "
+                               "Jacobian at a slightly shifted point instead.", _pyGSTiDeprecationWarning)
+        if isinstance(tol, float):
+            tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        else:
+            default_tol = {'relx': 1e-8, 'relf': 1e-6, 'f': 1.0, 'jac': 1e-6, 'maxdx': 1.0}
+            tol = {**default_tol, **tol}
+        linesearch = dict(linesearch) if linesearch else {}
+        linesearch.setdefault('mode', 'guarded')
+        linesearch.setdefault('beta', 0.25)
+        linesearch.setdefault('max_evals', 6)
+        linesearch.setdefault('kappa', 1.0)
         self.maxiter = maxiter
         self.maxfev = maxfev
         self.tol = tol
-        self.fditer = fditer
-        self.first_fditer = first_fditer
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
@@ -205,6 +225,7 @@ class SimplerLMOptimizer(Optimizer):
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
         self.lsvec_mode = lsvec_mode
+        self.linesearch = linesearch
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -212,8 +233,6 @@ class SimplerLMOptimizer(Optimizer):
             'maximum_iterations': self.maxiter,
             'maximum_function_evaluations': self.maxfev,
             'tolerance': self.tol,
-            'number_of_finite_difference_iterations': self.fditer,
-            'number_of_first_stage_finite_difference_iterations': self.first_fditer,
             'initial_mu_and_nu': self.init_munu,
             'out_of_bounds_check_interval': self.oob_check_interval,
             'out_of_bounds_action': self.oob_action,
@@ -221,7 +240,8 @@ class SimplerLMOptimizer(Optimizer):
             'array_types': self.array_types,
             'called_objective_function_methods': self.called_objective_methods,
             'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold,
-            'lsvec_mode': self.lsvec_mode
+            'lsvec_mode': self.lsvec_mode,
+            'linesearch': self.linesearch
         })
         return state
 
@@ -230,14 +250,13 @@ class SimplerLMOptimizer(Optimizer):
         return cls(maxiter=state['maximum_iterations'],
                    maxfev=state['maximum_function_evaluations'],
                    tol=state['tolerance'],
-                   fditer=state['number_of_finite_difference_iterations'],
-                   first_fditer=state['number_of_first_stage_finite_difference_iterations'],
                    init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
                    oob_action=state['out_of_bounds_action'],
                    oob_check_mode=state['out_of_bounds_check_mode'],
                    serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'],
-                   lsvec_mode=state.get('lsvec_mode', 'normal'))
+                   lsvec_mode=state.get('lsvec_mode', 'normal'),
+                   linesearch=state.get('linesearch', None))
 
     def run(self, objective: TimeIndependentMDCObjectiveFunction, profiler, printer):
 
@@ -286,16 +305,16 @@ class SimplerLMOptimizer(Optimizer):
         opt_x, converged, msg, mu, nu, norm_f, f = simplish_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
-            num_fd_iters=self.fditer,
-            f_norm2_tol=self.tol.get('f', 1.0),
-            jac_norm_tol=self.tol.get('jac', 1e-6),
-            rel_ftol=self.tol.get('relf', 1e-6),
-            rel_xtol=self.tol.get('relx', 1e-8),
-            max_dx_scale=self.tol.get('maxdx', 1.0),
+            f_norm2_tol=self.tol['f'],
+            jac_norm_tol=self.tol['jac'],
+            rel_ftol=self.tol['relf'],
+            rel_xtol=self.tol['relx'],
+            max_dx_scale=self.tol['maxdx'],
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
             oob_action=self.oob_action,
             oob_check_mode=self.oob_check_mode,
+            linesearch=self.linesearch,
             resource_alloc=objective.resource_alloc,
             arrays_interface=ari,
             serial_solve_proc_threshold=self.serial_solve_proc_threshold,
@@ -347,35 +366,13 @@ def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
     return mu, nu, msg
 
 
-def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f, ari, global_x, fdJac_work):
-    if k >= num_fd_iters:
-        Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
-    else:
-        # Note: x holds only number of "fine"-division params - need to use global_x, and
-        # Jac only holds a subset of the derivative and element columns and rows, respectively.
-        f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
-
-        pslice = ari.jac_param_slice(only_if_leader=True)
-        eps = 1e-7
-        #Don't do this: for ii, i in enumerate(range(pslice.start, pslice.stop)): (must keep procs in sync)
-        for i in range(len(global_x)):
-            x_plus_dx = global_x.copy()
-            x_plus_dx[i] += eps
-            fd = (obj_fn(x_plus_dx) - f_fixed) / eps
-            if pslice.start <= i < pslice.stop:
-                fdJac_work[:, i - pslice.start] = fd
-            #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
-        Jac = fdJac_work
-    return Jac
-
-
-
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
+    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
-    x_limits=None, verbosity=0, profiler=None
+    x_limits=None, verbosity=0, profiler=None,
+    linesearch=None
     ):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
@@ -415,13 +412,7 @@ def simplish_leastsq(
         `d(|x|)/|x| < rel_xtol` then mark converged.
 
     max_iter : int, optional
-        The maximum number of (outer) interations.
-
-    num_fd_iters : int optional
-        Internally compute the Jacobian using a finite-difference method
-        for the first `num_fd_iters` iterations.  This is useful when `x0`
-        lies at a special or singular point where the analytic Jacobian is
-        misleading.
+        The maximum number of (outer) iterations.
 
     max_dx_scale : float, optional
         If not None, impose a limit on the magnitude of the step, so that
@@ -475,6 +466,25 @@ def simplish_leastsq(
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    linesearch : dict, optional
+        Controls the optional backtracking-to-argmin line search performed on a trial
+        LM step when it looks untrusted.  Recognized keys (missing keys, or an entirely
+        `None` dict, take the defaults shown):
+
+        - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
+          only searches when a trigger fires (the `max_dx_scale` clip activated, the step
+          is large relative to `|x|`, or the trial's objective norm is non-finite).
+          `'always'` searches on every trial step.  `'none'` never searches (except on a
+          degenerate first iteration; see Notes).  The primary motivation is robustness
+          against a full LM step leaving the good basin, not speed.
+        - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
+          in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
+          along the step ray.
+        - `'max_evals'` (default `6`) : maximum number of trial objective evaluations
+          performed per line search.
+        - `'kappa'` (default `1.0`) : scale factor for the `'guarded'` oversize trigger:
+          a search is triggered when `|dx|^2 > kappa^2 * |x|^2`.
+
     Returns
     -------
     x : numpy.ndarray
@@ -483,7 +493,34 @@ def simplish_leastsq(
         Whether the solution converged.
     msg : str
         A message indicating why the solution converged (or didn't).
+
+    Notes
+    -----
+    A degenerate `x0`, whose Jacobian has zero columns (e.g. the Cholesky coordinates of a
+    Lindblad generator at zero noise), would leave those coordinates stuck. The first iteration
+    therefore computes its step from the Jacobian and objective at `x0` shifted by `JAC_SHIFT`
+    along those coordinates, and always line-searches that step from `x0`, whatever
+    `linesearch['mode']` says.
     """
+    linesearch = dict(linesearch) if linesearch else {}
+    linesearch.setdefault('mode', 'guarded')
+    linesearch.setdefault('beta', 0.25)
+    linesearch.setdefault('max_evals', 6)
+    linesearch.setdefault('kappa', 1.0)
+    ls_mode = linesearch['mode']
+    ls_beta = linesearch['beta']
+    ls_max_evals = linesearch['max_evals']
+    ls_kappa = linesearch['kappa']
+
+    if ls_mode not in ('none', 'guarded', 'always'):
+        raise ValueError("Invalid `linesearch['mode']`: %s" % str(ls_mode))
+    if not (0 < ls_beta < 1):
+        raise ValueError("`linesearch['beta']` must satisfy 0 < beta < 1, got %s" % str(ls_beta))
+    if ls_max_evals < 1:
+        raise ValueError("`linesearch['max_evals']` must be >= 1, got %s" % str(ls_max_evals))
+    if ls_kappa <= 0:
+        raise ValueError("`linesearch['kappa']` must be > 0, got %s" % str(ls_kappa))
+
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
     comm = resource_alloc.comm
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
@@ -502,7 +539,6 @@ def simplish_leastsq(
     dx = ari.allocate_jtf()
     new_x = ari.allocate_jtf()
     optional_jtj_buff = ari.allocate_jtj_shared_mem_buf()
-    fdJac = ari.allocate_jac() if num_fd_iters > 0 else None
 
     global_x = x0.copy()
     ari.allscatter_x(global_x, x)
@@ -518,6 +554,9 @@ def simplish_leastsq(
     max_norm_dx = (max_dx_scale**2) * len(global_x) if max_dx_scale else None
     # ^ don't let any component change by more than ~max_dx_scale
 
+    # NOTE: all "norm" variables below (norm_f, norm_dx, norm_x, max_norm_dx, and the
+    # ari.norm2_* helpers) are *squared* 2-norms, not norms. E.g. a log line reading
+    # "norm_dx=96" means ||dx|| ~= 9.8.
 
     f = obj_fn(global_x)  # 'E'-type array
     norm_f = ari.norm2_f(f)
@@ -535,6 +574,52 @@ def simplish_leastsq(
     best_x_state = (mu, nu, norm_f, f.copy())
     # ^ here and elsewhere, need f.copy() b/c f is objfn mem
 
+    def revert_to_best_x(verb):
+        nonlocal oob_check_interval, mu, nu, norm_f
+        printer.log(("** %s with out-of-bounds with check interval=%d, reverting to last know "
+                      "in-bounds point and setting interval=1 **") % (verb, oob_check_interval), 2)
+        oob_check_interval = 1
+        x[:] = best_x[:]
+        mu, nu, norm_f, f[:] = best_x_state
+
+    def eval_candidate(do_oob_check):
+        """Collective. Evaluates obj_fn at global_new_x (caller has filled new_x and allgathered).
+        Returns (new_f, known_inbounds, oob_ok). oob_ok=False means the oob check raised ValueError."""
+        if oob_check_mode == 0 and oob_check_interval > 0:
+            if do_oob_check:
+                try:
+                    new_f = obj_fn(global_new_x, oob_check=True)
+                except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                    return None, False, False
+                return new_f, True, True
+            else:  # don't check this time
+                new_f = obj_fn(global_new_x, oob_check=False)
+                return new_f, False, True
+        else:
+            #Just evaluate objective function normally; never check for in-bounds condition
+            new_f = obj_fn(global_new_x)
+            return new_f, (oob_check_interval == 0), True
+            # ^ assume in bounds if we have no out-of-bounds checks.
+
+    def handle_oob_rejection():
+        """Called when `eval_candidate` reports oob_ok=False. Returns 'continue' or 'break',
+        indicating which the inner-loop call site should do."""
+        nonlocal mu, nu, msg, converged
+        MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+        if oob_action == "reject" or k < MIN_STOP_ITER:
+            reject_msg = " (out-of-bounds)"
+            mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+            return "continue" if len(msg) == 0 else "break"
+        elif oob_action == "stop":
+            if oob_check_interval == 1:
+                msg = "Objective function out-of-bounds! STOP"
+                converged = True
+            else:  # reset to last know in-bounds point and not do oob check every step
+                revert_to_best_x("Hit")
+            return "break"
+        else:
+            raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+
     try:
 
         for k in range(max_iter):  # outer loop
@@ -549,15 +634,12 @@ def simplish_leastsq(
                     converged = True
                     break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                    oob_check_interval = 1
-                    x[:] = best_x[:]
-                    mu, nu, norm_f, f[:] = best_x_state
+                    revert_to_best_x("Converged")
                     continue
 
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
-            Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
+            Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
 
             if profiler:
                 jac_gb = Jac.nbytes/(1024.0**3) if hasattr(Jac, 'nbytes') else _np.nan
@@ -575,6 +657,37 @@ def simplish_leastsq(
             ari.fill_jtf(Jac, f, minus_JTf)  # 'P'-type
             minus_JTf *= -1
 
+            force_linesearch = False
+            if k == 0:
+                # Zero columns of J at x0 (e.g. Cholesky coordinates of a Lindblad generator at
+                # zero noise) leave those coordinates stuck. Compute the step from J and f at
+                # x0 + JAC_SHIFT on just those coordinates, then line-search it from x0 itself.
+                jtj_diag = JTJ[ari.jtj_diag_indices(JTJ)]
+                zero_cols = jtj_diag <= ZERO_COLUMN_RTOL**2 * ari.max_x(jtj_diag)
+                num_zero_cols = int(round(ari.norm2_x(zero_cols.astype('d'))))
+                if num_zero_cols > 0:
+                    shift = ari.allocate_jtf()
+                    shift[:] = JAC_SHIFT * zero_cols
+                    global_shifted_x = global_x.copy()
+                    ari.allgather_x(shift, global_shifted_x)
+                    ari.deallocate_jtf(shift)
+                    global_shifted_x += global_x
+                    if x_limits is not None:
+                        global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
+                    shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
+                    resource_alloc.host_comm_barrier()
+                    Jac = jac_fn(global_shifted_x)
+                    resource_alloc.host_comm_barrier()
+                    ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
+                    ari.fill_jtf(Jac, shifted_f, minus_JTf)
+                    minus_JTf *= -1
+                    resource_alloc.host_comm_barrier()
+                    f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x0
+                    force_linesearch = True
+                    printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "
+                                "Jacobian at a point shifted by %g in those coordinates"
+                                % (num_zero_cols, len(global_x), JAC_SHIFT), 2)
+
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
 
             norm_JTf = ari.infnorm_x(minus_JTf)
@@ -583,14 +696,11 @@ def simplish_leastsq(
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
-                    msg = "norm(jacobian) is at most %g" % jac_norm_tol
+                    msg = "norm(J'f) is at most %g" % jac_norm_tol
                     converged = True
                     break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                    oob_check_interval = 1
-                    x[:] = best_x[:]
-                    mu, nu, norm_f, f[:] = best_x_state
+                    revert_to_best_x("Converged")
                     continue
 
             if k == 0:
@@ -598,15 +708,14 @@ def simplish_leastsq(
                 mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
-            #determing increment using adaptive damping
+            #determining increment using adaptive damping
             while True:  # inner loop
+                step_clipped = False
+                step_shrunk_by_ls = False
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                 ari.jtj_update_regularization(JTJ, pre_reg_data, mu)
-
-                #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
-                #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf (inner)!" # NaNs tracking
 
                 try:
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
@@ -632,6 +741,7 @@ def simplish_leastsq(
                     dx *= _np.sqrt(max_norm_dx / norm_dx)
                     new_x[:] = x + dx
                     norm_dx = ari.norm2_x(dx)
+                    step_clipped = True
 
                 #apply x limits (bounds)
                 if x_limits is not None:
@@ -653,64 +763,64 @@ def simplish_leastsq(
                         converged = True
                         break
                     else:
-                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                        oob_check_interval = 1
-                        x[:] = best_x[:]
-                        mu, nu, norm_f, f[:] = best_x_state
+                        revert_to_best_x("Converged")
                         break
                 elif (norm_x + rel_xtol) < norm_dx * (_MACH_PRECISION**2):
                     msg = "(near-)singular linear system"
                     break
 
-                if oob_check_mode == 0 and oob_check_interval > 0:
-                    if k % oob_check_interval == 0:
-                        #Check to see if objective function is out of bounds
-
-                        in_bounds = []
-                        ari.allgather_x(new_x, global_new_x)
-                        try:
-                            new_f = obj_fn(global_new_x, oob_check=True)
-                        except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                            in_bounds.append(False)
-                        else:
-                            in_bounds.append(True)
-
-                        if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
-                            new_x_is_known_inbounds = True
-                        else:
-                            MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
-                            if oob_action == "reject" or k < MIN_STOP_ITER:
-                                reject_msg = " (out-of-bounds)"
-                                mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                                if len(msg) == 0:
-                                    continue
-                                else:
-                                    break
-                            elif oob_action == "stop":
-                                if oob_check_interval == 1:
-                                    msg = "Objective function out-of-bounds! STOP"
-                                    converged = True
-                                    break
-                                else:  # reset to last know in-bounds point and not do oob check every step
-                                    printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                    oob_check_interval = 1
-                                    x[:] = best_x[:]
-                                    mu, nu, norm_f, f[:] = best_x_state
-                                    break  # restart next outer loop
-                            else:
-                                raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                    else:  # don't check this time
-                        ari.allgather_x(new_x, global_new_x)
-                        new_f = obj_fn(global_new_x, oob_check=False)
-                        new_x_is_known_inbounds = False
-                else:
-                    #Just evaluate objective function normally; never check for in-bounds condition
-                    ari.allgather_x(new_x, global_new_x)
-                    new_f = obj_fn(global_new_x)
-                    new_x_is_known_inbounds = oob_check_interval == 0
-                    # ^ assume in bounds if we have no out-of-bounds checks.
+                ari.allgather_x(new_x, global_new_x)
+                do_oob_check = (oob_check_mode == 0 and oob_check_interval > 0 and k % oob_check_interval == 0)
+                new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
+                if not oob_ok:
+                    if handle_oob_rejection() == "continue":
+                        continue
+                    else:
+                        break
 
                 norm_new_f = ari.norm2_f(new_f)
+
+                if ls_mode == 'always' or force_linesearch:
+                    do_linesearch = True
+                elif ls_mode == 'guarded':
+                    do_linesearch = step_clipped or norm_dx > (ls_kappa**2) * norm_x or not _np.isfinite(norm_new_f)
+                else:  # 'none'
+                    do_linesearch = False
+
+                if do_linesearch:
+                    best_t = 1.0
+                    best_norm = norm_new_f if _np.isfinite(norm_new_f) else _np.inf
+                    t = ls_beta
+                    for _ in range(ls_max_evals):
+                        new_x[:] = x + t * dx
+                        ari.allgather_x(new_x, global_new_x)
+                        trial_norm = ari.norm2_f(obj_fn(global_new_x))
+                        if _np.isfinite(trial_norm) and trial_norm < best_norm:
+                            best_t, best_norm = t, trial_norm
+                            t *= ls_beta
+                        else:
+                            break  # one past the interior minimum (or trial non-finite)
+
+                    if best_t < 1.0:
+                        dx *= best_t
+                        norm_dx = ari.norm2_x(dx)
+                        step_shrunk_by_ls = True
+
+                    # Re-evaluate at the (possibly rescaled) dx: the trial evals above clobbered
+                    # obj_fn's internally-owned memory, so `new_f`/`norm_new_f` no longer reflect x + dx.
+                    new_x[:] = x + dx
+                    ari.allgather_x(new_x, global_new_x)
+                    new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
+                    if not oob_ok:
+                        if handle_oob_rejection() == "continue":
+                            continue
+                        else:
+                            break
+                    norm_new_f = ari.norm2_f(new_f)
+
+                    if step_shrunk_by_ls:
+                        printer.log("      Line search: t=%g, norm_f %g -> %g" % (best_t, best_norm, norm_new_f), 2)
+
                 if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                     msg = "Infinite norm of objective function!"
                     break
@@ -727,14 +837,11 @@ def simplish_leastsq(
                         converged = True
                         break
                     else:
-                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                        oob_check_interval = 1
-                        x[:] = best_x[:]
-                        mu, nu, norm_f, f[:] = best_x_state
+                        revert_to_best_x("Converged")
                         break
 
                 if (dL <= 0 or dF <= 0):
-                    reject_msg = " (out-of-bounds)"
+                    reject_msg = " (dL or dF <= 0)"
                     mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
                     if len(msg) == 0:
                         continue
@@ -762,10 +869,7 @@ def simplish_leastsq(
                                 converged = True
                                 break
                             else:  # reset to last know in-bounds point and not do oob check every step
-                                printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                oob_check_interval = 1
-                                x[:] = best_x[:]
-                                mu, nu, norm_f, f[:] = best_x_state
+                                revert_to_best_x("Hit")
                                 break  # restart next outer loop
                         else:
                             raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -775,6 +879,8 @@ def simplish_leastsq(
                 t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
                 # always reduce mu for accepted step when |dx| is small
                 mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
+                if step_shrunk_by_ls:
+                    mu_factor = max(mu_factor, 1.0)  # the model was untrusted at full step; never loosen damping
                 mu *= mu_factor
                 nu = 2
                 x[:] = new_x[:]
@@ -796,16 +902,9 @@ def simplish_leastsq(
                         best_x[:] = x[:]
                         best_x_state = (mu, nu, norm_f, f.copy())
 
-                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
-
                 break 
                 # ^ exit inner loop normally ...
             # end of inner loop
-            #
-            # x[:] = best_x[:]
-            # mu, nu, norm_f, f[:] = best_x_state
-            #
         # end of outer loop
         else:
             #if no break stmt hit, then we've exceeded max_iter
@@ -838,9 +937,6 @@ def simplish_leastsq(
 
     ari.deallocate_jtf(dx)
     ari.deallocate_jtf(new_x)
-
-    if fdJac is not None:
-        ari.deallocate_jac(fdJac)
 
     ari.allgather_x(best_x, global_x)
     ari.deallocate_jtf(best_x)

@@ -20,14 +20,14 @@ class MongoSerializable(object):
     Base class for objects that can be serialized to a MongoDB database.
 
     At the very least, saving an object to a database creates a document in the
-    collection named by the `collection_name` class variable (which can be overriden by
+    collection named by the `collection_name` class variable (which can be overridden by
     derived classes).  Additionally, saving the object may create other documents outside
     of this collection (e.g., if the object contains MongoSerializable attributes that specify
     their own collection name).
 
     This interface also allows an object to save large chunks of data using, e.g.,
     MongoDB's GridFS system, when serializing itself instead of trying to write an
-    enourmous JSON dictionary as a single document (as an object that is NicelySerializable
+    enormous JSON dictionary as a single document (as an object that is NicelySerializable
     might do).
     """
     collection_name = 'pygsti_objects'
@@ -63,12 +63,12 @@ class MongoSerializable(object):
             The MongoDB instance to load from.
 
         doc_id : bson.objecctid.ObjectId or dict
-            The object ID or filter used to find a single object ID wihtin the database.  This
+            The object ID or filter used to find a single object ID within the database.  This
             document is loaded from the collection given by the `collection_name` attribute of
             this class.
 
         `**kwargs` : dict
-            Additional keyword arguments poentially used by subclass implementations.  Any arguments
+            Additional keyword arguments potentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
         Returns
@@ -104,7 +104,7 @@ class MongoSerializable(object):
             of giving an identifier for this object.
 
         `**kwargs` : dict
-            Additional keyword arguments poentially used by subclass implementations.  Any arguments
+            Additional keyword arguments potentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
         Returns
@@ -146,7 +146,7 @@ class MongoSerializable(object):
             and is different from what is being written.
 
         `**kwargs` : dict
-            Additional keyword arguments poentially used by subclass implementations.  Any arguments
+            Additional keyword arguments potentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
         Returns
@@ -188,7 +188,7 @@ class MongoSerializable(object):
             and is different from what is being written.
 
         `**kwargs` : dict
-            Additional keyword arguments poentially used by subclass implementations.  Any arguments
+            Additional keyword arguments potentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
         Returns
@@ -318,7 +318,7 @@ class WriteOpsByCollection(dict):
         Add a single write operation to this dictionary, if one is allowed and needed.
 
         Adds a `pymongo.InsertOne` or `pymongo.ReplaceOne` object to `self[collection_name]` in
-        order to write a document `doc` with unique identifer `uid`.  If `overwrite_existing` is
+        order to write a document `doc` with unique identifier `uid`.  If `overwrite_existing` is
         `False` then an error is raised if a document with `uid` already exists -- either in the
         database or within the list of existing write operations -- *and* the existing document
         doesn't match the document being written (`doc`).
@@ -385,7 +385,6 @@ class WriteOpsByCollection(dict):
 
         if overwrite_existing is True:
             self[collection_name].append(ReplaceOne({'_id': doc_id}, doc, upsert=True))
-            #mongodb[collection_name].replace_one(doc_id, doc, upsert=True)  # alt line for DEBUG
         else:
             if not tried_to_find_existing_doc:  # then try now
                 existing_doc = mongodb[collection_name].find_one(doc_id)
@@ -396,9 +395,7 @@ class WriteOpsByCollection(dict):
 
             if existing_doc is None:  # then insert the document as given
                 self[collection_name].append(InsertOne(doc))
-                #mongodb[collection_name].insert_one(doc)  # alt line for DEBUG
             else:
-                #print("Found existing doc: ", doc.get('module','?'), doc.get('class','?'), doc.get('circuit_str','?'))
                 existing_to_chk = prepare_doc_for_existing_doc_check(existing_doc, None, False, False, False)
                 info_to_check = prepare_doc_for_existing_doc_check(doc, existing_doc)
                 if existing_to_chk != info_to_check:
@@ -611,7 +608,6 @@ def _find_one_doc(db, collection_name, doc_id, projection=None, error_if_no_doc=
                 doc_id_known_to_be_unique = True
                 break
         if not doc_id_known_to_be_unique:  # then check that this doc_id is indeed unique with a db call
-            # for DEBUG: print("UID without _id and not known unique: ", doc_id, " for ", collection_name)
             if db[collection_name].count_documents(doc_id, limit=2) > 1:
                 raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
                                   " `doc_id` must specify exactly one record."))

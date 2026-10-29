@@ -1,5 +1,0 @@
-# Example text file of circuits
-{}@(0)
-[]@(0)
-Gxpi2:0@(0)
-Gypi2:0@(0)

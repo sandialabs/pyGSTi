@@ -301,10 +301,6 @@ class SmartCache(object):
             with _timed_block('hash', times):
                 key = _call_key(fn, tuple(arg_vals) + (kwargs,), self.customDigests)  # cache by call key
             if key not in self.cache:
-                #DB: if "_compute_sub_mxs" in fn.__name__:
-                #DB: print(fn.__name__, " --> computing... (not found in %d keys)" % len(list(self.cache.keys()))) # DB
-                #DB: print("Key detail: ",key[0]) # DB
-                #DB: for a,k in zip(tuple(arg_vals)+(kwargs,),key[1:]): print(type(a),": ",repr(k)) # DB
                 typesig = str(tuple(str(type(arg)) for arg in arg_vals)) + \
                     str({k: str(type(v)) for k, v in kwargs.items()})
                 self.typesigs[name_key] = typesig
@@ -514,7 +510,7 @@ class CustomDigestError(Exception):
 
 def digest(obj, custom_digests=None):
     """
-    Returns an MD5 digest of an arbitary Python object, `obj`.
+    Returns an MD5 digest of an arbitrary Python object, `obj`.
 
     Parameters
     ----------

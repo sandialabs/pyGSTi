@@ -3,11 +3,14 @@ import os
 import shutil
 import subprocess
 import unittest
+import warnings
 
 import numpy as np
+import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
+from pygsti.tools.exceptions import UnnamedReportWarning, OverparameterizationWarning
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files, run_notebook
@@ -41,12 +44,13 @@ class TestReport(ReportBaseCase):
         pygsti.report.create_offline_zip(temp_files + "/.")
 
     def test_failures(self):
-        self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
-        with self.assertRaises(ValueError): # backward compat catch - when forget to specify title
-            pygsti.report.create_standard_report(self.results, temp_files + "/XXX", 95)
+        with self.assertRaises(ValueError):
+            # backward compat catch - when forget to specify title
+            pygsti.report.construct_standard_report(self.results, 95)
 
-        with self.assertRaises(ValueError): #PDF report with multiple gauge opts
-            pygsti.report.create_standard_report(self.results, temp_files + "/XXX.pdf")
+        with pytest.warns(UnnamedReportWarning), self.assertRaises(ValueError):
+            # PDF report with multiple gauge opts
+            pygsti.report.construct_standard_report(self.results).write_pdf(temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(), 3) is not None)
@@ -54,30 +58,39 @@ class TestReport(ReportBaseCase):
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
 
     def test_reports_chi2_noCIs(self):
-    
-        pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False) # omit title as test
 
-        #Test advanced options
-        linkto = ()
-        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
-        if bPandas: linkto = ('pkl',) + linkto
-        results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
-        pygsti.report.construct_standard_report(results_odict,
-                                             confidence_level=None, verbosity=3,
-                                             advanced_options={'errgen_type': "logG-logT",
-                                                              'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
+        # All construct_standard_report calls below intentionally omit
+        # title= to exercise the auto-title path; each fires
+        # UnnamedReportWarning, wrapped explicitly.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False)
 
-        pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
-                                             confidence_level=None, verbosity=3,
-                                             advanced_options={'errgen_type': "logTiG",
-                                                              'precision': 2, #just a single int
-                                                              'resizable': False,
-                                                              'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
+            #Test advanced options
+            linkto = ()
+            if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+            if bPandas: linkto = ('pkl',) + linkto
+            results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report(results_odict,
+                                                     confidence_level=None, verbosity=3,
+                                                     advanced_options={'errgen_type': "logG-logT",
+                                                                      'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
 
-        #test latex reporting
-        if bLatex:
-            pygsti.report.construct_standard_report(self.results.view("default", "go0"),
-                                                 confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
+                                                     confidence_level=None, verbosity=3,
+                                                     advanced_options={'errgen_type': "logTiG",
+                                                                      'precision': 2, #just a single int
+                                                                      'resizable': False,
+                                                                      'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
+
+            #test latex reporting
+            if bLatex:
+                with pytest.warns(UnnamedReportWarning):
+                    pygsti.report.construct_standard_report(self.results.view("default", "go0"),
+                                                         confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
 
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
@@ -87,8 +100,10 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('intrinsic error')
 
-        pygsti.report.construct_standard_report(self.results,
-                                             "Report B", confidence_level=95, verbosity=3).write_html( temp_files + "/general_reportB", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            pygsti.report.construct_standard_report(self.results,
+                                                 "Report B", confidence_level=95, verbosity=3).write_html( temp_files + "/general_reportB", auto_open=False)
 
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
@@ -98,23 +113,26 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
 
-        #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
-        pygsti.report.construct_standard_report(self.results,"Report E", confidence_level=95, verbosity=3,
-                                             advanced_options={'nm threshold': -10}).write_html(temp_files + "/general_reportE", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
+            pygsti.report.construct_standard_report(self.results,"Report E", confidence_level=95, verbosity=3,
+                                                    advanced_options={'nm threshold': -10}).write_html(temp_files + "/general_reportE", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
     def test_reports_logL_TP_noCIs(self):
-        #Also test adding a model-test estimate to this report
+            #Also test adding a model-test estimate to this report
         mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
         results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gaugeopt_keys="auto")
 
-
-        #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.construct_standard_report(results,
-                                             "Report C", confidence_level=None, verbosity=3,
-                                             advanced_options={'combine_robust': False}).write_html(temp_files + "/general_reportC", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have (un-combined) Robust estimates too
+            pygsti.report.construct_standard_report(results,
+                                                    "Report C", confidence_level=None, verbosity=3,
+                                                    advanced_options={'combine_robust': False}).write_html(temp_files + "/general_reportC", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -127,16 +145,20 @@ class TestReport(ReportBaseCase):
         crfact = self.results.estimates['default'].create_confidence_region_factory('go0') #was created by propagation
         crfact.project_hessian('optimal gate CIs')
 
-        #Note: this report will have Robust estimates too
-        pygsti.report.construct_standard_report(self.results_logL,
-                                             "Report D", confidence_level=95, verbosity=3).write_html(temp_files + "/general_reportD", auto_open=False)
-        #Compare the html files?
-        #self.checkFile("general_reportD%s.html" % vs)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have Robust estimates too
+            pygsti.report.construct_standard_report(self.results_logL,
+                                                    "Report D", confidence_level=95, verbosity=3).write_html(temp_files + "/general_reportD", auto_open=False)
+            #Compare the html files?
+            #self.checkFile("general_reportD%s.html" % vs)
 
     def test_reports_multiple_ds(self):
-        #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.construct_standard_report({"chi2": self.results, "logl": self.results_logL},
-                                             "Report F", confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportF", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have (un-combined) Robust estimates too
+            pygsti.report.construct_standard_report({"chi2": self.results, "logl": self.results_logL},
+                                                 "Report F", confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportF", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -144,9 +166,10 @@ class TestReport(ReportBaseCase):
         import os
         os.chdir(temp_files)
         nb_filename = "report_notebook.ipynb"
-        pygsti.report.construct_standard_report(
-            self.results_logL, None, verbosity=3
-        ).write_notebook(nb_filename, use_pickle=True)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                self.results_logL, None, verbosity=3
+            ).write_notebook(nb_filename, use_pickle=True)
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
@@ -157,15 +180,17 @@ class TestReport(ReportBaseCase):
         import os
         os.chdir(temp_files)
         nb_filename = "report_notebook.ipynb"
-        pygsti.report.construct_standard_report(
-            self.results_logL, None, verbosity=3
-        ).write_notebook(nb_filename)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                self.results_logL, None, verbosity=3
+            ).write_notebook(nb_filename)
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
-        pygsti.report.construct_standard_report(
-            {'one': self.results_logL, 'two': self.results_logL}, None, verbosity=3
-        ).write_notebook(nb_filename) # multiple comparable data
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                {'one': self.results_logL, 'two': self.results_logL}, None, verbosity=3
+            ).write_notebook(nb_filename) # multiple comparable data
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
@@ -196,7 +221,7 @@ class TestReport(ReportBaseCase):
         pygsti.report.merge_helpers.merge_jinja_template(qtys, temp_files + "/inline_report.html",
                                                          template_dir=compare_files, template_name="report_dashboard_template.html",
                                                          auto_open=False, precision=None, link_to=linkto,
-                                                         connected=False, toggles=toggles, render_math=True,
+                                                         enable_offline_mode=True, toggles=toggles, render_math=True,
                                                          resizable=True, autosize='none', verbosity=printer)
 
     def test_table_formatting(self):
@@ -268,16 +293,16 @@ class TestReport(ReportBaseCase):
         import pygsti.report.merge_helpers as mh
 
         # ---- insert_resource ----
-        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+        mh.insert_resource(enable_offline_mode=False, online_url="http://myurl.com/myfile.js",
                            offline_filename="myOfflineFile.js")
-        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+        mh.insert_resource(enable_offline_mode=False, online_url="http://myurl.com/myfile.js",
                            offline_filename=None, integrity="TEST", crossorigin="TEST")
 
         with self.assertRaises(ValueError):
-            mh.insert_resource(connected=True, online_url=None, offline_filename="myOfflineFile.foobar")
+            mh.insert_resource(enable_offline_mode=False, online_url=None, offline_filename="myOfflineFile.foobar")
             #unknown resource type (extension)
         with self.assertRaises(ValueError):
-            mh.insert_resource(connected=False, online_url=None, offline_filename="myOfflineFile.foobar")
+            mh.insert_resource(enable_offline_mode=True, online_url=None, offline_filename="myOfflineFile.foobar")
             #unknown resource type (extension)
 
         # ---- rsync_offline_dir ----
@@ -306,11 +331,6 @@ class TestReport(ReportBaseCase):
         if os.path.exists(dirname):
             shutil.rmtree(dirname) #make sure no directory exists
         mh.create_empty_dir(dirname)
-
-
-        # ---- fill_std_qtys ---- Not a function anymore
-        #qtys = {}
-        #mh.fill_std_qtys(qtys, connected=True, render_math=True, CSSnames=[]) #test connected=True case HERE
 
         # ---- evaluate_call ----
         printer = pygsti.baseobjs.VerbosityPrinter(1)

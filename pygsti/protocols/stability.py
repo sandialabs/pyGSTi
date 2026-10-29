@@ -84,7 +84,7 @@ class StabilityAnalysis(_proto.Protocol):
     constnumtimes : str or bool, optional
         True, False or 'auto'. If True then data is discarded from the end of the "clickstream" for
         each circuit until all circuits have the same length clickstream, i.e., the same number of
-        data aquisition times. If 'auto' then it is set to True or False depending on the meta-data of
+        data acquisition times. If 'auto' then it is set to True or False depending on the meta-data of
         the data and the type of transform being used.
 
     ids: True or False, optional
@@ -112,7 +112,7 @@ class StabilityAnalysis(_proto.Protocol):
 
             Time-stamp aware transforms take the frequencies to calculate powers at *as an input*, so the
             specified frequencies are, explicitly, the frequencies associated with the powers. The task
-            of choosing the frequencies amounts to picking the best set of frequencies at which to interogate
+            of choosing the frequencies amounts to picking the best set of frequencies at which to interrogate
             the true probability trajectory for components. As there are complex factors involved in this
             choice that the code has no way of knowing, sometimes it is best to choose them yourself. E.g.,
             if different frequencies are used for different circuits it isn't possible to (meaningfully)
@@ -135,7 +135,7 @@ class StabilityAnalysis(_proto.Protocol):
     freqpointers : dict, optional
         Specifies which frequencies correspond to which power spectra. The keys are power spectra labels,
         and the values are integers that point to the index of `frequencies` (a list of lists) that the
-        relevant frquencies are found at. Whenever a power spectra is not included in `freqpointers` then
+        relevant frequencies are found at. Whenever a power spectra is not included in `freqpointers` then
         this defaults to 0. So if `frequencies` is specified and is a list containing a single list (of
         frequencies) then `freqpointers` can be left as the empty dictionary.
 
@@ -153,7 +153,7 @@ class StabilityAnalysis(_proto.Protocol):
         for the clickstream for every combination of eachinput DataSet (e.g., there are multiple DataSets if there
         has been marginalization of multi-qubit data), each Circuit in the DataSet, and each possible outcome in
         the DataSet. For each of "dataset", "circuit" and "outcome" *not* included in a tuple defining a test class,
-        the coresponding "axis" of the 3-dimensional array of spectra is averaged over, and these spectra are then
+        the corresponding "axis" of the 3-dimensional array of spectra is averaged over, and these spectra are then
         tested. So the tuple () specifies the "test class" whereby we test the power spectrum obtained by averaging
         all power spectra; the tuple ('dataset','circuit') specifies the "test class" whereby we average  only over
         outcomes, obtaining a single power spectrum for each DataSet and Circuit combination, which we test.
@@ -258,7 +258,7 @@ class StabilityAnalysis(_proto.Protocol):
         constnumtimes : str or bool, optional
             True, False or 'auto'. If True then data is discarded from the end of the "clickstream" for
             each circuit until all circuits have the same length clickstream, i.e., the same number of
-            data aquisition times. If 'auto' then it is set to True or False depending on the meta-data of
+            data acquisition times. If 'auto' then it is set to True or False depending on the meta-data of
             the data and the type of transform being used.
 
         ids: True or False, optional
@@ -286,7 +286,7 @@ class StabilityAnalysis(_proto.Protocol):
 
                 Time-stamp aware transforms take the frequencies to calculate powers at *as an input*, so the
                 specified frequencies are, explicitly, the frequencies associated with the powers. The task
-                of choosing the frequencies amounts to picking the best set of frequencies at which to interogate
+                of choosing the frequencies amounts to picking the best set of frequencies at which to interrogate
                 the true probability trajectory for components. As there are complex factors involved in this
                 choice that the code has no way of knowing, sometimes it is best to choose them yourself. E.g.,
                 if different frequencies are used for different circuits it isn't possible to (meaningfully)
@@ -309,7 +309,7 @@ class StabilityAnalysis(_proto.Protocol):
         freqpointers : dict, optional
             Specifies which frequencies correspond to which power spectra. The keys are power spectra labels,
             and the values are integers that point to the index of `frequencies` (a list of lists) that the
-            relevant frquencies are found at. Whenever a power spectra is not included in `freqpointers` then
+            relevant frequencies are found at. Whenever a power spectra is not included in `freqpointers` then
             this defaults to 0. So if `frequencies` is specified and is a list containing a single list (of
             frequencies) then `freqpointers` can be left as the empty dictionary.
 
@@ -327,7 +327,7 @@ class StabilityAnalysis(_proto.Protocol):
             for the clickstream for every combination of eachinput DataSet (e.g., there are multiple DataSets if there
             has been marginalization of multi-qubit data), each Circuit in the DataSet, and each possible outcome in
             the DataSet. For each of "dataset", "circuit" and "outcome" *not* included in a tuple defining a test class,
-            the coresponding "axis" of the 3-dimensional array of spectra is averaged over, and these spectra are then
+            the corresponding "axis" of the 3-dimensional array of spectra is averaged over, and these spectra are then
             tested. So the tuple () specifies the "test class" whereby we test the power spectrum obtained by averaging
             all power spectra; the tuple ('dataset','circuit') specifies the "test class" whereby we average  only over
             outcomes, obtaining a single power spectrum for each DataSet and Circuit combination, which we test.

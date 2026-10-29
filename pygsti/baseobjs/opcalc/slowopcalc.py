@@ -59,15 +59,12 @@ def _typed_bulk_eval_compact_polynomials(vtape, ctape, paramvec, dest_shape, dty
     while i < vtape.size:
         poly_val = 0
         nTerms = vtape[i]; i += 1
-        #print("POLY w/%d terms (i=%d)" % (nTerms,i))
         for m in range(nTerms):
             nVars = vtape[i]; i += 1  # number of variable indices in this term
             a = ctape[c]; c += 1
-            #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a)))
             for k in range(nVars):
                 a *= paramvec[vtape[i]]; i += 1
             poly_val += a
-            #print("  -> added %s to poly_val = %s" % (str(a),str(poly_val))," i=%d, vsize=%d" % (i,vtape.size))
         res[r] = poly_val; r += 1
     assert(c == ctape.size), "Coeff Tape length error: %d != %d !" % (c, ctape.size)
     assert(r == result.size), "Result/Tape size mismatch: only %d result entries filled!" % r
@@ -101,13 +98,11 @@ def _typed_bulk_eval_compact_polynomials_derivs(vtape, ctape, wrt_params, paramv
     while i < vtape_sz:
         j = i  # increment j instead of i for this poly
         nTerms = vtape[j]; j += 1
-        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
 
         for m in range(nTerms):
             coeff = ctape[c]; c += 1
             nVars = vtape[j]; j += 1  # number of variable indices in this term
 
-            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
             cur_iWrt = 0
             j0 = j  # the vtape index where the current term starts
             j1 = j + nVars  # the ending index
@@ -130,7 +125,6 @@ def _typed_bulk_eval_compact_polynomials_derivs(vtape, ctape, wrt_params, paramv
                     j += 1  # so vtape[j] >= wrt[cur_iWrt]
                 if j == j1: break  # no more iVars - we're done
 
-                #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
                 if vtape[j] == cur_wrt:
                     #Yay! a value we're looking for is present in the vtape.
                     # Figure out how many there are (easy since vtape is sorted
@@ -190,7 +184,6 @@ def compact_deriv(vtape, ctape, wrt_params):
     result_ctape = []
     wrt = sorted(wrt_params)
     assert(wrt == list(wrt_params)), "`wrt_params` (%s) must be in ascending order!" % wrt_params
-    #print("TAPE SIZE = ",vtape.size)
 
     c = 0; i = 0
     while i < vtape.size:
@@ -199,12 +192,10 @@ def compact_deriv(vtape, ctape, wrt_params):
         dctapes = [list() for x in range(len(wrt))]
         dvtapes = [list() for x in range(len(wrt))]
         dnterms = [0] * len(wrt)
-        #print("POLY w/%d terms (i=%d)" % (nTerms,i))
         for m in range(nTerms):
             coeff = ctape[c]; c += 1
             nVars = vtape[j]; j += 1  # number of variable indices in this term
 
-            #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff)))
             cur_iWrt = 0
             j0 = j  # the vtape index where the current term starts
 
@@ -225,7 +216,6 @@ def compact_deriv(vtape, ctape, wrt_params):
                     j += 1  # so vtape[j] >= wrt[cur_iWrt]
                 if j == j0 + nVars: break  # no more iVars - we're done
 
-                #print(" check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],wrt[cur_iWrt],cur_iWrt))
                 if vtape[j] == wrt[cur_iWrt]:
                     #Yay! a value we're looking for is present in the vtape.
                     # Figure out how many there are (easy since vtape is sorted
@@ -238,8 +228,6 @@ def compact_deriv(vtape, ctape, wrt_params):
                     dctapes[cur_iWrt].append(coeff * cnt)
                     dvtapes[cur_iWrt].extend([nVars - 1] + dvars)
                     dnterms[cur_iWrt] += 1
-                    # print(" wrt=%d found cnt=%d: adding deriv term coeff=%f vars=%s" \
-                    #       % (wrt[cur_iWrt], cnt, coeff*cnt, [nVars-1] + dvars))
 
                     cur_iWrt += 1  # processed this wrt param - move to next one
 

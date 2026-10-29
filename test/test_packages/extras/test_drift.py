@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 
 import numpy as np
@@ -5,6 +7,8 @@ import numpy as np
 import pygsti
 from pygsti.extras import drift
 from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.protocols import (ProtocolData, StabilityAnalysis,
+                              StabilityAnalysisResults, StandardGSTDesign)
 from ..testutils import BaseTestCase
 
 
@@ -102,60 +106,83 @@ class DriftTestCase(BaseTestCase):
         trmodel.set_parameters([0.2])
         trmodel.hyperparameters
 
-    @unittest.skip("Need to update this test - do_stability_analysis no longer exists")
     def test_core_and_stabilityanalyzer(self):
 
         ds = pygsti.io.read_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
-        fiducial_strs = ['{}', 'Gx', 'Gy', 'GxGx', 'GxGxGx', 'GyGyGy']
-        germ_strs = ['Gi']
-        fiducials = [pygsti.objects.Circuit(None, stringrep=fs) for fs in fiducial_strs]
-        germs = [pygsti.objects.Circuit(None, stringrep=mdl) for mdl in germ_strs]
-        max_lengths = [256, ]
-        gssList = pygsti.circuits.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
-        gss = gssList[-1]
 
-        # Test the integrated routine
-        results = drift.do_stability_analysis(ds, significance=0.01, estimator='mle')
-
-        # Redo but testing direct access of the stability analyzer.
+        # --- Core analysis -------------------------------------------------------
+        # do_stability_analysis(), the old one-call routine, was removed; the
+        # StabilityAnalyzer is now the public entry point, so drive it directly.
         results = drift.StabilityAnalyzer(ds, ids=True)
-        print(results)
+        str(results)  # smoke-test __str__ at each stage, as the original test did
         results.compute_spectra()
-        print(results)
+        str(results)
         results.run_instability_detection(verbosity=0)
-        print(results)
-        results.run_instability_characterization(estimator='filter', modelselector=('default',()),verbosity=0)
-        print(results)
+        str(results)
+        results.run_instability_characterization(estimator='filter', modelselector=('default', ()),
+                                                  verbosity=0)
+        str(results)
 
-        # Test adding more detectors.
-        inclass_correction={'dataset': 'Bonferroni', 'circuit': 'Bonferroni', 'spectrum': 'Benjamini-Hochberg'}
-        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-1', 
-                                         default=False, verbosity=0)
-        inclass_correction={'dataset': 'Bonferroni', 'circuit': 'Benjamini-Hochberg', 'spectrum': 'Benjamini-Hochberg',}
-        results.run_instability_detection(inclass_correction=inclass_correction, tests=((),('circuit',),), saveas='fdr-2',
-                                         default=False)
-        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-3',
-                                         default=False)
+        # Register additional detectors using different multi-test corrections and
+        # test classes, exercising the inclass_correction / tests / saveas arguments.
+        inclass_correction = {'dataset': 'Bonferroni', 'circuit': 'Bonferroni',
+                              'spectrum': 'Benjamini-Hochberg'}
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),),
+                                          saveas='fdr-1', default=False, verbosity=0)
+        inclass_correction = {'dataset': 'Bonferroni', 'circuit': 'Benjamini-Hochberg',
+                              'spectrum': 'Benjamini-Hochberg'}
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=((), ('circuit',)),
+                                          saveas='fdr-2', default=False, verbosity=0)
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),),
+                                          saveas='fdr-3', default=False, verbosity=0)
 
-        results.unstable_circuits(fromtests=[(), ('circuit',)])
+        # The truncated timeseries dataset has injected drift, so detection must fire.
+        self.assertTrue(results.instability_detected())
 
-        freq, s = results.power_spectrum()
-        circuit = ds.keys()[0]
+        unstable = results.unstable_circuits(fromtests=[(), ('circuit',)])
+        self.assertIsInstance(unstable, dict)
 
-        #Create a workspace to show plots
+        freq, power = results.power_spectrum()
+        self.assertEqual(len(freq), len(power))
+
+        # The maximum TVD bound is a total-variation distance, so it lies in [0, 1].
+        bound = results.maxmax_tvd_bound()
+        self.assertGreaterEqual(bound, 0.0)
+        self.assertLessEqual(bound, 1.0)
+
+        # --- Reporting and plotting ----------------------------------------------
+        # The drift report/plot layer consumes a StabilityAnalysisResults: a
+        # ProtocolResults pairing the StabilityAnalyzer with a GST experiment design
+        # (the germ/fiducial structure drives the per-triple figures).
+        pspec = std1Q_XYI.processor_spec()
+        germs = [pygsti.circuits.Circuit(None, stringrep='Gi')]
+        edesign = StandardGSTDesign(pspec, std1Q_XYI.fiducials, std1Q_XYI.fiducials, germs, [256])
+        sa_results = StabilityAnalysisResults(ProtocolData(edesign, ds), StabilityAnalysis(), results)
+
+        circuit = list(ds.keys())[0]
+        some_circuits = list(ds.keys())[:5]
         w = pygsti.report.Workspace()
-        #w.init_notebook_mode(connected=False, autodisplay=True) 
-        w.ProbTrajectoriesPlot(results, circuit, outcome=('0',))
-        w.PowerSpectraPlot(results, detectorkey='fdr-2')
-        w.PowerSpectraPlot(results, spectrumlabel={'circuit': circuit})
-        w.PowerSpectraPlot(results, spectrumlabel={'dataset': '0', 'circuit': [c for c in ds.keys()[:10]], 'outcome': ('1',)},
-                           showlegend=True)
-        w.ProbTrajectoriesPlot(results, [c for c in ds.keys()[:5]], outcome=('1', ))
-        w.GermFiducialProbTrajectoriesPlot(results, gss, 'Gx', 'Gi', 'Gx', outcome=('1', ))
-        w.GermFiducialPowerSpectraPlot(results, gss, 'Gx', 'Gi', 'Gx')
 
-        drift.driftreport.create_drift_report(results, gss, "../temp_test_files/DriftReport", title="Test Drift Report",
-                                              verbosity=10)
+        # Probability-trajectory plots, for a single circuit and for several at once.
+        self.assertEqual(len(w.ProbTrajectoriesPlot(sa_results, circuit, outcome=('0',)).figs), 1)
+        self.assertEqual(len(w.ProbTrajectoriesPlot(sa_results, some_circuits, outcome=('1',)).figs), 1)
+
+        # Power-spectra plots: by named detector, for one circuit, and across circuits.
+        w.PowerSpectraPlot(sa_results, detectorkey='fdr-2')
+        w.PowerSpectraPlot(sa_results, spectrumlabel={'circuit': circuit})
+        w.PowerSpectraPlot(sa_results, spectrumlabel={'dataset': '0', 'circuit': some_circuits,
+                                                      'outcome': ('1',)}, showlegend=True)
+
+        # Germ/fiducial-resolved plots (prep fiducial, germ, meas fiducial).
+        w.GermFiducialProbTrajectoriesPlot(sa_results, 'Gx', 'Gi', 'Gx', outcome=('1',))
+        w.GermFiducialPowerSpectraPlot(sa_results, 'Gx', 'Gi', 'Gx')
+
+        # Full HTML drift report, written to a throwaway directory.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "DriftReport")
+            drift.report.create_drift_report(sa_results, edesign.circuit_lists[-1], path,
+                                              title="Test Drift Report", verbosity=0)
+            self.assertTrue(os.path.isfile(os.path.join(path, "main.html")))
 
 
 if __name__ == '__main__':

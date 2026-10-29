@@ -26,8 +26,6 @@ per-file-ignores=
 	test/test_packages/extras/test_rb.py:F821
 	# Should nPossible be nLocal?
 	test/test_packages/drivers/nqubitconstruction.py:F821
-	# Likely results existed in a deleted cell
-	scripts/profiling/gaugeopt/3Q_example.py:F821
 	# New with flake 7.2.0, should go back to these
 	pygsti/forwardsims/termforwardsim_calc_generic.py:F824
 	pygsti/baseobjs/basisconstructors.py:F824

@@ -20,7 +20,7 @@ class NamedDict(dict, _NicelySerializable):
     """
     A dictionary that also holds category names and types.
 
-    This `dict`-derived class holds a catgory name applicable to
+    This `dict`-derived class holds a category name applicable to
     its keys, and key and value type names indicating the types
     of its keys and values.
 

@@ -10,6 +10,8 @@ The ComposedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import itertools as _itertools
 import collections as _collections
 
@@ -24,6 +26,13 @@ from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
+
+from typing import TYPE_CHECKING, Union, Literal
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs import Basis as _Basis
+    from pygsti.evotypes import Evotype as _Evotype
+    from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 
 class ComposedErrorgen(_LinearOperator):
     """
@@ -49,7 +58,7 @@ class ComposedErrorgen(_LinearOperator):
         error generator being composed.
     """
 
-    def __init__(self, errgens_to_compose, evotype="auto", state_space="auto"):
+    def __init__(self, errgens_to_compose: list[_LindbladErrorgen], evotype: Union[_Evotype.Castable, Literal["auto"]]="auto", state_space: SpaceT="auto"):
         assert(len(errgens_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one error generator when state_space='auto'!"
         self.factors = errgens_to_compose
@@ -75,11 +84,10 @@ class ComposedErrorgen(_LinearOperator):
         #assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
         #    "All error generators must have the same sparsity (%s expected)!" % self.sparse
 
-        self.matrix_basis = errgens_to_compose[0].matrix_basis \
-            if len(errgens_to_compose) > 0 else None
-        assert(all([self.matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
-                    for eg in errgens_to_compose])), \
-            "All error generators must have the same matrix basis (%s expected)!" % str(self.matrix_basis)
+        # `matrix_basis` is constructed lazily (see the property below): building a Basis for
+        # the full composed state space overflows for very large (e.g. 100-qubit) error
+        # generators, and it is only needed by a few dense-matrix code paths.
+        self._matrix_basis = None
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
@@ -87,6 +95,23 @@ class ComposedErrorgen(_LinearOperator):
 
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    @property
+    def matrix_basis(self) -> _Basis:
+        """
+        The matrix basis shared by all factor error generators (None if there are no factors).
+
+        Constructed on first access rather than in `__init__` so that very large composed
+        error generators (whose full-dimension Basis cannot be built) remain usable on code
+        paths that never need it.
+        """
+        if self._matrix_basis is None and len(self.factors) > 0:
+            matrix_basis = self.factors[0].matrix_basis
+            assert(all([matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
+                        for eg in self.factors])), \
+                "All error generators must have the same matrix basis (%s expected)!" % str(matrix_basis)
+            self._matrix_basis = matrix_basis
+        return self._matrix_basis
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
@@ -96,7 +121,7 @@ class ComposedErrorgen(_LinearOperator):
         errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
         return cls(errgens_to_compose, mm_dict['evotype'], state_space)
 
-    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
+    def coefficients(self, return_basis: bool=False, logscale_nonham: bool=False, label_type: Literal['global', 'local']='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 

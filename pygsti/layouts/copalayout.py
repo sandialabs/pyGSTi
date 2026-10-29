@@ -176,8 +176,8 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples,
                  unique_complete_circuits=None, param_dimensions=(), resource_alloc=None):
-        # See class definitiion for docstring -- usually this is only called by derived classes; see `create_from` above
-        # to_unique : dict maping indices of `circuits` to indices of `unique_circuits`
+        # See class definition for docstring -- usually this is only called by derived classes; see `create_from` above
+        # to_unique : dict mapping indices of `circuits` to indices of `unique_circuits`
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
@@ -202,13 +202,14 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             "Inconsistency: %d distinct indices but max index + 1 is %d!" % (len(indices), self._size)
 
         self._outcomes = dict()
-        self._element_indices = dict()
+        self._element_indices : dict[tuple, slice] = dict()
         sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
             sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = tuple(outcomes)
-            self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
+            s = _slct.list_to_slice(elindices, array_ok=True)
+            self._element_indices[i_unique] = s # type: ignore
 
 #    def hotswap_circuits(self, circuits, unique_complete_circuits=None):
 #        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
@@ -311,7 +312,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             Note that, even though the `"p"` and `"jtf"` types are the same shape
             they are used for different purposes and are distributed differently
             when there are multiple processors.  The `"p"` type is for use with
-            other element-dimentions-containing arrays, whereas the `"jtf"` type
+            other element-dimensions-containing arrays, whereas the `"jtf"` type
             assumes that the element dimension has already been summed over.
 
         dtype : numpy.dtype
@@ -363,19 +364,23 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         Frees an array allocated by :meth:`allocate_local_array`.
 
-        This method should always be paired with a call to
-        :meth:`allocate_local_array`, since the allocated array
-        may utilize shared memory, which must be explicitly de-allocated.
+        This layout allocates plain NumPy arrays, so there are no external
+        shared-memory handles to release.  This method is intentionally a
+        no-op, but exists so callers can pair every
+        :meth:`allocate_local_array` call with a matching free call without
+        checking the concrete layout type.
 
         Parameters
         ----------
-        local_array : numpy.ndarray or LocalNumpyArray
-            The array to free, as returned from `allocate_local_array`.
+        local_array : numpy.ndarray
+            The NumPy array to free, as returned from `allocate_local_array`.
 
         Returns
         -------
         None
         """
+        # See pyGSTi issue #698.  Distributed layouts may need explicit shared-memory
+        # cleanup; this local layout does not.
         pass
 
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0,
@@ -415,7 +420,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -740,7 +745,9 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def __iter__(self):
         for circuit, i in self._unique_circuit_index.items():
-            for element_index, outcome in zip(self._element_indices[i], self._outcomes[i]):
+            indices = _slct.to_array(self._element_indices[i])
+            iterator = zip(indices, self._outcomes[i])
+            for element_index, outcome in iterator:
                 yield element_index, circuit, outcome
 
     def iter_unique_circuits(self):

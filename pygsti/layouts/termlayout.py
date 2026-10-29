@@ -24,7 +24,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
     """
     The atom ("atomic unit") for dividing up the element dimension in a :class:`TermCOPALayout`.
 
-    This class noteably holds the current "path-set" used to evaluate circuit probabilites,
+    This class notably holds the current "path-set" used to evaluate circuit probabilities,
     as well as compact representations of the polynomials for evaluating these probabilities.
 
     Parameters
@@ -103,7 +103,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         self.elindex_outcome_tuples = elindex_outcome_tuples
         element_slice = None  # *global* (of parent layout) element-index slice - set by parent
 
-        # cache of the high-magnitude terms (actually their represenations), which
+        # cache of the high-magnitude terms (actually their representations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
         # defines a set of paths to use in probability computations.
         self.pathset = None
@@ -155,7 +155,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         A 1- or 2-tuple of integers specifying how many parameter-block processors are
         used when dividing the physical processors into a grid.  The first and second
         elements correspond to counts for the first and second parameter dimensions,
-        respecively.
+        respectively.
 
     param_dimensions : tuple, optional
         The number of parameters along each parameter dimension.  Can be an

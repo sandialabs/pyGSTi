@@ -36,7 +36,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
                             EmbeddedOp(ss3Q, ('Q2',), idleErr2)
                             ])
 
-        targetGx = StaticArbitraryOp(gs1Q.operations['Gx'])
+        targetGx = StaticArbitraryOp(gs1Q.operations['Gx'].to_dense('minimal'))
         Gxii_xErr = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Id_1Q))
         Gxii_xGate = ComposedOp( [targetGx, idleErr0, Gxii_xErr])
         Gxii = ComposedOp([ EmbeddedOp(ss3Q, ('Q0',), Gxii_xGate),

@@ -1,5 +1,0 @@
-## Columns = 0 count, 1 count
-{}@(0)             0 100
-Gxpi2:0@(0)        10 90
-Gxpi2:0Gypi2:0@(0) 40 60
-Gxpi2:0^4@(0)      20 90

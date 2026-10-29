@@ -12,6 +12,7 @@ Implements the ArraysInterface object and supporting functionality.
 
 import numpy as _np
 
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 
 
@@ -26,7 +27,7 @@ class ArraysInterface(object):
     that the algorithm doesn't need to worry about how the arrays are actually stored in memory,
     e.g. whether shared memory is used or not.
     """
-    pass  # just a base class - maybe make an abc abtract class in FUTURE?
+    pass  # just a base class - maybe make an abc abstract class in FUTURE?
 
 
 class UndistributedArraysInterface(ArraysInterface):
@@ -126,7 +127,7 @@ class UndistributedArraysInterface(ArraysInterface):
         Parameters
         ----------
         only_if_leader : bool, optional
-            If `True`, the current processor's parameter slice is ony returned if
+            If `True`, the current processor's parameter slice is only returned if
             the processor is the "leader" (i.e. the first) of the processors that
             calculate the same parameter slice.  All non-leader processors return
             the zero-slice `slice(0,0)`.
@@ -231,7 +232,7 @@ class UndistributedArraysInterface(ArraysInterface):
 
     def allgather_f(self, f, global_f):
         """
-        Gather an objective funtion (`f`) vector onto all the processors.
+        Gather an objective function (`f`) vector onto all the processors.
 
         Parameters
         ----------
@@ -260,7 +261,7 @@ class UndistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -305,7 +306,7 @@ class UndistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -661,7 +662,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jtf)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtf)  # cleanup shared memory, if it was used
 
     def deallocate_jtj(self, jtj):
         """
@@ -671,7 +672,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jtj)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtj)  # cleanup shared memory, if it was used
 
     def deallocate_jac(self, jac):
         """
@@ -681,7 +682,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jac)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jac)  # cleanup shared memory, if it was used
 
     def global_num_elements(self):
         """
@@ -707,7 +708,7 @@ class DistributedArraysInterface(ArraysInterface):
         Parameters
         ----------
         only_if_leader : bool, optional
-            If `True`, the current processor's parameter slice is ony returned if
+            If `True`, the current processor's parameter slice is only returned if
             the processor is the "leader" (i.e. the first) of the processors that
             calculate the same parameter slice.  All non-leader processors return
             the zero-slice `slice(0,0)`.
@@ -816,7 +817,7 @@ class DistributedArraysInterface(ArraysInterface):
 
     def allgather_f(self, f, global_f):
         """
-        Gather an objective funtion (`f`) vector onto all the processors.
+        Gather an objective function (`f`) vector onto all the processors.
 
         Parameters
         ----------
@@ -852,7 +853,7 @@ class DistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -905,7 +906,7 @@ class DistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -1024,7 +1025,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_dot = _np.array(_np.dot(x1, x2))
-        local_dot.shape = (1,)  # for compatibility with allreduce_sum
+        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1063,7 +1064,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_infnorm = _np.array(_np.linalg.norm(x, ord=_np.inf))
-        local_infnorm.shape = (1,)  # for compatibility with allreduce_sum
+        local_infnorm = _compat.reshape_no_copy(local_infnorm, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_infnorm,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1087,7 +1088,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_min = _np.array(_np.min(x))
-        local_min.shape = (1,)  # for compatibility with allreduce_sum
+        local_min = _compat.reshape_no_copy(local_min, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_min(result, local_min,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1111,7 +1112,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_max = _np.array(_np.max(x))
-        local_max.shape = (1,)  # for compatibility with allreduce_sum
+        local_max = _compat.reshape_no_copy(local_max, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_max,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1134,7 +1135,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_dot = _np.array(_np.dot(f, f))
-        local_dot.shape = (1,)  # for compatibility with allreduce_sum
+        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('atom-processing'))
@@ -1157,7 +1158,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_norm2 = _np.array(_np.linalg.norm(j)**2)
-        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
+        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-processing'))
@@ -1180,7 +1181,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_norm2 = _np.array(_np.linalg.norm(jtj)**2)
-        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
+        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))

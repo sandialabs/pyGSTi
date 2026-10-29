@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from unittest import mock, TestCase
 
 import numpy as np
@@ -13,17 +14,16 @@ from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
 from ..util import BaseCase
+from ..modelmembers.test_instrument import z_measurement_projectors
 
-from pygsti.data import simulate_data
-from pygsti.modelpacks import smq1Q_XYI
+from pygsti.data import DataSet, simulate_data
+from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
+from pygsti.modelmembers.operations import EmbeddedOp, FullTPOp
+from pygsti.modelmembers.povms import ComputationalBasisPOVM
+from pygsti.modelmembers.instruments import Instrument, TPInstrument
 from pygsti.protocols import gst
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.tools import two_delta_logl
-
-
-def Ls(*args):
-    """ Convert args to a tuple to Labels """
-    return tuple([L(x) for x in args])
 
 
 class AbstractForwardSimTester(BaseCase):
@@ -53,6 +53,18 @@ class AbstractForwardSimTester(BaseCase):
         layout = self.fwdsim.create_layout([self.circuit])
         with self.assertRaises(NotImplementedError):
             self.fwdsim.bulk_fill_hprobs(np.zeros((1,0,0)), layout)
+
+    def test_free_local_array_is_noop_for_numpy_array(self):
+        layout = self.fwdsim.create_layout([self.circuit], array_types=('e',))
+        local_array = layout.allocate_local_array('e', 'd', zero_out=True)
+        local_array[0] = 1.0
+
+        with self.assertNoWarns():
+            self.assertIsNone(layout.free_local_array(local_array))
+
+        self.assertIsInstance(local_array, np.ndarray)
+        self.assertEqual(local_array.shape, (layout.num_elements,))
+        self.assertEqual(local_array[0], 1.0)
 
 
 class ForwardSimBase(object):
@@ -145,6 +157,24 @@ class MapForwardSimTester(ForwardSimBase, BaseCase):
         cls.model.sim = MapForwardSimulator()
 
 
+class ZeroParamModelTester(BaseCase):
+    def test_dprobs_hprobs_empty_for_zero_param_model(self):
+        # static model has no free params -> dprobs/hprobs return empty arrays
+        # quietly instead of an opaque IndexError (#604)
+        model = smq1Q_XYI.target_model('static')
+        self.assertEqual(model.num_params, 0)
+        circuit = Circuit([L('Gxpi2', 0)], line_labels=(0,))
+        for sim in (MapForwardSimulator(), MatrixForwardSimulator()):
+            model.sim = sim
+            with self.assertNoWarns():
+                dprobs = model.sim.bulk_dprobs([circuit])
+                hprobs = model.sim.bulk_hprobs([circuit])
+            for dprob in next(iter(dprobs.values())).values():
+                self.assertEqual(dprob.shape, (0,))
+            for hprob in next(iter(hprobs.values())).values():
+                self.assertEqual(hprob.shape, (0, 0))
+
+
 class BaseProtocolData:
 
     @classmethod
@@ -165,6 +195,18 @@ def dict_to_arrays(od, ravel=True):
         return keys.ravel(), vals.ravel()
     else:
         return keys, vals
+
+
+def _sorted_outcome_vals(od):
+    """Stack an outcome-label dict's values in sorted-key order.
+
+    Different forward simulators can build a circuit's per-outcome dict by iterating
+    instrument members and POVM effects in different nesting orders (e.g. when a circuit
+    contains instrument layers), so raw dict-iteration order isn't guaranteed to line up
+    across simulators even though every (key, value) pair is individually correct. Sorting
+    by the outcome-label tuple gives a canonical order all simulators can be compared against.
+    """
+    return np.array([od[k] for k in sorted(od.keys())])
 
 
 class ForwardSimTestHelper:
@@ -200,9 +242,8 @@ class ForwardSimTestHelper:
             circs, probs = dict_to_arrays(out)
             curr_cstrs = np.array([str(c) for c in circs])
             assert np.all(self.circuit_strs  == curr_cstrs), "Circuits outcome probabilities were returned in a different order than given."
-            temp1 = [dict_to_arrays(p) for p in probs]
-            temp2 = [t[1].ravel() for t in temp1]
-            probs = np.stack(temp2).ravel()
+            temp2 = [_sorted_outcome_vals(p) for p in probs]
+            probs = np.concatenate(temp2)
             agg_probs.append(probs)
         probs = np.vstack(agg_probs)
         self.outcome_probs = probs
@@ -215,9 +256,8 @@ class ForwardSimTestHelper:
             circs, jac_dicts = dict_to_arrays(out)
             curr_cstrs = np.array([str(c) for c in circs])
             assert np.all(self.circuit_strs  == curr_cstrs),  "Circuit outcome probability Jacobians were returned in a different order than given."
-            temp1 = [dict_to_arrays(jd) for jd in jac_dicts]
-            temp2 = [t[1] for t in temp1]
-            jac = np.stack(temp2)
+            temp2 = [_sorted_outcome_vals(jd) for jd in jac_dicts]
+            jac = np.concatenate(temp2, axis=0)
             agg_jacs.append(jac)
         self.outcome_probs_jacs = np.stack(agg_jacs)
         return
@@ -240,6 +280,7 @@ class ForwardSimTestHelper:
     def jac_colinearities(self):
         if self.outcome_probs_jacs is None:
             self.compute_outcome_probs_jac()
+        assert self.outcome_probs_jacs is not None  # make linter happy
         alljacs = np.stack([J.ravel() for J in self.outcome_probs_jacs])
         # ^ Each row of alljacs is a vectorized Jacobian of circuit outcome probabilities.
         #   The length of a given row is len(self.circuits) * (number of model parameters).
@@ -258,24 +299,24 @@ class ForwardSimTestHelper:
     
 
 class ForwardSimConsistencyTester(TestCase):
+    """Base class for Testers that check TorchForwardSimulator agrees with the classic forward
+    simulators (SimpleMap, SimpleMatrix, Map, Matrix) on circuit outcome probabilities and their
+    Jacobians, for some noisy model + circuit list.
+
+    Subclasses override `build_helper` to supply the model + circuits under test, and may
+    override PROBS_TOL / JACS_TOL. The base implementation (exercised directly by this class, not
+    just inherited) checks smq1Q_XYI's ideal target model under depolarizing noise.
+    """
 
     PROBS_TOL = 1e-14
     JACS_TOL = 1e-10
 
-    def setUp(self):
-        self.model_ideal = smq1Q_XYI.target_model()
-        if TorchForwardSimulator.ENABLED:
-            # TorchFowardSimulator can only work with TP modelmembers.
-            self.model_ideal.convert_members_inplace(to_type='full TP')
-        
-        self.model_noisy = self.model_ideal.depolarize(op_noise=0.05, spam_noise=0.025)
-        prep_fiducials = smq1Q_XYI.prep_fiducials()
-        meas_fiducials = smq1Q_XYI.meas_fiducials()
-        germs = smq1Q_XYI.germs()
-        max_lengths = [4]
-        circuits = create_lsgst_circuit_lists(
-            self.model_noisy, prep_fiducials, meas_fiducials, germs, max_lengths
-        )[0]
+    @staticmethod
+    def standard_sims():
+        """The 4 always-available forward simulators, plus TorchForwardSimulator when installed.
+        We request float64 explicitly: PROBS_TOL/JACS_TOL are tight enough to need it, and pinning
+        it here means these comparisons stay correct even if TorchForwardSimulator's own default
+        dtype ever changes."""
         sims = [
             SimpleMapForwardSimulator(),
             SimpleMatrixForwardSimulator(),
@@ -283,12 +324,30 @@ class ForwardSimConsistencyTester(TestCase):
             MatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
-            sims.append(TorchForwardSimulator())
-        fsth = ForwardSimTestHelper(self.model_noisy, sims, circuits)
-        return fsth
-        
+            import torch
+            sims.append(TorchForwardSimulator(dtype=torch.float64))
+        return sims
+
+    @staticmethod
+    def standard_lsgst_circuits(model, max_lengths=(4,)):
+        prep_fiducials = smq1Q_XYI.prep_fiducials()
+        meas_fiducials = smq1Q_XYI.meas_fiducials()
+        germs = smq1Q_XYI.germs()
+        return create_lsgst_circuit_lists(model, prep_fiducials, meas_fiducials, germs, list(max_lengths))[0]
+
+    def build_helper(self):
+        """Build the ForwardSimTestHelper this Tester checks. Override in subclasses to swap in a
+        different model and/or circuit list; the default exercises smq1Q_XYI's target model."""
+        model_ideal = smq1Q_XYI.target_model()
+        if TorchForwardSimulator.ENABLED:
+            # TorchForwardSimulator can only work with TP modelmembers.
+            model_ideal.convert_members_inplace(to_type='full TP')
+        model_noisy = model_ideal.depolarize(op_noise=0.05, spam_noise=0.025)
+        circuits = self.standard_lsgst_circuits(model_noisy)
+        return ForwardSimTestHelper(model_noisy, self.standard_sims(), circuits)
+
     def test_consistent_probs(self):
-        fsth = self.setUp()
+        fsth = self.build_helper()
         pcl = fsth.probs_colinearities()
         if np.any(pcl < 1 - self.PROBS_TOL):
             locs = np.where(pcl < 1 - self.PROBS_TOL)[0]
@@ -300,16 +359,13 @@ class ForwardSimConsistencyTester(TestCase):
             but ...
             """
             for idx in locs:
-                temp = f"""
+                msg += f"""
                 The colinearity of the probabilities from {fsth.sims[idx]} and the reference was {pcl[idx]}.
                 """
-                msg += temp
-            msg += '\n'
             self.assertTrue(False, msg)
-        return
-    
+
     def test_consistent_jacs(self):
-        fsth = self.setUp()
+        fsth = self.build_helper()
         jcl = fsth.jac_colinearities()
         if np.any(jcl < 1 - self.JACS_TOL):
             locs = np.where(jcl < 1 - self.JACS_TOL)[0]
@@ -321,13 +377,228 @@ class ForwardSimConsistencyTester(TestCase):
             colinearity of at least {1 - self.JACS_TOL}, but ...
             """
             for idx in locs:
-                temp = f"""
+                msg += f"""
                 The colinearity of the Jacobian from {fsth.sims[idx]} and the reference was {jcl[idx]}.
                 """
-                msg += temp
-            msg += '\n'
             self.assertTrue(False, msg)
-        return
+
+
+class LindbladForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """End-to-end check that TorchForwardSimulator runs on a full CPTPLND (Lindblad) model and agrees
+    with the other forward simulators (GitHub issue 607).  Every model member is a Lindblad-composed
+    object: the prep is a ComposedState, the POVM a ComposedPOVM, and each gate a
+    ComposedOp([static ideal, ExpErrorgenOp]) -- exercising the whole Torchable op + SPAM chain."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        # Lindblad SPAM *and* operations: ComposedState prep, ComposedPOVM, ComposedOp gates.
+        model = smq1Q_XYI.target_model()
+        model.set_all_parameterizations('CPTPLND')
+        # perturb off the ideal so the error generators are nonzero
+        rng = np.random.default_rng(7)
+        model.from_vector(model.to_vector() + 0.03 * rng.standard_normal(model.num_params))
+        circuits = self.standard_lsgst_circuits(model)
+        return ForwardSimTestHelper(model, self.standard_sims(), circuits)
+
+
+class GLNDULindbladForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """Like LindbladForwardSimConsistencyTester, but with the GLNDU (unconstrained-'other'-block)
+    Lindblad parameterization, to exercise _EEGVectorElements.torch_stateless_data (GitHub issue 607)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = smq1Q_XYI.target_model()
+        model.set_all_parameterizations('GLNDU')
+        rng = np.random.default_rng(70)
+        model.from_vector(model.to_vector() + 0.03 * rng.standard_normal(model.num_params))
+        circuits = self.standard_lsgst_circuits(model)
+        return ForwardSimTestHelper(model, self.standard_sims(), circuits)
+
+
+class EmbeddedOpForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """End-to-end check that TorchForwardSimulator agrees with the other forward simulators on a
+    2-qubit model where two of the single-qubit gates are EmbeddedOp-wrapped, noisy FullTPOps
+    (GitHub issue 607)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = smq2Q_XYICNOT.target_model('full TP')
+        ss = model.state_space
+        rng = np.random.default_rng(21)
+
+        def noisy_1q_tp(scale=0.05):
+            mx = np.eye(4)
+            mx[1:, :] += scale * rng.standard_normal((3, 4))
+            return FullTPOp(mx, basis='pp')
+
+        model.operations[L('Gxpi2', 0)] = EmbeddedOp(ss, [0], noisy_1q_tp())
+        model.operations[L('Gypi2', 1)] = EmbeddedOp(ss, [1], noisy_1q_tp())
+
+        circuits = [
+            Circuit([L('Gxpi2', 0)], line_labels=(0, 1)),
+            Circuit([L('Gypi2', 1)], line_labels=(0, 1)),
+            Circuit([L('Gxpi2', 0), L('Gypi2', 1)], line_labels=(0, 1)),
+            Circuit([L('Gxpi2', 0), L('Gcnot', (0, 1)), L('Gypi2', 1)], line_labels=(0, 1)),
+            Circuit([L('Gypi2', 1), L('Gxpi2', 0), L('Gxpi2', 0)], line_labels=(0, 1)),
+        ]
+        return ForwardSimTestHelper(model, self.standard_sims(), circuits)
+
+
+class ComputationalPOVMForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """End-to-end check that TorchForwardSimulator agrees with the other forward simulators when
+    the model's POVM is a 0-parameter ComputationalBasisPOVM, exercising the 0-param code path in
+    StatelessModelCircuitStore.get_free_params (GitHub issue 607)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = smq1Q_XYI.target_model('full TP')
+        model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+        model.povms['Mdefault'] = ComputationalBasisPOVM(1, model.evotype)
+        circuits = self.standard_lsgst_circuits(model)
+        return ForwardSimTestHelper(model, self.standard_sims(), circuits)
+
+
+def _iz_instrument_model(instrument_cls, seed):
+    """A noisy 'full TP' model with a weak-Z-measurement instrument 'Iz' installed, whose two
+    members are built from the ideal POVM's effect projectors."""
+    model = smq1Q_XYI.target_model('full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+    _, _, Gmz_plus, Gmz_minus = z_measurement_projectors(model)
+    model.instruments[L('Iz', 0)] = instrument_cls({'plus': Gmz_plus, 'minus': Gmz_minus})
+    rng = np.random.default_rng(seed)
+    model.from_vector(model.to_vector() + 0.01 * rng.standard_normal(model.num_params))
+    return model
+
+
+def _iz_instrument_circuits():
+    """Circuits mixing ordinary gates and the 'Iz' instrument, including one with two Iz layers
+    (so the layout expands to the *product* of both layers' member outcomes)."""
+    return [
+        Circuit([L('Gxpi2', 0), L('Iz', 0)], line_labels=(0,)),
+        Circuit([L('Iz', 0), L('Gxpi2', 0), L('Iz', 0)], line_labels=(0,)),
+        Circuit([L('Gypi2', 0), L('Iz', 0), L('Gxpi2', 0)], line_labels=(0,)),
+    ]
+
+
+class InstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """End-to-end check that TorchForwardSimulator agrees with the other forward simulators on
+    circuits containing a noisy Instrument layer, including a circuit with two Iz layers
+    (GitHub issue 607)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = _iz_instrument_model(Instrument, seed=51)
+        return ForwardSimTestHelper(model, self.standard_sims(), _iz_instrument_circuits())
+
+
+class TPInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """Like InstrumentForwardSimConsistencyTester, but the 'Iz' instrument is a TPInstrument, so
+    its members are TPInstrumentOp objects (GitHub issue 607)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = _iz_instrument_model(TPInstrument, seed=52)
+        return ForwardSimTestHelper(model, self.standard_sims(), _iz_instrument_circuits())
+
+
+class CPTRInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
+    """End-to-end check of the full RootConjOperator / ComposedPOVMEffect chain: an Instrument
+    built via Instrument.from_effects on a CPTPLND-parameterized model (GitHub issue 607). The
+    effects are interior, where RootConjOperator's derivative is exact, so the Jacobian tolerance
+    matches the other Lindblad Testers (whose floor is the Map simulators' finite differences)."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def build_helper(self):
+        model = smq1Q_XYI.target_model()
+        model.set_all_parameterizations('CPTPLND')
+        rng = np.random.default_rng(44)
+        model.from_vector(model.to_vector() + 0.02 * rng.standard_normal(model.num_params))
+
+        # Effects spectrally interior to (0, 1), so RootConjOperator's NumPy and Torch derivatives
+        # are exact and no NumericalDomainWarning fires.
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        E1 = np.diag([0.3, 0.7]).astype(complex)
+        instr = Instrument.from_effects({'p0': E0, 'p1': E1}, model.basis)
+        model.instruments[L('Iz', 0)] = instr
+        iz = model.instruments[L('Iz', 0)]
+        rng2 = np.random.default_rng(45)
+        iz.from_vector(iz.to_vector() + 0.01 * rng2.standard_normal(iz.num_params))
+
+        return ForwardSimTestHelper(model, self.standard_sims(), _iz_instrument_circuits())
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_instrument_expansion_plumbing():
+    """Directly exercise StatelessModelCircuitStore's instrument-expansion bookkeeping: its
+    torch_bases dict must expose each instrument member under its expanded op label (e.g.
+    Iz_plus, Iz_minus), and the resulting circuit outcome probabilities must match
+    model.sim.bulk_probs (GitHub issue 607)."""
+    import torch
+    from pygsti.forwardsims.torchfwdsim import StatelessModelCircuitStore
+
+    model = _iz_instrument_model(Instrument, seed=53)
+    circuits = _iz_instrument_circuits()
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits)
+    smcs = StatelessModelCircuitStore(model, layout, torch.float64, 'cpu')
+    free_params = smcs.get_free_params(model, torch.float64, 'cpu')
+    torch_bases = smcs.get_torch_bases(free_params)
+
+    assert L('Iz_plus', 0) in torch_bases
+    assert L('Iz_minus', 0) in torch_bases
+
+    probs = smcs.circuit_probs_from_torch_bases(torch_bases).detach().numpy()
+    ref = model.sim.bulk_probs(circuits)
+    ref_probs = np.concatenate([np.array(list(p.values())) for p in ref.values()])
+    assert np.allclose(probs, ref_probs, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_dataset_ordered_layout():
+    """A dataset-built layout orders each circuit's outcomes by the dataset's observed outcomes,
+    which can differ from povm.keys() order or omit unobserved outcomes entirely.
+    TorchForwardSimulator must emit each probability in the layout's slot for that outcome
+    (StatelessModelCircuitStore selects POVM rows by the expanded circuit's effect labels)."""
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+
+    c1 = Circuit([L('Gxpi2', 0), L('Gxpi2', 0)], line_labels=(0,))  # ~bit flip: p('1') >> p('0')
+    c2 = Circuit([L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,))
+    ds = DataSet(outcome_labels=[('0',), ('1',)])
+    # add_count_dict sorts a plain dict's keys; an OrderedDict preserves insertion order, giving
+    # a layout that orders c1's outcomes '1' before '0' -- the reverse of povm.keys() order.
+    ds.add_count_dict(c1, OrderedDict([(('1',), 95), (('0',), 5)]))
+    ds.add_count_dict(c2, {('1',): 50})  # only '1' observed: a strict subset of the POVM's effects
+    ds.done_adding_data()
+
+    ref = {c: model.probabilities(c) for c in (c1, c2)}  # computed with the default (matrix) sim
+
+    import torch
+    model.sim = TorchForwardSimulator(dtype=torch.float64)  # the 1e-12 tolerance below needs it
+    layout = model.sim.create_layout([c1, c2], dataset=ds)
+    probs = np.empty(layout.num_elements, 'd')
+    model.sim.bulk_fill_probs(probs, layout)
+
+    for c in (c1, c2):
+        inds, outcomes = layout.indices_and_outcomes(c)
+        inds = np.arange(layout.num_elements)[inds]
+        for idx, outcome in zip(inds, outcomes):
+            assert abs(probs[idx] - ref[c][outcome]) < 1e-12
 
 
 class ForwardSimIntegrationTester(BaseProtocolData):
@@ -359,3 +630,292 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_matrix_fwdsim(self):
         self._run(MatrixForwardSimulator)
 
+
+
+# --------------------------------------------------------------------------------------------
+# TorchForwardSimulator's batched evaluation plan (pygsti/forwardsims/torchfwdsim_plan.py)
+# --------------------------------------------------------------------------------------------
+
+def _dprobs_in_canonical_order(model, circuits, sim):
+    """`bulk_fill_dprobs` with rows reordered to (circuits in list order, outcomes sorted by name).
+
+    Different forward simulators build different Layout subclasses, which order elements
+    differently -- MatrixCOPALayout reorders circuits to make its evaluation tree efficient. Two
+    filled arrays are only comparable once both are put in a common order.
+    """
+    m = model.copy()
+    m.sim = sim
+    layout = m.sim.create_layout(circuits, array_types=('ep',))
+    J = np.empty((layout.num_elements, m.num_params))
+    P = np.empty(layout.num_elements)
+    m.sim.bulk_fill_dprobs(J, layout, P)
+
+    all_idx = np.arange(layout.num_elements)
+    perm = []
+    for c in circuits:
+        inds, outcomes = layout.indices_and_outcomes(c)
+        inds = all_idx[inds]
+        perm.extend(inds[np.argsort([str(o) for o in outcomes], kind='stable')])
+    perm = np.asarray(perm)
+    return P[perm], J[perm]
+
+
+def _two_prep_model_and_circuits():
+    """A noisy 1-qubit model with *two* state preps, and circuits that use both."""
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.preps['rho1'] = model.preps['rho0'].copy()
+    v = model.preps['rho1'].to_vector()
+    v[1:] = -0.7 * v[1:]
+    model.preps['rho1'].from_vector(v)
+    circuits = [
+        Circuit([L('rho0'), L('Gxpi2', 0)], line_labels=(0,)),
+        Circuit([L('rho1'), L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,)),
+        Circuit([L('rho1')], line_labels=(0,)),                    # no operations at all
+        Circuit([L('rho0'), L('Gypi2', 0)], line_labels=(0,)),
+    ]
+    return model, circuits
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_multiple_state_preps():
+    """A model with more than one state prep needs more than one root in the plan's prefix DAG.
+    Those roots have to be created before any interior node, or the renumbering that puts nodes in
+    (depth, gate) order no longer leaves the roots at the front."""
+    import torch
+    model, circuits = _two_prep_model_and_circuits()
+
+    ref_P, ref_J = _dprobs_in_canonical_order(model, circuits, MatrixForwardSimulator())
+    P, J = _dprobs_in_canonical_order(model, circuits,
+                                      TorchForwardSimulator(dtype=torch.float64))
+    assert np.allclose(P, ref_P, atol=1e-12)
+    assert np.allclose(J, ref_J, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_plan_batches_gate_applications():
+    """The plan must evaluate a circuit list with far fewer matrix products than there are gate
+    applications -- that batching is the whole point of it -- while still reproducing a plain
+    per-circuit, per-layer evaluation exactly."""
+    import torch
+    from pygsti.forwardsims.torchfwdsim_plan import TorchEvalPlan
+
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1, 2, 4, 8))
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits)
+    store = model.sim._circuit_store(layout)
+    plan = store.eval_plan
+    stats = plan.stats()
+
+    batched = stats['forward_matmuls'] + stats['backward_matmuls']
+    assert stats['gate_applications'] > 5 * batched, \
+        f"expected heavy batching, got {stats['gate_applications']} applications in {batched} matmuls"
+    assert stats['prefix_nodes'] < stats['gate_applications'], "no prefix sharing was found"
+
+    # ... and the batched result equals the naive one.
+    free_params = store.get_free_params(model, torch.float64, store.device)
+    torch_bases = store.get_torch_bases(free_params)
+    batched_probs = plan.probs(torch_bases, store.model_dim).cpu().numpy()
+
+    naive = []
+    for c in store.circuits:
+        superket = torch_bases[c.prep_label]
+        for op_label in c.op_labels:
+            superket = torch_bases[op_label] @ superket
+        povm_mat = torch_bases[c.povm_label]
+        if c.effect_row_indices is not None:
+            povm_mat = povm_mat[c.effect_row_indices]
+        naive.append(povm_mat @ superket)
+    naive = torch.concat(naive).cpu().numpy()
+
+    assert np.allclose(batched_probs, naive, atol=1e-13)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_circuit_store_is_reused_across_calls():
+    """Building the StatelessModelCircuitStore (and its evaluation plan) walks every circuit in
+    Python. GST calls the simulator once or twice per optimizer iteration against a fixed layout,
+    so that work must be done once, not once per call."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1, 2))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+    first = model.sim._circuit_store(layout)
+    plan = first.eval_plan
+    model.sim.bulk_fill_dprobs(J, layout, None)
+    assert model.sim._circuit_store(layout) is first
+    assert first.eval_plan is plan
+
+    # A different layout must not silently reuse the old plan.
+    other_layout = model.sim.create_layout(circuits[:3], array_types=('ep',))
+    assert model.sim._circuit_store(other_layout) is not first
+
+    # The Jacobian must still track parameter changes through the reused store.
+    J2 = np.empty_like(J)
+    model.from_vector(model.to_vector() + 0.01)
+    model.sim.bulk_fill_dprobs(J2, layout, None)
+    assert not np.allclose(J, J2)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_circuit_store_is_invalidated_by_reparameterization():
+    """The store bakes each modelmember's *type* and stateless data, so identity of the model
+    object is not enough to key the cache on: `convert_members_inplace` swaps member objects under
+    the same labels on the same model, and reusing the store then computes against stale types."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1,))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    first = model.sim._circuit_store(layout)
+    assert model.sim._circuit_store(layout) is first
+
+    # Same model object, same layout object, different member types underneath.
+    model.convert_members_inplace(to_type='CPTPLND')
+    assert model.sim._circuit_store(layout) is not first, \
+        "reparameterizing in place must invalidate the cached store"
+
+    # ...and the answer it now produces must match a simulator that never had a stale cache.
+    # Both sides use the same simulator class and their own layout, so element order agrees.
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+
+    fresh = model.copy()
+    fresh.sim = TorchForwardSimulator(dtype=torch.float64)
+    fresh_layout = fresh.sim.create_layout(circuits, array_types=('ep',))
+    Jfresh = np.empty((fresh_layout.num_elements, fresh.num_params))
+    fresh.sim.bulk_fill_dprobs(Jfresh, fresh_layout, None)
+    assert np.allclose(J, Jfresh, atol=1e-12)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+@pytest.mark.parametrize("ptype1,ptype2", [
+    ('CPTPLND', 'GLND'),
+    ('H', 'S'),
+    ('H+S', 'H+s'),
+])
+def test_torch_circuit_store_invalidated_by_type_preserving_reparameterization(ptype1, ptype2):
+    """A same-family Lindblad reparameterization performed while the model still sits at its
+    unperturbed target point rebuilds every member as an identically-shaped `ComposedOp` on both
+    sides, preserving type and parameter count even though the internal structure (which
+    Lindblad coefficient blocks are active) has changed. The cached circuit store must be
+    invalidated by this regardless, and a store rebuilt after conversion must still agree with
+    one built completely fresh."""
+    import torch
+    model = smq1Q_XYI.target_model(ptype1)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1,))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    first = model.sim._circuit_store(layout)
+    assert model.sim._circuit_store(layout) is first
+
+    # Reparameterize while still at the unperturbed target point: this is exactly the collision
+    # `_model_signature` can't see, since type(obj) and obj.num_params match on both sides.
+    model.convert_members_inplace(to_type=ptype2, categories_to_convert='ops', flatten_structure=True)
+    assert model.sim._circuit_store(layout) is not first, \
+        "reparameterizing to a type/num_params-preserving parameterization must still invalidate the cached store"
+
+    # Once correctly invalidated, the (now-fresh) store must still agree with a fully independent
+    # computation built from scratch at the same perturbed parameter vector.
+    np.random.seed(1234)
+    model.from_vector(model.to_vector() + 0.01 * np.random.randn(model.num_params))
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+
+    model2 = model.copy()
+    model2.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout2 = model2.sim.create_layout(circuits, array_types=('ep',))
+    J2 = np.empty((layout2.num_elements, model2.num_params))
+    model2.sim.bulk_fill_dprobs(J2, layout2, None)
+    assert np.allclose(J, J2, atol=1e-12)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+@pytest.mark.parametrize("instrument_cls,seed", [(Instrument, 61), (TPInstrument, 62)])
+def test_torch_plan_instrument_jacobian(instrument_cls, seed):
+    """An instrument is one parameterized member whose torch_base stacks several expanded ops
+    (Iz_plus, Iz_minus, ...), so those ops share one column block of the Jacobian and the plan has
+    to accumulate their rank-one contributions into that block before writing it. Check that the
+    plan really routes more than one op into one member's block, and that the resulting Jacobian
+    matches MatrixForwardSimulator's element-wise (the consistency Testers above only check
+    colinearity across simulators)."""
+    import torch
+    model = _iz_instrument_model(instrument_cls, seed=seed)
+    circuits = _iz_instrument_circuits()
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    store = model.sim._circuit_store(layout)
+    plan = store.eval_plan
+    iz = L('Iz', 0)
+    assert len(plan.instrument_expansions[iz]) == 2
+    ops_in_plan = {op for g in plan.groups for op in g.positions}
+    assert set(plan.instrument_expansions[iz]) <= ops_in_plan, \
+        "both instrument members must appear as gate positions in the plan"
+
+    ref_P, ref_J = _dprobs_in_canonical_order(model, circuits, MatrixForwardSimulator())
+    P, J = _dprobs_in_canonical_order(model, circuits, TorchForwardSimulator(dtype=torch.float64))
+    assert np.allclose(P, ref_P, atol=1e-12)
+    assert np.allclose(J, ref_J, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_plan_scattered_output_rows_jacobian():
+    """When a dataset-built layout observes a circuit's outcomes in a different order than
+    povm.keys(), or only a subset of them, the plan's dense (circuit, effect) rows no longer line
+    up with the layout's element indices and every write goes through the gather-and-scatter
+    fallback rather than the contiguous slice. test_torch_dataset_ordered_layout covers that
+    path for probabilities; this covers it for the Jacobian (and the probabilities produced
+    alongside it)."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+
+    c1 = Circuit([L('Gxpi2', 0), L('Gxpi2', 0)], line_labels=(0,))
+    c2 = Circuit([L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,))
+    c3 = Circuit([L('Gypi2', 0)], line_labels=(0,))
+    ds = DataSet(outcome_labels=[('0',), ('1',)])
+    ds.add_count_dict(c1, OrderedDict([(('1',), 95), (('0',), 5)]))   # reversed order
+    ds.add_count_dict(c2, {('1',): 50})                                # strict subset
+    ds.add_count_dict(c3, OrderedDict([(('0',), 50), (('1',), 50)]))   # povm.keys() order
+    ds.done_adding_data()
+    circuits = [c1, c2, c3]
+
+    ref = model.copy()
+    ref.sim = MatrixForwardSimulator()
+    ref_J = ref.sim.bulk_dprobs(circuits)   # circuit -> {outcome: row of the Jacobian}
+    ref_P = ref.sim.bulk_probs(circuits)
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits, dataset=ds, array_types=('ep',))
+    plan = model.sim._circuit_store(layout).eval_plan
+    assert not any(g.contiguous_out for g in plan.groups), \
+        "this layout is meant to exercise the scattered-write fallback"
+
+    J = np.full((layout.num_elements, model.num_params), np.nan)
+    P = np.full(layout.num_elements, np.nan)
+    model.sim.bulk_fill_dprobs(J, layout, P)
+    assert layout.num_elements == 5 and not np.isnan(J).any() and not np.isnan(P).any()
+
+    all_idx = np.arange(layout.num_elements)
+    for c in circuits:
+        inds, outcomes = layout.indices_and_outcomes(c)
+        for idx, outcome in zip(all_idx[inds], outcomes):
+            assert abs(P[idx] - ref_P[c][outcome]) < 1e-12
+            assert np.allclose(J[idx], ref_J[c][outcome], atol=1e-9)

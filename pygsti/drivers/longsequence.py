@@ -14,7 +14,6 @@ import os as _os
 import pickle as _pickle
 import warnings as _warnings
 
-from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
@@ -25,7 +24,8 @@ from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
 from pygsti.forwardsims import ForwardSimulator
-from typing import Optional
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from typing import Optional, Any
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -201,125 +201,14 @@ def run_model_test(model_filename_or_object,
     return results
 
 
-def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
-                   prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                   gauge_opt_params=None, advanced_options=None, comm=None,
-                   mem_limit=None, output_pkl=None, verbosity=2):
-    """
-    Perform Linear Gate Set Tomography (LGST).
-
-    This function differs from the lower level :func:`run_lgst` function
-    in that it may perform a post-LGST gauge optimization and this routine
-    returns a :class:`Results` object containing the LGST estimate.
-
-    Overall, this is a high-level driver routine which can be used similarly
-    to :func:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
-    routine used when building your own algorithms.
-
-    Parameters
-    ----------
-    data_filename_or_set : DataSet or string
-        The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (assumed to be a pickled `DataSet`
-        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
-
-    target_model_filename_or_object : Model or string
-        The target model specifying the gates and SPAM elements that LGST is to be run on,
-        given either directly or by the filename of a model file (text format).
-
-    prep_fiducial_list_or_filename : (list of Circuits) or string
-        The state preparation fiducial circuits, specified either directly
-        or by the filename of a circuit list file (text format).
-
-    meas_fiducial_list_or_filename : (list of Circuits) or string or None
-        The measurement fiducial circuits, specified either directly or by
-        the filename of a circuit list file (text format).  If ``None``,
-        then use the same strings as specified by prep_fiducial_list_or_filename.
-
-    gauge_opt_params : dict, optional
-        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
-        how the final gauge optimization should be performed.  The keys and
-        values of this dictionary may correspond to any of the arguments
-        of :func:`gaugeopt_to_target` *except* for the first `model`
-        argument, which is specified internally.  The `target_model` argument,
-        *can* be set, but is specified internally when it isn't.  If `None`,
-        then the dictionary `{'item_weights': {'gates':1.0, 'spam':0.001}}`
-        is used.  If `False`, then then *no* gauge optimization is performed.
-
-    advanced_options : dict, optional
-        Specifies advanced options most of which deal with numerical details of
-        the objective function or expert-level functionality.  See
-        :func:`run_long_sequence_gst`.
-
-    comm : mpi4py.MPI.Comm, optional
-        When not ``None``, an MPI communicator for distributing the computation
-        across multiple processors.  In this LGST case, this is just the gauge
-        optimization.
-
-    mem_limit : int or None, optional
-        A rough memory limit in bytes which restricts the amount of memory
-        used (per core when run on multi-CPUs).
-
-    output_pkl : str or file, optional
-        If not None, a file(name) to `pickle.dump` the returned `Results` object
-        to (only the rank 0 process performs the dump when `comm` is not None).
-
-    verbosity : int, optional
-        The 'verbosity' option is an integer specifying the level of
-        detail printed to stdout during the calculation.
-
-    Returns
-    -------
-    Results
-    """
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-    advanced_options = _GSTAdvancedOptions(advanced_options or {})
-    ds = _load_dataset(data_filename_or_set, comm, printer)
-    target_model = _load_model(target_model_filename_or_object)
-
-    if isinstance(target_model, _ProcessorSpec):  # for backward compatibility
-        _warnings.warn(("You passed a processor spec to 'run_linear_gst' when you really should have passed a"
-                        " model.  Trying to create an explicit model from the pspec w/Pauli prod basis and use it."))
-        target_model = _create_explicit_model(target_model, None, ideal_gate_type='full', basis='pp')
-
-    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.primitive_op_labels])  # just the single gates
-    max_lengths = [1]  # we only need maxLength == 1 when doing LGST
-
-    exp_design = _proto.StandardGSTDesign(target_model.create_processor_spec(),
-                                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                                          germs, max_lengths,
-                                          sequenceRules=advanced_options.get('string_manipulation_rules', None),
-                                          op_label_aliases=advanced_options.get('op_label_aliases', None),
-                                          dscheck=ds, actionIfMissing='raise', verbosity=printer)
-
-    data = _proto.ProtocolData(exp_design, ds)
-
-    if gauge_opt_params is None:
-        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-    gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-
-    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
-                                           _get_badfit_options(advanced_options), printer,
-                                           name=advanced_options.get('estimate_label', None))
-    proto.profile = advanced_options.get('profile', 1)
-    proto.record_output = advanced_options.get('record_output', 1)
-    proto.oplabels = advanced_options.get('op_labels', 'default')
-    proto.oplabel_aliases = advanced_options.get('op_label_aliases', None)
-    proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
-
-    results = proto.run(data, mem_limit, comm)
-    _output_to_pickle(results, output_pkl, comm)
-    return results
-
-
 def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                          advanced_options=None, comm=None, mem_limit=None,
+                          advanced_options: Optional[dict[str,Any]]=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                           disable_checkpointing=False,
                           simulator: Optional[ForwardSimulator.Castable]=None,
-                          gauge_opt_suite_name: str = 'stdgaugeopt'):
+                          gauge_opt_suite_name: Optional[str] = 'stdgaugeopt'):
     """
     Perform long-sequence GST (LSGST).
 
@@ -386,7 +275,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
         and values include:
-        - objective = {'chi2', 'logl'}
+
+        HISTORICAL NOTE: "XX" indicates that we've at least _intended_ for the
+        keyword argument to be removed.
+
+        - objective = typically, a string in {'chi2', 'logl', 'tvd'}. But this can
+          be anything accepted by the `ObjectiveFunctionBuilder.create_from` function.
         - op_labels = list of strings
         - circuit_weights = dict or None
         - starting_point = "LGST-if-possible" (default), "LGST", or "target"
@@ -396,25 +290,22 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - cptpPenaltyFactor = float (default = 0)
         - tolerance = float or dict w/'relx','relf','f','jac','maxdx' keys
         - max_iterations = int
-        - finitediff_iterations = int
+        - finitediff_iterations = int (deprecated and ignored)
         - min_prob_clip = float
         - min_prob_clip_for_weighting = float (default == 1e-4)
         - prob_clip_interval = tuple (default == (-1e6,1e6)
         - radius = float (default == 1e-4)
         - use_freq_weighted_chi2 = True / False (default)
-        - XX nested_circuit_lists = True (default) / False
-        - XX include_lgst = True / False (default is True)
+        - XX nested_circuit_lists = True (default) / False  -- passed to StandardGSTDesign; seems to be functional
+        - XX include_lgst = True / False (default is True)  -- passed to StandardGSTDesign; seems to be functional
         - distribute_method = "default", "circuits" or "deriv"
         - profile = int (default == 1)
         - check = True / False (default)
-        - XX op_label_aliases = dict (default = None)
+        - XX op_label_aliases = dict (default = None) -- passed to StandardGSTDesign and used to set a GateSetTomography protocol object's oplabel_aliases field.
         - always_perform_mle = bool (default = False)
         - only_perform_mle = bool (default = False)
-        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers" or "length as exponent"
         - appendTo = Results (default = None)
-        - estimateLabel = str (default = "default")
-        - XX missingDataAction = {'drop','raise'} (default = 'drop')
-        - XX string_manipulation_rules = list of (find,replace) tuples
+        - XX string_manipulation_rules = list of (find,replace) tuples -- passed to _proto.StandardGSTDesign construct as its "circuit_rules" argument.
         - germ_length_limits = dict of form {germ: maxlength}
         - record_output = bool (default = True)
         - timeDependent = bool (default = False)
@@ -489,7 +380,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
     data = _proto.ProtocolData(exp_design, ds)
 
-    assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
+    if gauge_opt_suite_name and gauge_opt_params:
+        msg = "`gauge_opt_params` and `gauge_opt_suite_name` cannot both be truthy.\n" \
+        "This error happens when `gauge_opt_params` is overriden from its default value (None),\n" \
+        "but `gauge_opt_suite_name` is left at its default value ('stdgaugeopt'). The fix in that\n" \
+        "situation is to override `gauge_opt_suite_name=None`."
+        raise ValueError(msg)
 
     if gauge_opt_suite_name is not None:
         gopt_suite = _proto.GSTGaugeOptSuite(
@@ -640,7 +536,12 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
 
-    assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
+    if gauge_opt_suite_name and gauge_opt_params:
+        msg = "`gauge_opt_params` and `gauge_opt_suite_name` cannot both be truthy.\n" \
+        "This error happens when `gauge_opt_params` is overriden from its default value (None),\n" \
+        "but `gauge_opt_suite_name` is left at its default value ('stdgaugeopt'). The fix in that\n" \
+        "situation is to override `gauge_opt_suite_name=None`."
+        raise ValueError(msg)
 
     if gauge_opt_suite_name is not None:
         gopt_suite = _proto.GSTGaugeOptSuite(
@@ -742,7 +643,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
         gauge-optimization parameter dictionaries, as specified by the
         `gauge_opt_params` argument of :func:`run_long_sequence_gst`.  The key
         names of `gaugeopt_suite` then label the gauge optimizations within
-        the resuling `Estimate` objects.  The built-in suites are:
+        the resulting `Estimate` objects.  The built-in suites are:
 
           - "single" : performs only a single "best guess" gauge optimization.
           - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
@@ -955,11 +856,12 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, model_being_optimized):
-    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
-    default_fditer = 1 if isinstance(model_being_optimized.sim, _MatrixFSim) else 0
+    if 'finitediff_iterations' in advanced_options:
+        _warnings.warn("The 'finitediff_iterations' advanced option is deprecated and ignored: when the "
+                       "starting point's Jacobian has zero columns, the optimizer's first iteration now "
+                       "evaluates the Jacobian at a slightly shifted point instead.", _pyGSTiDeprecationWarning)
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100),
-                 'tol': advanced_options.get('tolerance', 1e-6),
-                 'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
+                 'tol': advanced_options.get('tolerance', 1e-6)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
     return optimizer

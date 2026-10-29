@@ -37,7 +37,7 @@ class QubitGraph(_NicelySerializable):
         connectivity of the graph.  If an integer array, then 0 indicates
         no edge and positive integers indicate present edges in the
         "direction" given by the positive integer.  For example `1` may
-        corresond to "left" and `2` to "right".  Names must be associated
+        correspond to "left" and `2` to "right".  Names must be associated
         with these directions using `direction_names`.  If a boolean array,
         if there's an edge from qubit `i` to `j` then
         `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -157,7 +157,7 @@ class QubitGraph(_NicelySerializable):
             connectivity of the graph.  If an integer array, then 0 indicates
             no edge and positive integers indicate present edges in the
             "direction" given by the positive integer.  For example `1` may
-            corresond to "left" and `2` to "right".  Names must be associated
+            correspond to "left" and `2` to "right".  Names must be associated
             with these directions using `direction_names`.  If a boolean array,
             if there's an edge from qubit `i` to `j` then
             `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -304,10 +304,18 @@ class QubitGraph(_NicelySerializable):
                           directed=self.directed, direction_names=self.directions)
 
     def _refresh_dists_and_predecessors(self):
+        # `self._dirty` must be set by *every* write to `self._connectivity`, which is why all
+        # such writes live in this class (__init__, __setitem__, add_edge, remove_edge). Nothing
+        # outside it touches `_connectivity`, and copy()/subgraph()/deserialization all build a
+        # new graph through __init__, so they start dirty too.
         if self._dirty:
+            # `unweighted=True` is essential: when direction names are in use, `_connectivity`
+            # holds `direction_index + 1` (0 meaning "no edge"), and a weighted Floyd-Warshall
+            # would read those indices as edge lengths. Every edge has length 1.
             self._distance_matrix, self._predecessors = _fw(
                 self._connectivity, return_predecessors=True,
-                directed=self.directed, unweighted=False)  # TIM - why use unweighted=False?
+                directed=self.directed, unweighted=True)
+            self._dirty = False
 
     def __getitem__(self, key):
         node1, node2 = key
@@ -333,7 +341,7 @@ class QubitGraph(_NicelySerializable):
         """
         All the node labels of this graph.
 
-        These correpond to integer indices where appropriate,
+        These correspond to integer indices where appropriate,
         e.g. for :meth:`shortest_path_distance_matrix`.
 
         Returns
@@ -536,7 +544,9 @@ class QubitGraph(_NicelySerializable):
         """
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         self._refresh_dists_and_predecessors()
-        return self._predecessors[i, j] >= 0
+        # Not `self._predecessors[i, j] >= 0`: Floyd-Warshall puts a sentinel (-9999) on the
+        # diagonal of the predecessor matrix, which would report a node as not connected to itself.
+        return bool(_np.isfinite(self._distance_matrix[i, j]))
 
     def has_edge(self, edge):
         """
@@ -592,8 +602,8 @@ class QubitGraph(_NicelySerializable):
                     add_to_glob(glob, j)
 
         if not self.directed:
-            # then just check that we can get from node-index 0 to all the others:
-            glob = set(); add_to_glob(glob, 0)
+            # then just check that we can get from one member of the subset to all the others:
+            glob = set(); add_to_glob(glob, node_indices[0])
             return node_indices_set.issubset(glob)
         else:
             # we need to check that, starting at *any* initial node, we can
@@ -889,7 +899,12 @@ class QubitGraph(_NicelySerializable):
                 else:
                     edges.append(edge)
 
-        return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
+        # Pass the parent's direction names through, so that the child's direction indices (and
+        # hence the integers in its `_connectivity`) agree with the parent's even when some
+        # directions have no surviving edge.
+        direction_names = self.directions if (include_directions and self.directions is not None) else None
+        return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed,
+                          direction_names=direction_names)
 
     def resolve_relative_nodelabel(self, relative_nodelabel, target_labels):
         """

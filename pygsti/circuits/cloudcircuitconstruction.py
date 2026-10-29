@@ -178,7 +178,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     # would be a vector in the space of polynomials).  We currently take
     # a cheap/HACK way out and evaluate the derivative-polynomial at a
     # random dummy value which should yield linearly dependent vectors
-    # in R^n whenever the polynomials are linearly indepdendent - then
+    # in R^n whenever the polynomials are linearly independent - then
     # we can use the usual scipy/numpy routines for computing a matrix
     # rank, etc.
 
@@ -489,7 +489,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     true_idle_pairs : dict
         A dictionary whose keys are integer max-weight values and whose values
         are lists of fiducial pairs, each in "gatename-fidpair-list" format,
-        whcih give the fiducial pairs needed to amplify all the parameters of
+        which give the fiducial pairs needed to amplify all the parameters of
         a non-synthetic idle gate on max-weight qubits.
 
     idle_str : Circuit
@@ -980,7 +980,7 @@ def _tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weig
     true-idle errors on `max_idle_weight` qubits (so with weight up to `max_idle_weight`
     onto `nQubits` qubits.
 
-    This function essentaily converts fiducial pairs that amplify all
+    This function essentially converts fiducial pairs that amplify all
     up-to-weight-k errors on k qubits to fiducial pairs that amplify all
     up-to-weight-k errors on `nQubits` qubits (where `k = max_idle_weight`).
 
@@ -1153,7 +1153,7 @@ def _tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, ma
             """ Add op_labels to g_str using g_str_qubits to keep track of available qubits """
             for lbl in op_labels:
                 iLayer = 0
-                while True:  # find a layer that can accomodate lbl
+                while True:  # find a layer that can accommodate lbl
                     if len(g_str_qubits) < iLayer + 1:
                         g_str.append([]); g_str_qubits.append(set())
                     if len(g_str_qubits[iLayer].intersection(lbl.sslbls)) == 0:
@@ -1278,7 +1278,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
     on *all* of the core qubits (if the core is 2 qubits then this function
     won't return a germ consisting of just 1-qubit gates).
 
-    This list serves as the inital candidate list when a new cloud template is
+    This list serves as the initial candidate list when a new cloud template is
     created within create_cloudnoise_circuits.
 
     Parameters
@@ -1382,7 +1382,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -1414,7 +1414,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         ones of idle tomography, and thereby easier to interpret.
 
     algorithm : {"greedy","sequential"}
-        The algorithm is used internall by
+        The algorithm is used internal by
         :func:`_find_amped_polynomials_for_syntheticidle`.  You should leave this
         as the default unless you know what you're doing.
 
@@ -1440,7 +1440,11 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     #Gii = tgt2Q.operations[()]
     #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
+    gatenames = ['Gx', 'Gy', '{idle}']
+    if num_qubits > 1:
+        gatenames.append('Gcnot')
+        if cnot_edges is not None:
+            availability['Gcnot'] = cnot_edges
 
     if parameterization in ("H+S", "S", "H+D", "D",
                             "H+s", "s", "H+d", "d"):  # no affine - can get away w/1 fewer fiducials
@@ -1448,7 +1452,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx', 'Gx')]
 
-    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '{idle}'],
+    processor_spec = _QubitProcessorSpec(num_qubits, gatenames,
                                          availability=availability, geometry=geometry)
     return create_cloudnoise_circuits(processor_spec, max_lengths, singleQfiducials,
                                       max_idle_weight, maxhops,
@@ -1468,7 +1472,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     arguments of this function to
     function:`create_cloudnoise_model_from_hops_and_weights`.
 
-    Note that this function essentialy performs fiducial selection, germ
+    Note that this function essentially performs fiducial selection, germ
     selection, and fiducial-pair reduction simultaneously.  It is used to
     generate a short (ideally minimal) list of sequences needed for multi-
     qubit GST.
@@ -1488,7 +1492,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     single_q_fiducials : list
         A list of gate-name-tuples, e.g. `[(), ('Gx',), ('Gy',), ('Gx','Gx')]`,
         which form a set of 1-qubit fiducials for the given model (compatible
-        with both the gates it posseses and their parameterizations - for
+        with both the gates it possesses and their parameterizations - for
         instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
         and Stochastic errors.  If a list of two such lists
         is given, they specify preparation and measurement fiducials,
@@ -1511,7 +1515,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -1543,7 +1547,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         ones of idle tomography, and thereby easier to interpret.
 
     algorithm : {"greedy","sequential"}
-        The algorithm is used internall by
+        The algorithm is used internal by
         :func:`_find_amped_polynomials_for_syntheticidle`.  You should leave this
         as the default unless you know what you're doing.
 
@@ -1572,7 +1576,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     # - To amplify the remaining parameters iterate through the "clouds"
     #   constructed by a CloudNoiseModel (these essentially give
     #   the areas of the qubit graph where non-Gi gates should act and where
-    #   they aren't supposted to act but can have errors).  For each cloud
+    #   they aren't supposed to act but can have errors).  For each cloud
     #   we either create a new "cloud template" for it and find a set of
     #   germs and fiducial pairs (for all requested L values) such that all
     #   the parameters of gates acting on the *entire* core of the cloud
@@ -1654,7 +1658,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     if max_idle_weight > 0:
         # create a model with max_idle_weight qubits that includes all
         # the errors of the actual n-qubit model...
-        #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
+        #Note: geometry doesn't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
         # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
         # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
         printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
@@ -1800,11 +1804,11 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         # Collect "pure gate" params of gates that *exactly* on (just and only) the core_qubits;
         # these are the parameters we want this cloud to amplify.  If all the gates which act on
         # the core act on the entire core (when there are no gates that only act on only a part
-        # of the core), then these params will be the *only* ones the choosen germs will amplify.
+        # of the core), then these params will be the *only* ones the chosen germs will amplify.
         # But, if there are partial-core gates, the germs might amplify some of their parameters
         # (e.g. Gx:0 params might get amplified when processing a cloud whose core is [0,1]).
         # This is fine, but we don't demand that such params be amplified, since they *must* be
-        # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
+        # amplified for another cloud with core exactly equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
         # OK b/c model.num_params called above
         Gi_params = set(_slct.to_array(model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices)) \
@@ -1824,7 +1828,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         printer.log("Cloud %d of %d: qubits = %s, core = %s, nparams = %d" %
                     (icloud + 1, len(clouds), str(cloud_qubits), str(core_qubits), Ngp), 2)
 
-        # cache struture:
+        # cache structure:
         #  'Idle gatename fidpair lists' - dict w/keys = ints == max-idle-weights
         #      - values = gatename-fidpair lists (on max-idle-weight qubits)
         #  'Cloud templates' - dict w/ complex cloud-class-identifying keys (tuples)
@@ -2231,8 +2235,8 @@ def create_kcoverage_template(n, k, verbosity=0):
         #
         # So at this point we consider all combinations of k columns
         # that include the a-th one (so really just combinations of
-        # k-1 existing colums), and fill in the a-th column values
-        # so that the k-columns take on each permuations of k integers.
+        # k-1 existing columns), and fill in the a-th column values
+        # so that the k-columns take on each permutations of k integers.
         #
 
         col_a = [None] * nRows  # the new column - start with None sentinels in all current rows
@@ -2263,7 +2267,7 @@ def create_kcoverage_template(n, k, verbosity=0):
             if verbosity > 2: print("  - check perms are present for cols %s" % str(existing_cols + (a,)))
 
             #make sure cols existing_cols + [a] take on all the needed permutations
-            # Since existing_cols already takes on all permuations minus the last
+            # Since existing_cols already takes on all permutations minus the last
             # value (which is determined as it's the only one missing from the k-1
             # existing cols) - we just need to *complete* each existing row and possibly
             # duplicate + add rows to ensure all completions exist.
@@ -2331,7 +2335,7 @@ def create_kcoverage_template(n, k, verbosity=0):
                 if not shift_soln_found:
                     # no shifting can be performed to place v into an open row,
                     # so we just create a new row equal to desired_row on existing_cols.
-                    # How do we choose the non-(existing & last) colums? For now, just
+                    # How do we choose the non-(existing & last) columns? For now, just
                     # replicate the first element of matching_rows:
                     if verbosity > 3: print("    -> creating NEW row.")
                     for i in range(a):
@@ -2425,7 +2429,7 @@ def _filter_nqubit_circuittuple(sequence_tuples, sectors_to_keep,
     (as these correspond to an irrelevant germ).
 
     A typical case is when the state-space is that of *n* qubits, and the
-    state space labels the intergers 0 to *n-1*.  One may want to "rebase" the
+    state space labels the integers 0 to *n-1*.  One may want to "rebase" the
     indices to 0 in the returned data set using `new_sectors`
     (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
 
@@ -2523,7 +2527,7 @@ def _fidpairs_to_gatename_fidpair_list(fidpairs, num_qubits):
     Converts a list of `(prep,meas)` pairs of fiducial circuits (containing
     only single-qubit gates!) to the "gatename fiducial pair list" format,
     consisting of per-qubit lists of gate names (see docstring for
-    :func:`_gatename_fidpair_list_to_fidpairs` for mor details).
+    :func:`_gatename_fidpair_list_to_fidpairs` for more details).
 
     Parameters
     ----------

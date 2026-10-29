@@ -9,10 +9,40 @@
 #***************************************************************************************************
 
 from pygsti.baseobjs import label as _lbl
+import sys
 
 
+# The two helpers below are imported by fastcircuitparser.pyx as well; a change here
+# changes the Cython parser's behavior too.
 def _to_int_or_strip(x):
     return int(x) if x.strip().isdigit() else x.strip()
+
+
+def _layer_is_canonical(lbls_list):
+    """
+    True if `Label.with_sorted_inner_labels` would leave this layer's components alone.
+
+    Used to skip the rebuild for layers that are already canonical, which is every
+    layer of any circuit string pyGSTi wrote itself.  Only the *outer* order is
+    checked: components come from a recursive parse that already canonicalized them.
+
+    Strictly-increasing is the test, not non-decreasing -- duplicate sslbls within a
+    layer have no sorted order and must reach `with_sorted_inner_labels` so it can
+    raise, as it does for the same circuit built through `Circuit.__init__`.
+    """
+    prev = None
+    for lbl in lbls_list:
+        sslbls = lbl.sslbls
+        if sslbls is None:
+            return True  # unsortable; with_sorted_inner_labels returns self unchanged
+        if prev is not None:
+            try:
+                if not prev < sslbls:
+                    return False
+            except TypeError:
+                return False  # incomparable sslbls; let the sorter raise
+        prev = sslbls
+    return True
 
 
 def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
@@ -65,7 +95,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
-def parse_label(code, integerize_sslbls=True):
+def parse_label(code: str, integerize_sslbls=True) -> _lbl.Label:
     create_subcircuits = False
     segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
     interlayer_marker = u''  # matches nothing - no interlayer markerg
@@ -125,10 +155,16 @@ def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment
         if len(lbls_list) == 0:
             to_exponentiate = _lbl.LabelTupTup(())
         elif len(lbls_list) > 1:
-            time = max([l.time for l in lbls_list])
+            time = max([getattr(l, "time", 0.0) for l in lbls_list])
             # create a layer label - a label of the labels within square brackets
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)
+            # Canonicalize here rather than leaving it to the caller: `Circuit._fastinit`
+            # applies no sort, and io/stdinput.py builds every parsed circuit through it,
+            # so source order would otherwise decide equality and hash (issue #757).
+            # Must stay in lockstep with fastcircuitparser.pyx.
+            if not _layer_is_canonical(lbls_list):
+                to_exponentiate = to_exponentiate.with_sorted_inner_labels()
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment, ()
@@ -194,23 +230,38 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
         args.append(arg); last = i
 
     sslbls = []
-    while i < end and s[i] == ':':
+    while i < end and s[i] == u':':
         i += 1
         last = i
+        is_int = True
         while i < end:
             c = s[i]
-            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q':
+            if u'0' <= c <= u'9':
                 i += 1
+            elif u'a' <= c <= u'z' or c == u'_':
+                # Labels can contain any combination of lowercase letters and underscores.
+                i += 1
+                is_int = False
+            elif c in (u'G', u'M', u'I', u'S'):
+                # These reserved characters (all uppercase letters) indicate that we've already
+                # seen everything there is to see for the most recent/current label.
+                break
+            elif last == i and c in (u'Q', u'T', u'L', u'A', u'D'):
+                # Labels can start with reserved uppercase letters Q, T, and L, per the 
+                # StateSpace documentation. Also added A and D for "auxiliary" or "data" qubits
+                # for interfacing with LoQS/futureproofing for QEC
+                i += 1
+                is_int = False
+            elif last == i and u'A' <= c <= u'Z':
+                msg = f"Invalid target label: {s[last:i + 1]!r}. Labels can't start with uppercase letters other than Q, T, and L."
+                raise ValueError(msg)
             else:
                 break
-        if integerize_sslbls:
-            try:
-                val = int(s[last:i])
-            except:
-                val = s[last:i]
-            sslbls.append(val); last = i
+        if integerize_sslbls and is_int:
+            sslbls.append(int(s[last:i]))
         else:
-            sslbls.append(s[last:i]); last = i
+            sslbls.append(sys.intern(s[last:i]))
+        last = i
 
     if i < end and s[i] == '!':
         i += 1

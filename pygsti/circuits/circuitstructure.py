@@ -37,7 +37,7 @@ class CircuitPlaquette(_NicelySerializable):
 
     num_cols : int, optional
         The number of columns in this plaquette. If None, then this is set to one
-        larger than the maximum colum index in `elements`.
+        larger than the maximum column index in `elements`.
 
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
@@ -127,7 +127,7 @@ class CircuitPlaquette(_NicelySerializable):
         Parameters
         ----------
         elementvec : numpy array
-            An array containting the values to use when constructing a
+            An array containing the values to use when constructing a
             matrix of values for this plaquette.  This array may contain more
             values than are needed by this plaquette.  Indices into this array
             are given by `elindices_lookup`.
@@ -173,7 +173,7 @@ class CircuitPlaquette(_NicelySerializable):
         updated_aliases : dict, optional
             Because the Label keys of an alias dictionary (maps
             Label -> Circuit) cannot be processed as a Circuit, one must
-            supply a manualy processed alias dictionary.  If you don't use
+            supply a manually processed alias dictionary.  If you don't use
             alias dictionaries just leave this set to None.
 
         Returns
@@ -258,7 +258,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
     """
     A plaquette whose rows and columns correspond to measurement and preparation fiducial circuits.
 
-    Theese fiducials sandwich a "base" circuit.
+    These fiducials sandwich a "base" circuit.
 
     Parameters
     ----------
@@ -278,7 +278,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
 
     num_cols : int, optional
         The number of columns in this plaquette. If None, then this is set to one
-        larger than the maximum colum index in `elements`.
+        larger than the maximum column index in `elements`.
 
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
@@ -325,7 +325,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
 
     def _post_from_nice_serialization_init(self, op_label_aliases, circuit_rules):
         super()._post_from_nice_serialization_init(op_label_aliases, circuit_rules)  # sets members
-        if self.circuit_rules is not None:  # reset elements since these aren't serialzed
+        if self.circuit_rules is not None:  # reset elements since these aren't serialized
             self.elements = _collections.OrderedDict([(k, _manipulate_circuit(c, self.circuit_rules))
                                                       for k, c in self.elements.items()])
 
@@ -342,7 +342,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         updated_aliases : dict, optional
             Because the Label keys of an alias dictionary (maps
             Label -> Circuit) cannot be processed as a Circuit, one must
-            supply a manualy processed alias dictionary.  If you don't use
+            supply a manually processed alias dictionary.  If you don't use
             alias dictionaries just leave this set to None.
 
         Returns
@@ -457,7 +457,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
 
     num_cols : int, optional
         The number of columns in this plaquette. If None, then this is set to one
-        larger than the maximum colum index in `elements`.
+        larger than the maximum column index in `elements`.
 
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
@@ -499,7 +499,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
 
     def _post_from_nice_serialization_init(self, op_label_aliases, circuit_rules):
         super()._post_from_nice_serialization_init(op_label_aliases, circuit_rules)  # sets members
-        if self.circuit_rules is not None:  # reset elements since these aren't serialzed
+        if self.circuit_rules is not None:  # reset elements since these aren't serialized
             self.elements = _collections.OrderedDict([(k, _manipulate_circuit(c, self.circuit_rules))
                                                       for k, c in self.elements.items()])
 
@@ -516,7 +516,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         updated_aliases : dict, optional
             Because the Label keys of an alias dictionary (maps
             Label -> Circuit) cannot be processed as a Circuit, one must
-            supply a manualy processed alias dictionary.  If you don't use
+            supply a manually processed alias dictionary.  If you don't use
             alias dictionaries just leave this set to None.
 
         Returns
@@ -905,7 +905,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         updated_aliases : dict, optional
             Because the Label keys of an alias dictionary (maps
             Label -> Circuit) cannot be processed as a Circuit, one must
-            supply a manualy processed alias dictionary.  If you don't use
+            supply a manually processed alias dictionary.  If you don't use
             alias dictionaries just leave this set to None.
 
         Returns

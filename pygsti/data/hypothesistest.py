@@ -95,7 +95,7 @@ class HypothesisTest(object):
           the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
           maintained in the sense that the probability of one or more tests triggering is at most `significance`.
           But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
-          that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+          that (in expectation) no more than a fraction of  "local significance" of tests are false alarms.This
           method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
           quantity.
         
@@ -182,7 +182,7 @@ class HypothesisTest(object):
               the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
               maintained in the sense that the probability of one or more tests triggering is at most `significance`.
               But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
-              that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+              that (in expectation) no more than a fraction of  "local significance" of tests are false alarms.This
               method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
               quantity.
 

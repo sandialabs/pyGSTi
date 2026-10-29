@@ -364,7 +364,9 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     Ns = dataset.degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitqty - k) / _np.sqrt(2 * k)
-    if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))
+    if Ns <= np:
+        msg = "Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np)
+        _warnings.warn(msg, _tools.exceptions.OverparameterizationWarning)
     #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
     if Nsig <= 2: rating = 5

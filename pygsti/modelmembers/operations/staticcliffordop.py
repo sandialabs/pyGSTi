@@ -19,6 +19,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import internalgates as _itgs
 from pygsti import SpaceT
 
 class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
@@ -64,6 +65,19 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_clifford_rep(U, symplecticrep, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
+
+    @classmethod
+    def from_standard_gate_name(cls, name, basis='pp', evotype='default', state_space=None):
+        """
+        Alternative constructor which builds the Clifford operation from a string
+        corresponding to a built-in standard gate name.
+        See `pygsti.tools.internalgates.standard_gatename_unitaries`.
+        """
+        std_unitaries = _itgs.standard_gatename_unitaries()
+        if name not in std_unitaries:
+            raise ValueError(f"'{name}' does not name a standard operation")
+        U = std_unitaries[name]
+        return cls(U, basis=basis, evotype=evotype, state_space=state_space)
 
     #NOTE: if this operation had parameters, we'd need to clear inv_smatrix & inv_svector
     # whenever the smatrix or svector changed, respectively (probably in from_vector?)

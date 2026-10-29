@@ -32,7 +32,8 @@ def _vnorm(x, vmin, vmax):
     #downside to using the version from core.umath for now. 
     #TODO: switch back to np.clip once we're confident most users are
     #on 1.25+
-    return _np.core.umath.clip((x - vmin) / (vmax - vmin), 0.0, 1.0)
+    mapped = (x - vmin) / (vmax - vmin)
+    return _np.minimum(_np.maximum(mapped, 0.0), 1.0)
 
 
 @smart_cached
@@ -317,7 +318,7 @@ class LinlogColormap(Colormap):
     Parameters
     ----------
     vmin : float
-        The minium value of the data being colormapped.
+        The minimum value of the data being colormapped.
 
     vmax : float
         The maximum value of the data being colormapped.
@@ -422,7 +423,7 @@ class LinlogColormap(Colormap):
         Parameters
         ----------
         vmin : float
-            The minium value of the data being colormapped.
+            The minimum value of the data being colormapped.
 
         vmax : float
             The maximum value of the data being colormapped.
@@ -548,7 +549,7 @@ class DivergingColormap(Colormap):
     Parameters
     ----------
     vmin : float
-        The minium value of the data being colormapped.
+        The minimum value of the data being colormapped.
 
     vmax : float
         The maximum value of the data being colormapped.
@@ -633,7 +634,7 @@ class SequentialColormap(Colormap):
         Parameters
         ----------
         vmin : float
-            The minium value of the data being colormapped.
+            The minimum value of the data being colormapped.
 
         vmax : float
             The maximum value of the data being colormapped.

@@ -10,11 +10,15 @@ The LindbladErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
 import warnings as _warnings
 import itertools as _itertools
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 
@@ -23,6 +27,7 @@ from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -31,13 +36,14 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from typing import Literal
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
-class LindbladErrorgen(_LinearOperator):
+class LindbladErrorgen(_LinearOperator, _Torchable):
     """
     A class for representing noisy quantum operations using Lindblad error generators.
     """
@@ -468,9 +474,10 @@ class LindbladErrorgen(_LinearOperator):
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
         eegs_by_typ = {
-            'ham':            {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H' },
-            'other_diagonal': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S' },
-            'other':          {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' }
+            'ham':                 {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H' },
+            'other_diagonal':      {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S' },
+            'other':               {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' },
+            'other_unconstrained': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' },
         }
 
         blocks = []
@@ -478,8 +485,13 @@ class LindbladErrorgen(_LinearOperator):
             relevant_eegs = eegs_by_typ[blk_type]  # KeyError => unrecognized block type!
             #only add block type is relevant_eegs is not empty.
             if relevant_eegs:
-                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
-                blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
+                if blk_type == 'other_unconstrained':
+                    # flat block keyed directly by the (possibly reduced) set of elementary error generators
+                    blk = _LindbladCoefficientBlock(blk_type, basis, param_mode=blk_param_mode,
+                                                    error_generator_labels=list(relevant_eegs.keys()))
+                else:
+                    bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
+                    blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
                 blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
                 blocks.append(blk)
         return cls(blocks, basis, mx_basis, evotype, state_space)
@@ -733,6 +745,88 @@ class LindbladErrorgen(_LinearOperator):
             return self.to_sparse(on_space).toarray()
         else:  # dense rep
             return self._rep.to_dense(on_space)
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        """
+        Returns `(G_re, G_im, superop_shape, blocks, param_dims, block_is_complex)`, the constant
+        data `torch_base` needs to rebuild this error generator from a parameter tensor. `blocks`
+        is a list, in `coefficient_blocks` order, of `blk.stateless_data(...)`.
+
+        The error generator is linear in the (per-block) block_data, so `to_dense('HilbertSchmidt')`
+        amounts to `einsum('i,ijk->jk', concat(block_datas), G).real` against the constant
+        term-superoperator stack `G` (= `combined_lindblad_term_superops`, shape `(N, d2, d2)`).
+        Because only the *real part* of that contraction is kept,
+
+            Re(sum_i c_i G_i) = Re(c) . Re(G) - Im(c) . Im(G),
+
+        so we store `G` pre-split into two real `(N, d2*d2)` matrices rather than one complex
+        `(N, d2, d2)` stack. Two consequences, both of which matter a lot when
+        `TorchForwardSimulator` differentiates this map with `torch.func`:
+
+          * the contraction is real arithmetic, which is half the flops of the complex one, and
+          * written as a plain 2-D matmul it *vectorizes into a GEMM* under `vmap`, whereas the
+            3-D `einsum` vectorized into a batched GEMV that ran an order of magnitude below the
+            GPU's matrix-multiply throughput.
+
+        `Im(G)` is only kept for the coefficient rows belonging to blocks whose block_data is
+        complex (the Hamiltonian block's coefficients are real), and is `None` if there are none.
+        Dense path only.
+        """
+        _torch = _import_torch()
+        assert self._rep_type != 'sparse superop', \
+            "LindbladErrorgen.stateless_data (the torch path) requires a dense representation."
+        const = _np.ascontiguousarray(self.combined_lindblad_term_superops)
+        n_terms = const.shape[0]
+        superop_shape = const.shape[1:]
+
+        block_is_complex = tuple(_np.iscomplexobj(blk.block_data) for blk in self.coefficient_blocks)
+        block_sizes = [blk.block_data.size for blk in self.coefficient_blocks]
+        assert sum(block_sizes) == n_terms, \
+            "the term-superoperator stack must have one entry per coefficient-block element"
+
+        def _to_torch(mx):
+            return _torch.from_numpy(_np.ascontiguousarray(mx)).to(device=device, dtype=real_dtype)
+
+        G_re = _to_torch(const.real.reshape(n_terms, -1))
+        if any(block_is_complex):
+            keep = _np.concatenate([_np.full(sz, is_c) for sz, is_c
+                                    in zip(block_sizes, block_is_complex)])
+            G_im = _to_torch(const.imag[keep].reshape(int(keep.sum()), -1))
+        else:
+            G_im = None
+
+        blocks     = [ blk.stateless_data(real_dtype, device) for blk in self.coefficient_blocks ]
+        param_dims = [ blk.num_params for blk in self.coefficient_blocks ]
+        return (G_re, G_im, superop_shape, blocks, param_dims, block_is_complex)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable dense HS error generator from the parameter tensor `t_param`.
+
+        Mirrors `to_dense('HilbertSchmidt')`: split `t_param` per block (`coefficient_blocks` order),
+        rebuild each block's block_data via `LindbladCoefficientBlock.torch_base`, and contract the
+        raveled block_datas against the constant term-superoperator stack. See `stateless_data` for
+        why that contraction is kept as two real matmuls.
+        """
+        _torch = _import_torch()
+        G_re, G_im, superop_shape, blocks, param_dims, block_is_complex = sd
+        re_parts = []
+        im_parts = []
+        off = 0
+        for blk_sd, nP, is_complex in zip(blocks, param_dims, block_is_complex):
+            t_slice = t_param[off:off + nP]
+            off += nP
+            bd = _LindbladCoefficientBlock.torch_base(blk_sd, t_slice).ravel()
+            if is_complex:
+                assert bd.is_complex(), "block_data dtype changed since stateless_data was built"
+                re_parts.append(bd.real)
+                im_parts.append(bd.imag)
+            else:
+                re_parts.append(bd.real if bd.is_complex() else bd)
+        egen = _torch.cat(re_parts) @ G_re
+        if im_parts:
+            egen = egen - _torch.cat(im_parts) @ G_im
+        return egen.reshape(superop_shape)
 
     def to_sparse(self, on_space: SpaceT='minimal'):
         """
@@ -1172,7 +1266,7 @@ class LindbladErrorgen(_LinearOperator):
             #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
                               for k, v in elementary_errorgens.items()}
         else:
             assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
@@ -1185,7 +1279,7 @@ class LindbladErrorgen(_LinearOperator):
                 for k in blk_elem_errorgens:
                     blk_elem_errorgens[k] = 0.0
 
-            for k, v in elem_errorgens.items():
+            for k, v in elementary_errorgens.items():
                 if logscale_nonham and k.errorgen_type == "S":
                     # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                     # set the errgen coefficient to the value that would, in a depolarizing channel, give
@@ -1359,6 +1453,8 @@ class LindbladErrorgen(_LinearOperator):
         dim = self.dim
         blk_superop_derivs = []; off = 0
         for blk, (superops, _) in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms):
+            if isinstance(superops, list):
+                raise ValueError()
             superop_deriv = blk.superop_deriv_wrt_params(superops, self.paramvals[off: off + blk.num_params], True)
             superop_deriv = superop_deriv.reshape((dim**2, -1))  # [iFlattenedOp, iParam]
             blk_superop_derivs.append(superop_deriv)
@@ -1573,6 +1669,22 @@ class LindbladParameterization(_NicelySerializable):
         else:
             parameterization = '+'.join(paramtypes)
         return cls.cast(parameterization)
+    
+    @staticmethod
+    def minimal_cp_paramtype(abbrev: str) -> str:
+        """
+        `abbrev` specifies sectors of interest in error generator space.
+
+        This function returns a string specification of the minimal Lindblad parameterization
+        needed to capture all (infinitessimally-generated) CPTP maps on the specified sectors.
+
+        The input-output behavior matches the conventions in LindbladParameterization.cast.
+        """
+        if abbrev in ('CPTP', 'GLND', 'CPTPLND'):
+            t = 'CPTPLND'
+        else:
+            t = abbrev.upper()
+        return t
 
     @classmethod
     def cast(cls, obj):
@@ -1600,7 +1712,8 @@ class LindbladParameterization(_NicelySerializable):
                 meta = '1+'
             elif obj.startswith('lindblad '):
                 _warnings.warn(("Use of 'lindblad <type>' is deprecated and will be removed.  "
-                                "You should use 'exp(<type>)' or '1+(<type>)' instead"))
+                                "You should use 'exp(<type>)' or '1+(<type>)' instead"),
+                               _pyGSTiDeprecationWarning)
                 abbrev = obj[len('lindblad '):]
                 meta = 'exp'
             else:
@@ -1608,12 +1721,22 @@ class LindbladParameterization(_NicelySerializable):
                 meta = None  # 'exp' by default?
 
             if abbrev == "CPTP":
-                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'")
+                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'",
+                               _pyGSTiDeprecationWarning)
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "CPTPLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "GLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'elements']
+            elif abbrev == "GLNDU":
+                # like GLND, but the non-Hamiltonian block uses the flat, per-elementary-errorgen
+                # 'other_unconstrained' representation (supports reduced/flexible parameterizations).
+
+                #
+                # TODO: Per Corey's PR comment,
+                #   https://github.com/sandialabs/pyGSTi/pull/755#discussion_r3424540867,
+                # he'd prefer that this GLNDU parameterization replace GLND entirely.
+                block_types = ['ham', 'other_unconstrained']; param_modes = ['elements', 'elements']
             else:
                 block_types = []; param_modes = []
                 for p in abbrev.split('+'):

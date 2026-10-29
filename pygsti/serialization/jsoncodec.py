@@ -85,7 +85,7 @@ def encode_obj(py_obj, binary):
 
         #Get State (and/or init args)
         if _class_hasattr(py_obj, '__pygsti_reduce__'):
-            red = py_obj.__pygsti_reduce__()  # returns class, construtor_args, state
+            red = py_obj.__pygsti_reduce__()  # returns class, constructor_args, state
             assert(callable(red[0]))
             init_args = red[1] if len(red) > 1 else []
             state = red[2] if len(red) > 2 else ()
@@ -101,7 +101,7 @@ def encode_obj(py_obj, binary):
         elif hasattr(py_obj, '__dict__'):
             state = py_obj.__dict__  # take __dict__ as state
         elif _class_hasattr(py_obj, '__reduce__'):
-            red = py_obj.__reduce__()  # returns class, construtor_args, state
+            red = py_obj.__reduce__()  # returns class, constructor_args, state
             if red[0] is not py_obj.__class__:
                 state = None  # weird reducing can happen, for instance, for namedtuples - just punt
             else:

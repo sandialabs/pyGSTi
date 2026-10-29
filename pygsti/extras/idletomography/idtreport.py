@@ -117,7 +117,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title={'text': "auto"},
+                                                 fidpair, obsOrOutcome, title="auto",
                                                  mdl_simulator=mdl_simulator)
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
@@ -723,9 +723,9 @@ def create_idletomography_report(results, filename, title="auto",
         A dictionary of advanced options for which the default values aer usually
         are fine.  Here are the possible keys of `advanced_options`:
 
-        - connected : bool, optional
+        - enable_offline_mode : bool, optional (default, False)
             Whether output HTML should assume an active internet connection.  If
-            True, then the resulting HTML file size will be reduced because it
+            False, then the resulting HTML file size will be reduced because it
             will link to web resources (e.g. CDN libraries) instead of embedding
             them.
 
@@ -763,7 +763,7 @@ def create_idletomography_report(results, filename, title="auto",
     if advanced_options is None: advanced_options = {}
     precision = advanced_options.get('precision', None)
     cachefile = advanced_options.get('cachefile', None)
-    connected = advanced_options.get('connected', False)
+    enable_offline_mode = advanced_options.get('enable_offline_mode', False)
     resizable = advanced_options.get('resizable', True)
     autosize = advanced_options.get('autosize', 'initial')
     mdl_sim = advanced_options.get('simulator', None)  # a model
@@ -778,12 +778,8 @@ def create_idletomography_report(results, filename, title="auto",
 
     if title is None or title == "auto":
         if filename is not None:
-            autoname = _autotitle.generate_name()
+            autoname = _autotitle.generate_name(log_warning=True)
             title = "Idle Tomography Report for " + autoname
-            _warnings.warn(("You should really specify `title=` when generating reports,"
-                            " as this makes it much easier to identify them later on.  "
-                            "Since you didn't, pyGSTi has generated a random one"
-                            " for you: '{}'.").format(autoname))
         else:
             title = "N/A"  # No title - but it doesn't matter since filename is None
 
@@ -907,14 +903,14 @@ def create_idletomography_report(results, filename, title="auto",
                     _merge.merge_jinja_template(
                         qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, render_math=render_math,
+                        enable_offline_mode=enable_offline_mode, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
                 else:
                     _merge.merge_jinja_template_dir(
                         qtys, filename, template_dir='~idletomography_html_report',
                         auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, render_math=render_math,
+                        enable_offline_mode=enable_offline_mode, toggles=toggles, render_math=render_math,
                         resizable=resizable, autosize=autosize, verbosity=printer
                     )
 

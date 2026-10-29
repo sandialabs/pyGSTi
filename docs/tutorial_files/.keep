@@ -1,0 +1,3 @@
+Placeholder so this directory exists on a fresh checkout. The tutorial notebooks
+under docs/markdown/ read and write files here via ../../tutorial_files; those
+generated files are gitignored (see .gitignore).

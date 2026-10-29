@@ -13,12 +13,65 @@ Defines the ElementaryErrorgenBasis class and supporting functionality.
 import numpy as _np
 import itertools as _itertools
 
-from pygsti.baseobjs import Basis as _Basis
+from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import optools as _ot
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+
+
+def _check_errorgen_state_space(state_space: _StateSpace) -> tuple:
+    """
+    Raise unless `state_space` is a single tensor product block of quantum factors, each of
+    dimension at least 2; return its labels.
+    """
+    if not isinstance(state_space, _StateSpace):
+        raise TypeError("`state_space` must be a StateSpace, not %s" % type(state_space).__name__)
+    if state_space.num_tensor_product_blocks != 1:
+        raise ValueError("Direct-sum state spaces are not supported for building error generators.")
+    sslbls = state_space.sole_tensor_product_block_labels
+    for lbl in sslbls:
+        if state_space.label_type(lbl) != 'Q':
+            raise ValueError("State space label %s is not quantum." % str(lbl))
+        if state_space.label_udimension(lbl) < 2:
+            raise ValueError("State space label %s has dimension %d < 2." % (str(lbl), state_space.label_udimension(lbl)))
+    return tuple(sslbls)
+
+
+def canonical_errorgen_basis(state_space: _StateSpace, *, sparse: bool = False) -> _Basis:
+    """
+    The canonical operator basis (a :class:`pygsti.baseobjs.basis.Basis`, not an `ElementaryErrorgenBasis`) from which
+    elementary error generators on `state_space` are built.
+
+    Each qubit factor gets the 'PP' basis and each other factor of dimension d gets the 'GM'
+    basis. Several factors are combined into a :class:`pygsti.baseobjs.basis.TensorProdBasis` in the order of the state
+    space's labels. The returned basis includes the identity as its first element; its other
+    D**2 - 1 elements, where D is the Hilbert-space dimension of `state_space`, are Hermitian,
+    traceless, and satisfy Tr(F_a^dag F_b) = D delta_ab. The Lindblad directions are the
+    non-identity elements.
+
+    Unlike :func:`pygsti.baseobjs.basis.default_basis_for_udims`, which chooses coordinate bases, this keeps the tensor
+    product structure even when all factors have the same dimension, so that basis element labels
+    split into one token per subsystem.
+
+    Parameters
+    ----------
+    state_space : StateSpace
+        A state space with a single tensor product block of quantum factors, each of dimension
+        at least 2.
+
+    sparse : bool, optional
+        Whether the basis elements are stored as sparse matrices.
+
+    Returns
+    -------
+    BuiltinBasis or TensorProdBasis
+    """
+    sslbls = _check_errorgen_state_space(state_space)
+    factor_bases = [_BuiltinBasis('PP' if udim == 2 else 'GM', udim**2, sparse=sparse)
+                    for udim in map(state_space.label_udimension, sslbls)]
+    return factor_bases[0] if len(factor_bases) == 1 else _TensorProdBasis(factor_bases)
 
 
 class ElementaryErrorgenBasis(_NicelySerializable):
@@ -32,7 +85,7 @@ class ElementaryErrorgenBasis(_NicelySerializable):
     def label_indices(self, labels, ok_if_missing=False):
         """ 
         Return a list of indices into this basis's label list
-        for the specifed list of `ElementaryErrorgenLabels`.
+        for the specified list of `ElementaryErrorgenLabels`.
 
         Parameters
         ----------
@@ -63,6 +116,7 @@ def _all_elements_same_type(lst):
             return False
     return True
 
+
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -77,7 +131,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         Parameters
         ----------
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         labels : list or tuple of `ElementaryErrorgenLabel`
@@ -329,6 +383,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         difference_state_space = self.state_space
         return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
+
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -397,7 +452,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             cnt += _np.prod(right_lengths) - start_at
 
         return cnt
-
 
     @classmethod
     def _create_ordered_labels(cls, type_str, basis_1q, state_space,
@@ -520,7 +574,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             `ElementaryErrorgenLabels` in `labels`.
 
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         elementary_errorgen_types : tuple of str, optional (default ('H', 'S', 'C', 'A'))
@@ -612,7 +666,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      [(ntriv,ntriv), (ntriv,triv)] or   (XX,XI)
         #                      [(ntriv,ntriv), (ntriv,ntriv)] or   (XX,XX) -- k^4 elements (up to k^(2n) in general)
         #    e.g. for 3 qubit: (IIX,XXI)  # start with weight-1's on left
-        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trival
+        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trivial
         #                      (IXI,XIX)  #                                                     & nontrivial on right
         #                      (IXI,XXX)
         #                      ...

@@ -1,5 +1,5 @@
 """
-LinearOperator Set Tomography Algorithms Python Package
+Gate Set Tomography Algorithms Python Package
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

@@ -65,12 +65,12 @@ def timed_block(label, time_dict=None, printer=None, verbosity=2, round_places=6
         The verbosity level at which to print the time message (if `printer` is
         given).
 
-    round_places : int, opitonal
+    round_places : int, optional
         How many decimal places of precision to print time with (in seconds).
 
     pre_message : str, optional
         A format string to print out before the timer's message, which
-        formats the `label` arguent, e.g. `"My label is {}"`.
+        formats the `label` argument, e.g. `"My label is {}"`.
 
     format_str : str, optional
         A format string used to format the label before the resulting "rendered

@@ -102,7 +102,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
     ----------
     models : dict
         A dictionary whose keys are string labels and values are :class:`Model` objects, specifying
-        the models used to compute "simluated" data.
+        the models used to compute "simulated" data.
     """
 
     def __init__(self, models):

@@ -1,1 +1,0 @@
-{"type": "pygsti.protocols.gst.ModelEstimateResults", "auxfile_types": {"data": "none", "protocol": "dir-serialized-object", "_dbcoordinates": "none", "circuit_lists": "none", "estimates": "dict:dir-serialized-object"}, "name": "GSTwithMyGO", "estimates": {"GSTwithMyGO": null}}

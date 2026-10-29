@@ -389,7 +389,7 @@ def update_u3_parameters(layer: Iterable[_Label],
         E.g., if n = 5, p[3] = 2, and p[8] = 2, then there is a Y gate on qubit 3.
 
     p : np.ndarray[int]
-        A vector describing the Pauli gates foloowing the layer.
+        A vector describing the Pauli gates following the layer.
         For an n-qubit layer, q is a length-2n array.
         q[0:n] indicates Pauli-Z (2 is yes Z, 0 is no Z), q[n:2*n] is Pauli-X (2 yes, 0 no).
         E.g., if n = 5, p[1] = 0, and p[6] = 2, then there is an X gate on qubit 3.
@@ -412,11 +412,11 @@ def update_u3_parameters(layer: Iterable[_Label],
         (theta, phi, lamb) = (float(g.args[0]), float(g.args[1]), float(g.args[2]))
         qubit = g.qubits[0]
         qubit_index = qubit_map[qubit]
-        if p[qubit_index] == 2:   # Z gate preceeding the layer
+        if p[qubit_index] == 2:   # Z gate preceding the layer
             lamb = lamb + _np.pi
         if q[qubit_index] == 2:   # Z gate following the layer
             phi = phi + _np.pi
-        if p[n + qubit_index] == 2:  # X gate preceeding the layer
+        if p[n + qubit_index] == 2:  # X gate preceding the layer
             theta = theta - _np.pi
             phi = phi
             lamb = -lamb - _np.pi
@@ -437,11 +437,11 @@ def update_u3_parameters(layer: Iterable[_Label],
 
         # Insert twirled idle on unpadded qubit
         (theta, phi, lamb) = (0.0, 0.0, 0.0)
-        if p[qubit_index] == 2:   # Z gate preceeding the layer
+        if p[qubit_index] == 2:   # Z gate preceding the layer
             lamb = lamb + _np.pi
         if q[qubit_index] == 2:   # Z gate following the layer
             phi = phi + _np.pi
-        if p[n + qubit_index] == 2:  # X gate preceeding the layer
+        if p[n + qubit_index] == 2:  # X gate preceding the layer
             theta = theta - _np.pi
             phi = phi
             lamb = -lamb - _np.pi

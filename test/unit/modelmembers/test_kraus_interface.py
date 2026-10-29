@@ -209,7 +209,10 @@ class KrausInterfaceModelTestBase(object):
     def test_depol_model_histogram(self):
         if self.forwardsim is None:
             self.skipTest("Forward simulator could not be constructed (unavailable?)")
+        else:
+            self.forwardsim.model = None
         pspec = smq1Q_XYI.processor_spec()
+
         mdl_sto = create_explicit_model(
             pspec, evotype=self.evotype,
             simulator=self.forwardsim,
@@ -249,10 +252,10 @@ class KrausInterfaceStateVecTester(KrausInterfaceModelTestBase, BaseCase):
 class KrausInterfaceCHPTester(KrausInterfaceModelTestBase, BaseCase):
     def setUp(self):
         from pygsti.evotypes import chp
+        import importlib.util as importlib
         self.evotype = 'chp'
-        chp_path = None #'/Users/enielse/chp/chp'  
-        if chp_path is not None:
-            chp.chpexe = chp_path
+        if importlib.find_spec('chp_sim'):
+            chp.chpexe = 'chp_sim'
             self.forwardsim = WeakForwardSimulator(shots=100, base_seed=1234)
         else:
             self.forwardsim = None

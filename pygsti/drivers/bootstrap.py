@@ -162,7 +162,7 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
 
     start_seed : int, optional
         The initial seed value for numpy's random number generator when
-        generating data sets.  For each succesive dataset (and model)
+        generating data sets.  For each successive dataset (and model)
         that are generated, the seed is incremented by one.
 
     outcome_labels : list, optional
@@ -252,11 +252,11 @@ def gauge_optimize_models(gs_list, target_model,
         to gauge-optimize them to.
 
     gate_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determing error
+        The metric used within the gauge optimization to determining error
         in the gates.
 
     spam_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determing error
+        The metric used within the gauge optimization to determining error
         in the state preparation and measurement.
 
     plot : bool, optional

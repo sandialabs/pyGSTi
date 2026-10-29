@@ -24,6 +24,8 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
@@ -136,7 +138,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         A memory limit in bytes.
 
     minimum_pairs : int, optional
-        The minimium number of fiducial pairs to try (default == 1).  Set this
+        The minimum number of fiducial pairs to try (default == 1).  Set this
         to integers larger than 1 to avoid trying pair sets that are known to
         be too small.
 
@@ -428,8 +430,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             #give this state space labels equal to the line_labels of 
             gsGerm.operations['Ggerm'] = _EigenvalueParamDenseOp(
@@ -486,7 +487,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 #set the value of goodPairList to be this value.
                 goodPairList= updated_solns[min_length_idx]
                     
-                #print some output about the minimum eigenvalue acheived.
+                #print some output about the minimum eigenvalue achieved.
                 printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval[0]), 3)
 
             else:
@@ -494,7 +495,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 goodPairList= list(candidate_solution_list.values())[0]
                 bestFirstEval=bestFirstEval[0]
             
-                #print some output about the minimum eigenvalue acheived.
+                #print some output about the minimum eigenvalue achieved.
                 printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval), 3)
             
             try:
@@ -566,7 +567,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
     inv_trace_tol : float, optional (default 10)
         Tolerance used to identify whether a candidate fiducial set has a feasible
         cost function value and for comparing among both complete and incomplete candidate
-        sets. The cost function corresonds to trace(pinv(sum_i(dot(J_i,J_i^T)))), where
+        sets. The cost function corresponds to trace(pinv(sum_i(dot(J_i,J_i^T)))), where
         the J_i's are described above, which is related to a condition in optimal 
         design theory called a-optimality. The tolerance is a relative tolerance 
         compared to the complete fiducial set. This essentially measures the relative
@@ -590,7 +591,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
         of this tolerance.
 
     sensitivity_threshold : float, optional (default 1e-10)
-        Threshold used for determing is a fiducial pair is useless 
+        Threshold used for determining is a fiducial pair is useless 
         for measuring a given germ's amplified parameters due to 
         trivial sensitivity to the germ kite parameters 
         (norm of jacobian w.r.t. the kite parameters is <sensitivity_threshold).
@@ -628,8 +629,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
@@ -650,7 +650,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
                                                                     sensitivity_threshold=sensitivity_threshold,
                                                                     germ_circuit= germ)
             
-            #print some output about the minimum eigenvalue acheived.
+            #print some output about the minimum eigenvalue achieved.
             printer.log('Score Achieved: ' + str(best_score), 2)
             
             try:
@@ -804,8 +804,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
@@ -1523,7 +1522,7 @@ def construct_compact_evd_cache(fiducial_indices, complete_jacobian, element_map
     for fid_index in fiducial_indices:
         fid_element_indices = element_map[fid_index]
         fid_jacobian_components = _np.take(complete_jacobian, fid_element_indices, axis=0)
-        e, U = compact_EVD(fid_jacobian_components.T@fid_jacobian_components, eigenvalue_tolerance)
+        e, U = compact_EVD(fid_jacobian_components.T@fid_jacobian_components, eigenvalue_tolerance, assume_hermitian=True)
         sqrteU_dict[fid_index]= U@_np.diag(_np.sqrt(e))  
     return sqrteU_dict    
     
@@ -1700,7 +1699,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                                     initial_seed_mode=initial_seed_mode, evd_tol=evd_tol,
                                                                     float_type= float_type, dprobs_dict = precomputed_jacobians[germ])
             
-            #print some output about the minimum eigenvalue acheived.
+            #print some output about the minimum eigenvalue achieved.
             if best_score is not None:
                 printer.log('Score Achieved: ' + str(best_score), 2)
             printer.log('Number of fid pairs in found solution: %d'%(len(candidate_solution_list)), 2)
@@ -2016,7 +2015,7 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
                 directional_deriv = jac@vec_mat
                 direc_deriv_gram = directional_deriv.T@directional_deriv                                        
                 #now take twirledDerivDerivDagger and construct its compact EVD.
-                e, U= compact_EVD(direc_deriv_gram, evd_tol)
+                e, U= compact_EVD(direc_deriv_gram, evd_tol, assume_hermitian=True)
                 e_list.append(e)
                 
                 #by doing this I am assuming that the matrix is PSD, but since these are all
@@ -2043,7 +2042,7 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
             direc_deriv_gram = directional_deriv.T@directional_deriv
     
             #now take twirledDerivDerivDagger and construct its compact EVD.
-            e, U= compact_EVD(direc_deriv_gram, evd_tol)
+            e, U= compact_EVD(direc_deriv_gram, evd_tol, assume_hermitian=True)
             e_list.append(e)
 
             sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )         
@@ -2071,6 +2070,29 @@ def _make_spam_static(model):
     model_copy._rebuild_paramvec()
     
     return model_copy
+
+
+def _copy_to_static_explicitop_model(mdl):
+    """
+    If `mdl` is already an ExplicitOpModel it is copied; otherwise (e.g. if
+    `mdl` is an ImplicitOpModel) it is first converted to an ExplicitOpModel
+    via :meth:`ImplicitOpModel.to_explicit_model`.  Either way all of the
+    returned model's parameterizations are then set to 'static'.
+
+    Parameters
+    ----------
+    mdl : Model
+        The model to copy.  Must be an ExplicitOpModel or ImplicitOpModel.
+    Returns
+    -------
+    Model
+        A copy of `mdl` with all elements set to 'static' parameterization.
+    """
+    ret = mdl.copy() if isinstance(mdl, _ExplicitOpModel) else mdl.to_explicit_model()
+    ret.set_all_parameterizations('static')
+    assert ret.num_params == 0
+    return ret
+
     
 #write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
 #which can then be passed into the construction of the compactEVD caches.
@@ -2147,10 +2169,18 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
 def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= False):
 
     if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        if isinstance(target_model, _ExplicitOpModel):        
+            firstRho = list(target_model.preps.keys())[0]
+            prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povms.keys())[0]
+            POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        elif isinstance(target_model, _ImplicitOpModel):
+            firstRho = list(target_model.prep_blks['layers'].keys())[0]
+            prep_ssl = [target_model.prep_blks['layers'][firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povm_blks['layers'].keys())[0]
+            POVM_ssl = [target_model.povm_blks['layers'][firstPOVM].state_space.state_space_labels]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
         prep_povm_tuples = [(firstRho, firstPOVM)]
         #I think using the state space labels for firstRho and firstPOVM as the
         #circuit labels should work most of the time (new stricter line_label enforcement means
@@ -2160,11 +2190,24 @@ def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= F
     #if not we still need to extract state space labels for all of these to meet new circuit
     #label handling requirements.
     else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        if isinstance(target_model, _ExplicitOpModel):
+            prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        elif isinstance(target_model, _ImplicitOpModel):
+            prep_ssl = [target_model.prep_blks['layers'][lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povm_blks['layers'][lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
 
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    if isinstance(target_model, _ExplicitOpModel):
+        num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    elif isinstance(target_model, _ImplicitOpModel):
+        num_effects= len(list(target_model.povm_blks['layers'][prep_povm_tuples[0][1]].keys()))
+    else:
+        raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
+    
+    #subtract 1 for the POVM constraint that effects sum to identity.
     dof_per_povm= num_effects-1
 
     prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 

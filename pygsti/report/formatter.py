@@ -55,7 +55,7 @@ class Formatter(object):
         is used if a label is equal to the first.
 
     defaults : dictionary (string, any)
-        overriden values to the dictionary passed in during formatted.
+        overridden values to the dictionary passed in during formatted.
         ie for rounded formatters, which override the precision key to be set to two
     """
 
@@ -91,7 +91,7 @@ class Formatter(object):
             return the second string if the label is equal to the first
 
         defaults : dictionary (string, any)
-            overriden values to the dictionary passed in during formatted.
+            overridden values to the dictionary passed in during formatted.
             ie for rounded formatters, which override the precision key to be set to two
         """
         

@@ -212,7 +212,7 @@ class CompilationRules(object):
             self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
         elif oplabel.name in self.function_templates:  # Fourth, construct from local function template
             template_fn_to_use = self.function_templates[oplabel.name]
-            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, oplabel.time))
+            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, getattr(oplabel, "time", 0.0)))
         else:
             # Failed to compile
             return None
@@ -379,7 +379,7 @@ class CliffordCompilationRules(CompilationRules):
     `compute_clifford_symplectic_reps` method gives representations for all of its gates.
 
     Compilations can be either "local" or "non-local". A local compilation
-    ony uses gates that act on its target qubits.  All 1-qubit gates can be
+    only uses gates that act on its target qubits.  All 1-qubit gates can be
     local.  A non-local compilation uses qubits outside the set of target
     qubits (e.g. a CNOT between two qubits between which there is no native
     CNOT).  Currently, non-local compilations can only be constructed for
@@ -540,7 +540,7 @@ class CliffordCompilationRules(CompilationRules):
                 if H_name is not None:
                     if cphase_name is not None:
                         if I_name is not None:
-                            # we explicitly put identity gates into template (so noise on them is simluated correctly?)
+                            # we explicitly put identity gates into template (so noise on them is simulated correctly?)
 
                             # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
                             # available in only one direction
@@ -664,17 +664,17 @@ class CliffordCompilationRules(CompilationRules):
         def to_real_label(template_label):
             """ Convert a "template" operation label (which uses integer qubit labels
                 0 to N) to a "real" label for a potential gate in self.processor_spec. """
-            qlabels = [oplabel.sslbls[i] for i in template_label.sslbls]
-            return _Label(template_label.name, qlabels)
+            return self.processor_spec.map_gate_label_state_space(template_label, lambda sslbl: oplabel.sslbls[sslbl])
 
         def to_template_label(real_label):
             """ The reverse (qubits in template == oplabel.qubits) """
-            qlabels = [oplabel.sslbls.index(lbl) for lbl in real_label.sslbls]
-            return _Label(real_label.name, qlabels)
+            return self.processor_spec.map_gate_label_state_space(real_label, lambda sslbl: oplabel.sslbls.index(sslbl))
 
         def is_local_compilation_feasible(allowed_gatenames):
             """ Whether template_labels can possibly be enough
                 gates to compile a template for op_label with """
+            if len(allowed_gatenames) == 0:
+                return False
             if oplabel.num_qubits <= 1:
                 return len(allowed_gatenames) > 0  # 1Q gates, anything is ok
             elif oplabel.num_qubits == 2:
@@ -701,8 +701,15 @@ class CliffordCompilationRules(CompilationRules):
             available_srep_dict = self.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
 
             if is_local_compilation_feasible(available_gatenames):
-                available_gatelabels = [to_template_label(gl) for gn in available_gatenames
-                                        for gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls)]
+                available_gatelabels = []
+                for gn in available_gatenames:
+                    for real_gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls):
+                        template_gl = to_template_label(real_gl)
+                        try:
+                            available_srep_dict[template_gl] = self.processor_spec.clifford_symplectic_rep_of(real_gl)
+                        except (KeyError, TypeError, ValueError):
+                            continue
+                        available_gatelabels.append(template_gl)
                 template_to_use = self.add_clifford_compilation_template(
                     oplabel.name, oplabel.num_qubits, unitary, srep,
                     available_gatelabels, available_srep_dict,
@@ -852,7 +859,7 @@ class CliffordCompilationRules(CompilationRules):
             A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
-        # The unitary is specifed, this takes priority and we use it to construct the
+        # The unitary is specified, this takes priority and we use it to construct the
         # symplectic rep of the gate.
         if unitary is not None:
             srep = _symp.unitary_to_symplectic(unitary, flagnonclifford=True)
@@ -884,7 +891,7 @@ class CliffordCompilationRules(CompilationRules):
             available_glabels_by_qubit[tuple(sorted(gl.qubits))].append(gl)
             #sort qubit labels b/c order doesn't matter and can't hash sets
 
-        # Construst all possible circuit layers acting on the qubits.
+        # Constructs all possible circuit layers acting on the qubits.
         all_layers = []
 
         #Loop over all partitions of the nqubits
@@ -1038,7 +1045,7 @@ class CliffordCompilationRules(CompilationRules):
             A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
-        # The unitary is specifed, this takes priority and we use it to construct the
+        # The unitary is specified, this takes priority and we use it to construct the
         # symplectic rep of the gate.
         if unitary is not None:
             srep = _symp.unitary_to_symplectic(unitary, flagnonclifford=True)
@@ -1456,7 +1463,7 @@ class CliffordCompilationRules(CompilationRules):
         Circuit
         """
         # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
-        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistency
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
@@ -1513,7 +1520,7 @@ class CliffordCompilationRules(CompilationRules):
         None
         """
         # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
-        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistency
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
