@@ -14,6 +14,7 @@ from __future__ import annotations
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
+from .unitaryfactors import UnitaryApproximationReport, infer_unitary_factors
 
 from typing import Optional, TYPE_CHECKING
 from pygsti.baseobjs.basis import BasisLike
@@ -58,7 +59,11 @@ def convert(
 
     to_type : str
         The type of parameterizaton to convert to. Supported types
-        are "full", "full TP", "static", and all Lindblad types.
+        are "full", "full TP", "static", and all Lindblad types.  A Lindblad
+        conversion goes through :meth:`Instrument.from_cptr_superops`, so every
+        member must have a single Kraus operator, as ideal instruments do; for
+        a noisy instrument, build the replacement with
+        :func:`infer_unitary_factors` and :meth:`Instrument.from_effects`.
 
     basis : BasisLike
         The basis for Hilbert--Schmidt superoperators in instrument.values().
@@ -106,10 +111,12 @@ def convert(
         return Instrument(members, instrument.evotype, instrument.state_space)
 
     # Else, route Lindblad-type conversions (e.g. "CPTPLND", "GLND", "H+S", "H+s")
-    # through the effect-then-CPTP-gate construction: a single CP-constrained POVM
-    # for the effects {E_k} plus one parameterized post-measurement gate per outcome.
-    # The POVM error map is always promoted to the minimal CP parameterization that
-    # subsumes `to_type`, which is what keeps the whole instrument trace-preserving.
+    # through the effect-then-unitary construction: a single CP-constrained POVM
+    # for the effects {E_k} plus one parameterized post-measurement gate per outcome,
+    # around a static unitary.  The POVM error map is always promoted to the minimal CP
+    # parameterization that subsumes `to_type`, which is what keeps the whole instrument
+    # trace-preserving.  The conversion is exact, so it raises unless every member has a
+    # single Kraus operator (as ideal instruments do).
     op_arrays   = {k: v.to_dense('HilbertSchmidt') for (k, v) in instrument.items()}
     povm_errmap = _op.LindbladParameterization.minimal_cp_paramtype(to_type)
     out = Instrument.from_cptr_superops(
