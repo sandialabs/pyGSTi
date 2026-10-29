@@ -40,13 +40,8 @@ from pygsti.tools.mptools import (
 from .errgentypes import _ErrorgenDict, _Rate
 from .algebra import (
     error_generator_commutator,
-    error_generator_composition,
     error_generator_anticommutator,
     pauli_conjugation_composition,
-    _COMMUTATOR_HANDLERS,
-    _COMPOSITION_HANDLERS,
-    _ANTICOMMUTATOR_HANDLERS,
-    _CONJUGATION_HANDLERS,
 )
 from . import parallelutils as _par
 from .parallelutils import (

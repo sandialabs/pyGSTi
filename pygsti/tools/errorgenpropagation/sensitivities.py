@@ -40,7 +40,7 @@ from .errgentypes import (
     BulkAlphaType,
     BulkAlphaPauliType,
 )
-from .algebra import com, pauli_product, errorgen_pauli_action
+from .algebra import com, pauli_product
 from .parallelutils import (
     _with_cyclic_gc_paused,
     EGPROP_PREWARM_PACKAGES,

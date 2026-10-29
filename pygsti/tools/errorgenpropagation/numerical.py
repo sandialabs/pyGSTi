@@ -36,7 +36,6 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
-from .errgentypes import _ErrorgenDict
 from .corrections import stabilizer_pauli_expectation
 from .sensitivities import random_support, _bitstring_to_int
 

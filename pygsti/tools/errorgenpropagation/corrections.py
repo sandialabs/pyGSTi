@@ -27,14 +27,14 @@ from typing import Optional, Union, Sequence, TYPE_CHECKING
 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
 from pygsti.circuits import Circuit as _Circuit
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
+from pygsti.errorgenpropagation.localstimerrorgen import canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 from pygsti.tools.mptools import SharedWorkerPool as _SharedWorkerPool, _pool_scope
 
 from .errgentypes import _ErrorgenDict
 from .parallelutils import EGPROP_PREWARM_PACKAGES
 from . import expansions as _exp
 from . import sensitivities as _sens
-from .sensitivities import bulk_alpha, bulk_alpha_pauli, _real_if_close, _bitstring_to_int
+from .sensitivities import bulk_alpha, bulk_alpha_pauli, _real_if_close
 
 if TYPE_CHECKING:
     import multiprocessing.pool as _mppool

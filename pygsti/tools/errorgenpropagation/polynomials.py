@@ -34,7 +34,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than as _bel_less_than
 
-from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
+from typing import Optional, Union, Iterable, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.models.model import OpModel as _OpModel
     from pygsti.circuits import Circuit as _Circuit
