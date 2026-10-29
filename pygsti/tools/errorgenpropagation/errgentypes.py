@@ -19,11 +19,12 @@ types. `LocalStimErrorgenLabel` is referenced via string forward references for 
 
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, Callable, Iterable, TypeVar, Union, TYPE_CHECKING
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
+
 
 if TYPE_CHECKING:
     import stim
     import numpy as _np
-    from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 else:
     try:
         import stim
