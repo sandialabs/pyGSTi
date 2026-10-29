@@ -22,7 +22,7 @@ import pygsti
 import stim
 import numpy as np
 from pygsti.tools import errorgenpropagation as eprop
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.mptools import SharedWorkerPool, warn_if_insufficient_memory
@@ -46,7 +46,7 @@ for gate, avail in pspec.availability.items():
     qubits_for_gate = qubit_labels if avail == 'all-edges' else avail
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
-        error_rates_dict[label] = random_CPTP_error_generator_rates(
+        error_rates_dict[label] = random_cptp_errorgen_rates(
             num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234
         )
 

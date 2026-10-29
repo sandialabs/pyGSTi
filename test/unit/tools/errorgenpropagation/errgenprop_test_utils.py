@@ -13,7 +13,7 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools import errorgenpropagation as _eprop
 from pygsti.tools.basistools import change_basis
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.tools.matrixtools import print_mx
 
 from ..mptools_test_utils import assert_pool_dispatch
@@ -95,7 +95,7 @@ def _all_sector_rate_subset(num_qubits, num_per_sector, seed):
     is generally not CP (S terms supporting the kept C/A terms may be dropped), which is
     irrelevant for error generator propagation.
     """
-    full = random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
+    full = random_cptp_errorgen_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
                                              SCA_params=(0, .01), label_type='local', seed=seed)
     rng = np.random.default_rng(seed + 1)
     subset = {}
