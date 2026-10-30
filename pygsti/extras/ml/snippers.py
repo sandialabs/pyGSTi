@@ -139,7 +139,7 @@ def layer_snipper_from_qubit_graph(
         # All the qubits that are within `hops` steps on the graph of the qubits acted on by the error
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
         # The encoding indices that encode what is happening to these qubits
-        relevant_encoding_indices = encoder.indices_for_qubits(list(relevant_qubits))
+        relevant_encoding_indices = encoder.indices_for_qubits([qubit_labels[i] for i in relevant_qubits])
         encoding_indices.append(relevant_encoding_indices)
 
     return encoding_indices
