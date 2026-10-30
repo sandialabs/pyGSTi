@@ -802,3 +802,30 @@ class ExpErrorgenOpToDenseHilbertTester(BaseCase):
         with self.assertRaises(ValueError) as ctx:
             expop.to_dense('Hilbert')
         self.assertIn('Could not convert to unitary', str(ctx.exception))
+
+
+def _build_rep_choice_ops():
+    """Inner pieces for the rep-choice test, built before any constructor is patched."""
+    ss1 = statespace.QubitSpace(1)
+    ss5 = statespace.QubitSpace(5)
+    inner = op.StaticArbitraryOp(np.identity(4, 'd'), evotype='densitymx_slow', state_space=ss1)
+    embedded = op.EmbeddedOp(ss5, [2], inner)
+    errgen = op.LindbladErrorgen.from_elementary_errorgens(
+        {('H', 'XIIII'): 0.01}, state_space=ss5, evotype='densitymx_slow')
+    return ss5, inner, embedded, errgen
+
+
+@pytest.mark.parametrize('create_name, make_op', [
+    ('create_embedded_rep', lambda ss5, inner, embedded, errgen: op.EmbeddedOp(ss5, [2], inner)),
+    ('create_composed_rep', lambda ss5, inner, embedded, errgen: op.ComposedOp([embedded])),
+    ('create_experrorgen_rep', lambda ss5, inner, embedded, errgen: op.ExpErrorgenOp(errgen)),
+    ('create_identitypluserrorgen_rep', lambda ss5, inner, embedded, errgen: op.IdentityPlusErrorgenOp(errgen)),
+])
+def test_rep_constructor_error_propagates(monkeypatch, create_name, make_op):
+    pieces = _build_rep_choice_ops()
+
+    def raiser(self, *args, **kwargs):
+        raise AttributeError('injected')
+    monkeypatch.setattr(Evotype, create_name, raiser)
+    with pytest.raises(AttributeError, match='injected'):
+        make_op(*pieces)
