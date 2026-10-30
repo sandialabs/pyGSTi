@@ -115,7 +115,7 @@ class CircuitEncoder(object):
         circuit_array += [self.layer_encoding(None) for l in range(circuit.depth, padded_depth)]
         circuit_array += self.measurement_encoding(circuit)
 
-        return _np.array(circuit_array)
+        return _np.array(circuit_array, dtype=float).reshape((-1, self.length))
 
     def initialization_encoding(self, circuit: _Circuit) -> list[list[float]] | list[list[int]]:
         """
@@ -512,6 +512,8 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
         Integer array of the same shape giving (+-1) sign factors for each propagation.
 
     """
+    if circuit.depth != circuit.num_layers:
+        circuit = circuit.expand_subcircuits()
     if include_spam:
         # State preparation errors act before the first layer, i.e., exactly like errors "after"
         # an idle layer prepended to the circuit: they propagate through every layer. Measurement
@@ -521,6 +523,9 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
         meas_indices = _np.array([[_tools.error_generator_index(t, paulis) for t, paulis in error_generators]])
         meas_signs = _np.array([[_tools.error_generator_canonicalization_sign(t, paulis) for t, paulis in error_generators]])
         return _np.concatenate([indices, meas_indices]), _np.concatenate([signs, meas_signs])
+    if circuit.depth == 0:
+        empty = _np.zeros((0, len(error_generators)), int)
+        return empty, empty.copy()
 
     # An empty `fixed_errorgen_layer` (rather than no arguments at all) is required: the
     # constructor asserts that exactly one of `model`/`fixed_errorgen_layer` is given. We need
@@ -681,6 +686,10 @@ def _get_tableau(circuit_or_tableau: _Circuit | _stim.Tableau) -> _stim.Tableau:
         If input is neither a `Circuit` nor a `stim.Tableau`.
     """
     if isinstance(circuit_or_tableau, _Circuit):
+        if circuit_or_tableau.depth != circuit_or_tableau.num_layers:
+            circuit_or_tableau = circuit_or_tableau.expand_subcircuits()
+        if circuit_or_tableau.depth == 0:
+            return _stim.Tableau(len(circuit_or_tableau.line_labels))
         return circuit_or_tableau.convert_to_stim_tableau()
     elif isinstance(circuit_or_tableau, _stim.Tableau):
         return circuit_or_tableau
@@ -813,7 +822,7 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], pspec: "
     for i, circuit in enumerate(circuits):
 
         # Compute the error-free probabilities for each bit string.
-        tableau = circuit.convert_to_stim_tableau()
+        tableau = _get_tableau(circuit)
         probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
 
         prior_alpha_matrix = prior_alphas[i, :, :] if prior_alphas is not None else None
