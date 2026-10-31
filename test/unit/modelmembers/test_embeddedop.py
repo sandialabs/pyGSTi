@@ -1,15 +1,15 @@
 """
-Regression tests for `EmbeddedOp.errorgen_coefficient_labels`/`errorgen_coefficients` with
-`label_type='local'`.
+Tests for `EmbeddedOp`, in two groups.
 
-`_embed_labels`'s local-label branch indexes a plain Python list (`base_label`) directly with
-entries of `self.target_labels`, which are the `EmbeddedOp`'s *target qubit labels* rather than
-their integer positions within `self.state_space`. This works by coincidence for state spaces
-with unpermuted integer qubit labels (where a label equals its own position), but raises
-`TypeError` for any state space with string qubit labels, and would silently mis-embed for a
-state space with permuted integer labels. These tests exercise both a string-labeled space (where
-the bug currently raises) and a permuted-integer-labeled space (where the bug would currently
-mis-embed silently), alongside an unpermuted-integer control that already passes today.
+Label-embedding regression tests for `errorgen_coefficient_labels`/`errorgen_coefficients` with
+`label_type='local'` (#878). `_embed_labels` once indexed a plain list with the `EmbeddedOp`'s
+target qubit labels rather than their positions within `self.state_space`. That raised `TypeError`
+for string qubit labels and silently mis-embedded for permuted integer labels. The tests cover a
+string-labeled space and a permuted-integer-labeled space, with an unpermuted-integer control.
+
+`densitymx_slow` tests: `OpRepEmbedded`'s action is checked against `EmbeddedOp.to_dense()`, and
+a crosstalk-free model on `densitymx_slow` is checked to get embedded reps and to match the
+matrix simulator.
 """
 import numpy as np
 import pytest
