@@ -61,33 +61,27 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
 
         #Create representation object
         rep_type_order = ('dense', 'experrgen') if evotype.prefer_dense_reps else ('experrgen', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'experrgen': 'experrorgen'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'experrgen':
-                    # "sparse mode" => don't ever compute matrix-exponential explicitly
-                    rep = evotype.create_experrorgen_rep(self.errorgen._rep)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-
-                    # Cache values - for later work with dense rep
-                    self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
-                    self.base_deriv = None
-                    self.base_hessian = None
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'experrgen':
+            # "sparse mode" => don't ever compute matrix-exponential explicitly
+            rep = evotype.create_experrorgen_rep(self.errorgen._rep)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+
+            # Cache values - for later work with dense rep
+            self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
+            self.base_deriv = None
+            self.base_hessian = None
+        self._rep_type = rep_type
 
         # Caches in case terms are used
         self.terms = {}

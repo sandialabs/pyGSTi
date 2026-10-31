@@ -36,6 +36,7 @@ class Evotype(object):
         'composed': 'OpRepComposed',
         'embedded': 'OpRepEmbedded',
         'experrorgen': 'OpRepExpErrorgen',
+        'identitypluserrorgen': 'OpRepIdentityPlusErrorgen',
         'stochastic': 'OpRepStochastic',
         'sum': 'OpRepSum',
         'clifford': 'OpRepClifford',
@@ -93,7 +94,11 @@ class Evotype(object):
             else:
                 if not isinstance(state_space, _StateSpace):
                     raise ValueError('state_space must be a StateSpace object.')
-                default_prefer_dense_reps = False if state_space.dim > 64 else True #HARDCODED
+                # The pure-Python structured reps of densitymx_slow cost more per call than a dense
+                # matvec up to 4 qubits (dim 256), so it keeps dense reps that far. HARDCODED
+                name = cls.default_evotype if obj == "default" else str(obj)
+                max_dense_dim = 256 if name == 'densitymx_slow' else 64
+                default_prefer_dense_reps = state_space.dim <= max_dense_dim
 
         if obj == "default":
             return Evotype(cls.default_evotype, default_prefer_dense_reps)
