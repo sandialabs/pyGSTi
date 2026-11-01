@@ -42,6 +42,7 @@ from pygsti import SpaceT
 from typing import Literal
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+DEFAULT_COMPLETION_STOCHASTIC_RATE = 1e-6  # positive initial S rate for completed Cholesky
 
 
 class LindbladErrorgen(_LinearOperator, _Torchable):
@@ -95,8 +96,9 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             completion requires a positive-definite initial covariance.
         initial_stochastic_rate : float or None, optional
             Initial diagonal covariance when initial_covariance is omitted.
-            None chooses zero for fill-free and 1e-6 for completion. An explicit
-            zero is rejected by completion. Units depend on direction normalization.
+            None chooses zero for fill-free and DEFAULT_COMPLETION_STOCHASTIC_RATE
+            for completion. An explicit zero is rejected by completion. Units depend
+            on direction normalization.
         completion_normalization : {'row', 'column'}, optional
             Normalization for completed Cholesky, as in from_weight_limited.
 
@@ -160,7 +162,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                                          completion_normalization=completion_normalization)
         n = len(bels)
         if initial_covariance is None:
-            rate = ((1e-6 if block._param_mode == 'cholesky completion' else 0.)
+            rate = ((DEFAULT_COMPLETION_STOCHASTIC_RATE if block._param_mode == 'cholesky completion' else 0.)
                     if initial_stochastic_rate is None else initial_stochastic_rate)
             covariance = rate * _np.eye(n)
         else:
@@ -222,8 +224,9 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             pivots and row-normalized off-diagonals. It does not support polynomial terms.
         initial_stochastic_rate : float or None, optional
             Initial S coefficient on each selected direction; C/A and H start at zero.
-            None means zero for the fill-free chart and 1e-6 for completion. Completion
-            requires a strictly positive rate; an explicit zero raises ValueError.
+            None means zero for the fill-free chart and DEFAULT_COMPLETION_STOCHASTIC_RATE
+            for completion. Completion requires a strictly positive rate; an explicit
+            zero raises ValueError.
         completion_normalization : {'row', 'column'}, optional
             Row normalization uses L = D T and unit-diagonal completion without pivot
             divisions. Column normalization uses L = T D and the pivot-dividing recurrence.
@@ -296,7 +299,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                                              error_generator_labels=labels,
                                              completion_normalization=completion_normalization)
             completed = block._param_mode == 'cholesky completion'
-            rate = (1e-6 if completed else 0.) if initial_stochastic_rate is None else initial_stochastic_rate
+            rate = ((DEFAULT_COMPLETION_STOCHASTIC_RATE if completed else 0.)
+                    if initial_stochastic_rate is None else initial_stochastic_rate)
             if completed and rate == 0:
                 raise ValueError("Cholesky completion requires a positive initial_stochastic_rate; "
                                  "zero noise is outside this interior chart.")

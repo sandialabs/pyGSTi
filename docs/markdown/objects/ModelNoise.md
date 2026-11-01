@@ -526,7 +526,7 @@ Completion uses positive pivots: diagonal parameters are $\log D_{ii}$ and free 
 
 Switch charts by constructing a generator with the desired normalization and transferring its elementary coefficients with `set_coefficients`. Raw parameter vectors have chart-specific meanings.
 
-The default completion initialization is a diagonal Kossakowski matrix with S rates of $10^{-6}$, zero C/A, and zero H. Supply `initial_stochastic_rate` to choose a different positive rate; an explicit zero raises `ValueError`. For example, use different C and A limits on three qubits:
+The default completion initialization is a diagonal Kossakowski matrix with S rates given by `DEFAULT_COMPLETION_STOCHASTIC_RATE` in `pygsti.modelmembers.operations.lindbladerrorgen`, zero C/A, and zero H. Supply `initial_stochastic_rate` to choose a different positive rate; an explicit zero raises `ValueError`. For example, use different C and A limits on three qubits:
 
 ```{code-cell} ipython3
 from pygsti.baseobjs import QubitSpace

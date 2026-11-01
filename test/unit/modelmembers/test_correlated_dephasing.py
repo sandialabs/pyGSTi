@@ -6,6 +6,7 @@ import pytest
 from pygsti.baseobjs import Basis, ExplicitBasis, ExplicitStateSpace, QubitSpace
 from pygsti.baseobjs.statespace import QuditSpace
 from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
+from pygsti.modelmembers.operations.lindbladerrorgen import DEFAULT_COMPLETION_STOCHASTIC_RATE
 from pygsti.tools.basistools import change_basis
 
 
@@ -37,7 +38,7 @@ def test_nonchordal_real_completion_keeps_covariance_zeros(normalization):
     block = errorgen.coefficient_blocks[0]
     assert errorgen.num_params == 8
     assert block._param_mode == 'cholesky completion'
-    np.testing.assert_allclose(covariance(errorgen), 1e-6 * np.eye(4))
+    np.testing.assert_allclose(covariance(errorgen), DEFAULT_COMPLETION_STOCHASTIC_RATE * np.eye(4))
     vector = errorgen.to_vector()
     vector += np.random.default_rng(8).normal(scale=.08, size=8)
     errorgen.from_vector(vector)
