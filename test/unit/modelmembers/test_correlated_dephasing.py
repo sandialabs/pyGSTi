@@ -1,4 +1,4 @@
-"""Covariance graph constraints, physical dephasing, and factory contracts."""
+"""Phase-noise covariance graphs, physical dephasing, and factory contracts."""
 
 import numpy as np
 import pytest
@@ -14,7 +14,7 @@ def construct(n=2, **kwargs):
     return LindbladErrorgen.from_correlated_dephasing(QubitSpace(n), **kwargs)
 
 
-def covariance(errorgen):
+def phase_noise_covariance(errorgen):
     return errorgen.coefficient_blocks[0].kossakowski_matrix().real
 
 
@@ -26,23 +26,23 @@ def test_default_direction_order_and_independent_dense_counts():
     np.testing.assert_array_equal(dense.to_dense(), np.zeros((64, 64)))
     independent = construct(3, correlation_edges=(), initial_stochastic_rate=.02)
     assert independent.num_params == 3
-    np.testing.assert_allclose(covariance(independent), .02 * np.eye(3))
+    np.testing.assert_allclose(phase_noise_covariance(independent), .02 * np.eye(3))
     assert {label.errorgen_type for label in block.elementary_errorgens} == {'S', 'C'}
 
 
 @pytest.mark.parametrize('normalization', ['row', 'column'])
-def test_nonchordal_real_completion_keeps_covariance_zeros(normalization):
+def test_nonchordal_real_completion_keeps_phase_covariance_zeros(normalization):
     bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
     edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
     errorgen = construct(4, correlation_edges=edges, completion_normalization=normalization)
     block = errorgen.coefficient_blocks[0]
     assert errorgen.num_params == 8
     assert block._param_mode == 'cholesky completion'
-    np.testing.assert_allclose(covariance(errorgen), DEFAULT_COMPLETION_STOCHASTIC_RATE * np.eye(4))
+    np.testing.assert_allclose(phase_noise_covariance(errorgen), DEFAULT_COMPLETION_STOCHASTIC_RATE * np.eye(4))
     vector = errorgen.to_vector()
     vector += np.random.default_rng(8).normal(scale=.08, size=8)
     errorgen.from_vector(vector)
-    result = covariance(errorgen)
+    result = phase_noise_covariance(errorgen)
     assert result[0, 2] == result[1, 3] == 0
     assert np.linalg.eigvalsh(result)[0] > 0
     standard = change_basis(errorgen.to_dense(), 'pp', 'std')
@@ -57,7 +57,7 @@ def test_coherence_decay_matches_diagonal_eigenvalue_formula(directions):
     lower = np.arange(1, n * n + 1).reshape(n, n) / 50
     target = lower @ lower.T + .01 * np.eye(n)
     errorgen = construct(basis_element_labels=directions, initial_covariance=target)
-    np.testing.assert_allclose(covariance(errorgen), target, atol=1e-14)
+    np.testing.assert_allclose(phase_noise_covariance(errorgen), target, atol=1e-14)
     block = errorgen.coefficient_blocks[0]
     basis = Basis.cast('PP', 16)
     eigenvalues = np.array([basis[b].diagonal().real for b in block.basis_element_labels]).T
@@ -93,11 +93,11 @@ def test_custom_labels_need_explicit_selection():
 def test_singular_common_mode_and_zero_supported_without_ridge():
     target = .02 * np.ones((3, 3))
     errorgen = construct(3, initial_covariance=target)
-    np.testing.assert_allclose(covariance(errorgen), target, atol=1e-14)
+    np.testing.assert_allclose(phase_noise_covariance(errorgen), target, atol=1e-14)
     errorgen.from_vector(errorgen.to_vector())
-    np.testing.assert_allclose(covariance(errorgen), target, atol=1e-14)
-    assert np.linalg.matrix_rank(covariance(errorgen), tol=1e-12) == 1
-    np.testing.assert_array_equal(covariance(construct()), np.zeros((2, 2)))
+    np.testing.assert_allclose(phase_noise_covariance(errorgen), target, atol=1e-14)
+    assert np.linalg.matrix_rank(phase_noise_covariance(errorgen), tol=1e-12) == 1
+    np.testing.assert_array_equal(phase_noise_covariance(construct()), np.zeros((2, 2)))
 
 
 def test_completion_rejects_boundary_and_explicit_zero():
@@ -112,7 +112,7 @@ def test_completion_rejects_boundary_and_explicit_zero():
         construct(4, correlation_edges=edges, initial_covariance=laplacian)
 
 
-def test_covariance_derivatives_and_persistence():
+def test_phase_covariance_derivatives_and_persistence():
     from pygsti.models import ExplicitOpModel
     from pygsti.modelmembers.states import StaticState, ComposedState
     from pygsti.modelmembers.povms import StaticPOVMEffect, UnconstrainedPOVM, ComposedPOVM
@@ -141,9 +141,9 @@ def test_covariance_derivatives_and_persistence():
         for label, sign in (('+', 1), ('-', -1))
     ])
     model.preps['rho0'] = ComposedState(reference_state, ExpErrorgenOp(
-        construct(initial_covariance=.25 * covariance(errorgen))))
+        construct(initial_covariance=.25 * phase_noise_covariance(errorgen))))
     model.povms['Mdefault'] = ComposedPOVM(ExpErrorgenOp(
-        construct(initial_covariance=.4 * covariance(errorgen))), reference_povm, mx_basis='pp')
+        construct(initial_covariance=.4 * phase_noise_covariance(errorgen))), reference_povm, mx_basis='pp')
     model.operations['Gi'] = ExpErrorgenOp(errorgen)
     assert model.num_params == 3 * errorgen.num_params
     assert model.probabilities(())[('+',)] < 1  # SPAM is physically noisy at zero idle duration.
@@ -170,7 +170,7 @@ def test_covariance_derivatives_and_persistence():
     ({'initial_covariance': [[1., 1j], [-1j, 1.]]}, 'must be real'),
     ({'initial_covariance': [[1., .2], [.1, 1.]]}, 'symmetric'),
     ({'initial_covariance': [[1., 2.], [2., 1.]]}, 'positive semidefinite'),
-    ({'initial_covariance': [[1., .1], [.1, 1.]], 'correlation_edges': ()}, 'forbidden correlation'),
+    ({'initial_covariance': [[1., .1], [.1, 1.]], 'correlation_edges': ()}, 'forbidden phase-noise covariance'),
     ({'initial_covariance': np.eye(2), 'initial_stochastic_rate': .1}, 'not both'),
     ({'initial_stochastic_rate': -1.}, 'finite nonnegative'),
     ({'initial_stochastic_rate': np.nan}, 'finite nonnegative'),

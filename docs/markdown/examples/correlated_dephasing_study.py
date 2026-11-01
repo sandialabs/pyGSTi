@@ -267,8 +267,8 @@ def verify_physical_signals(matrices, design):
             'serialized_parameters': restored.num_params}
 
 
-def quantum_phase_cycle():
-    """Algebraic counterexamples, without a preparation/measurement experiment."""
+def dephasing_phase_cycles():
+    """A-type and classical Poisson phase cycles, without preparation/measurement."""
     basis = Basis.cast('PP', 16)
     labels = [LEEL('S', ('ZI',)), LEEL('S', ('IZ',)),
               LEEL('C', ('ZI', 'IZ')), LEEL('A', ('ZI', 'IZ'))]
@@ -293,9 +293,9 @@ def truth_matrices(common=False):
     edges = ((.007, -.006, .005, .004), (.0012, -.0010, .0008, .0011),
              (-.0008, .0011, -.0005, .0006))
     matrices = []
-    for diagonal, correlations, common_rate in zip(diagonals, edges, (.006, .0015, .0025)):
+    for diagonal, phase_covariances, common_rate in zip(diagonals, edges, (.006, .0015, .0025)):
         matrix = np.diag(diagonal)
-        for (i, j), value in zip(EDGES, correlations):
+        for (i, j), value in zip(EDGES, phase_covariances):
             matrix[i, j] = matrix[j, i] = value
         if common:
             matrix += common_rate * np.ones((4, 4))
@@ -416,7 +416,7 @@ def run_study():
     thresholded = dense.copy()
     thresholded[0, 2] = thresholded[2, 0] = 0
     assert np.linalg.eigvalsh(dense)[0] > 0 and np.linalg.eigvalsh(thresholded)[0] < 0
-    complex_cycle, poisson_cycle = quantum_phase_cycle()
+    a_type_cycle, poisson_cycle = dephasing_phase_cycles()
     words = list(dict.fromkeys(design[3])) + ['XXYY', 'XXXX']
     physical = verify_physical_signals(truth_matrices(), parity_design(words, (0., 1., 4.)))
     return {
@@ -434,7 +434,7 @@ def run_study():
         'expected_data_fit_converged': exact_info['converged'],
         'physical_model_checks': physical,
         'entrywise_zeroing_negative_eigenvalue': float(np.linalg.eigvalsh(thresholded)[0]),
-        'imaginary_correlation_phase_cycle': complex_cycle,
+        'a_type_phase_cycle': a_type_cycle,
         'classical_poisson_phase_cycle': poisson_cycle,
         'scenarios': scenarios,
     }

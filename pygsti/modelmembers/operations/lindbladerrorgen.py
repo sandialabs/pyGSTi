@@ -55,25 +55,26 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                                  elementary_errorgen_basis=None, initial_covariance=None, mx_basis='pp',
                                  evotype='default', param_mode='auto', initial_stochastic_rate=None,
                                  completion_normalization='row'):
-        """Construct real correlated dephasing with a fixed covariance graph.
+        """Construct real correlated dephasing with a fixed phase-noise covariance graph.
 
         For diagonal Hermitian directions F_a and a real positive-semidefinite
-        covariance K, the generator is -1/2 sum_ab K_ab [F_a, [F_b, rho]].
-        Only S and C coefficients are used. Every computational-basis population
-        is fixed, and all parameter updates preserve the prescribed covariance
-        zeros and complete positivity of the exponentiated channel.
+        phase-noise covariance K per unit time, the generator is
+        -1/2 sum_ab K_ab [F_a, [F_b, rho]]. Only S coefficients and C-type
+        correlation pair terms are used. Every computational-basis population
+        is fixed, and all parameter updates preserve the prescribed phase-noise
+        covariance zeros and complete positivity of the exponentiated channel.
 
         Parameters
         ----------
         state_space : StateSpace or castable
             A single tensor product of quantum subsystems.
         correlation_edges : iterable of pairs of basis-element labels, optional
-            Allowed off-diagonal covariance entries. None selects all pairs;
+            Allowed off-diagonal phase-noise covariance entries. None selects all pairs;
             an empty iterable gives independent noise in the selected directions.
             Self-edges, duplicates (including reversed pairs), and unknown endpoints
-            are rejected. These are covariance zeros, not inverse-covariance zeros.
+            are rejected. These are phase-noise covariance zeros, not inverse-covariance zeros.
         basis_element_labels : iterable, optional
-            Selected nonidentity diagonal directions, in covariance matrix order.
+            Selected nonidentity diagonal directions, in phase-noise covariance matrix order.
             None selects the one-body diagonal PP/GM directions, ordered first by
             subsystem and then by their order in the elementary basis. Explicit
             selections may include higher-body diagonal directions, such as ZZ.
@@ -82,7 +83,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             the canonical PP/GM product basis. With custom labels that do not
             identify subsystem support, supply basis_element_labels explicitly.
         initial_covariance : array_like, optional
-            Real symmetric positive-semidefinite matrix in basis_element_labels
+            Real symmetric positive-semidefinite phase-noise covariance matrix in basis_element_labels
             order, with exact zeros at forbidden entries. Incompatible matrices
             are rejected rather than projected. Cannot be combined with
             initial_stochastic_rate.
@@ -95,7 +96,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             nonchordal graphs. Fill-free supports PSD boundaries and zero noise;
             completion requires a positive-definite initial covariance.
         initial_stochastic_rate : float or None, optional
-            Initial diagonal covariance when initial_covariance is omitted.
+            Initial diagonal phase-noise covariance when initial_covariance is omitted.
             None chooses zero for fill-free and DEFAULT_COMPLETION_STOCHASTIC_RATE
             for completion. An explicit zero is rejected by completion. Units depend
             on direction normalization.
@@ -104,9 +105,10 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
 
         Notes
         -----
-        This is a real covariance model of classical Gaussian Markovian phase
-        noise. It is not the entire family of quantum pure-dephasing generators,
-        which can also have imaginary correlations, or a colored-noise spectrum.
+        This models classical Gaussian Markovian phase-noise covariance. More
+        general pure-dephasing generators can also have A-type active pair terms,
+        represented by imaginary off-diagonal Kossakowski components. A colored-noise
+        spectrum is outside this model.
         For unnormalized Pauli Z_i, a coherence |x><y| decays at rate
         (z(x)-z(y))^T K (z(x)-z(y))/2. No Hamiltonian is included.
         """
@@ -148,10 +150,10 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             pairs, seen = [], set()
             for edge in correlation_edges:
                 if len(edge) != 2 or any(b not in pos for b in edge) or edge[0] == edge[1]:
-                    raise ValueError("Each correlation edge must join two distinct selected directions.")
+                    raise ValueError("Each phase-noise covariance edge must join two distinct selected directions.")
                 pair = tuple(sorted((pos[edge[0]], pos[edge[1]])))
                 if pair in seen:
-                    raise ValueError("Duplicate correlation edge, including reversed pairs.")
+                    raise ValueError("Duplicate phase-noise covariance edge, including reversed pairs.")
                 seen.add(pair)
                 pairs.append(pair)
             pairs.sort()
@@ -180,7 +182,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             for i, j in pairs:
                 supported[i, j] = supported[j, i] = True
             if _np.any(covariance[~supported] != 0):
-                raise ValueError("initial_covariance contains a forbidden correlation.")
+                raise ValueError("initial_covariance contains a forbidden phase-noise covariance entry.")
         block.block_data[:] = [covariance[i, i] for i in range(n)] + [covariance[i, j] for i, j in pairs]
         return cls([block], basis, mx_basis, evotype, state_space)
 
@@ -202,8 +204,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             A single tensor product of quantum subsystems (qubits or qudits).
         max_weights : mapping, optional
             Nonnegative integer limits keyed by H, S, C, A; omitted sectors have no limit.
-            Direction weight is the number of nonidentity subsystem factors. C/A pair
-            weight is the union of their supports, and both endpoints must be selected
+            Direction weight is the number of nonidentity subsystem factors. A C/A pair term's
+            weight is the union of its two directions' supports, and both endpoints must be selected
             S directions. For example, ``dict(H=1, S=2, C=2, A=2)`` gives weight-two
             S/C/A errors with one-body Hamiltonian errors.
         errorgen_types : iterable of {'H', 'S', 'C', 'A'}, optional
@@ -1298,7 +1300,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         basis : Basis
@@ -1364,7 +1366,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             list of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
         """
         labels = []
@@ -1473,7 +1475,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
@@ -1494,7 +1496,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
             values are corresponding error generator rates for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         action : {"update","add","reset"}
@@ -1587,7 +1589,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
             values are corresponding error generator rates for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         action : {"update","add","reset"}

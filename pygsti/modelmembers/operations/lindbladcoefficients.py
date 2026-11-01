@@ -277,9 +277,9 @@ class _EEGVectorElements(_RealVectorElements):
             if lbl.errorgen_type == 'S':
                 labels.append(f"{lbl} stochastic coefficient")
             elif lbl.errorgen_type == 'C':
-                labels.append(f"{lbl} pauli-correlation coefficient")
+                labels.append(f"{lbl} C-type correlation coefficient")
             else: #'A'
-                labels.append(f"{lbl} active coefficient")
+                labels.append(f"{lbl} A-type active coefficient")
         return labels
 
 
@@ -998,8 +998,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         block_type : str
             String specifying the type of error generator parameters contained within this block. Allowed
             values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
-            'other' (for Pauli stochastic, Pauli correlation and active error generators), and
-            'other_sparse' (a selected, chordal set of S/C/A elementary error generators).
+            'other' (for S-type stochastic, C-type correlation, and A-type active error generators), and
+            'other_sparse' (selected S coefficients and C/A pair terms with sparse CPTP charts).
         
         basis : `Basis`
             `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
@@ -1223,14 +1223,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         Returns
         -------
-        Ltermdict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
-            `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
-            label (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
-            to indicate a *diagonal* term and otherwise have 2 basis labels to
-            specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
-            are taken from `ham_basis` and `other_basis`.  Values are integer indices.
+        elem_errgen_indices : dict
+            Keys are `LocalElementaryErrorgenLabel` objects. H-type Hamiltonian and
+            S-type stochastic terms have one operator-basis label; C-type correlation
+            and A-type active pair terms have two distinct labels. Values are lists of
+            (multiplier, flattened block index) pairs that express each elementary
+            coefficient as a linear combination of the block's coefficients.
         """
         # Note: returned dictionary's value specify a linear combination of
         # this coefficient block's coefficients that product the given (by the key)
@@ -1695,8 +1693,8 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
 
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
-    """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
-    stochastic + correlation + active error generators).
+    """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block with
+    S-type stochastic, C-type correlation, and A-type active error generators.
 
     ``block_data`` is an n x n complex Hermitian coefficient matrix.
     Valid param modes: 'static', 'elements', 'cholesky'.
@@ -1965,7 +1963,11 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
 
 
 class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
-    """Selected S/C/A coefficients with sparse CPTP parameterizations.
+    """Selected S coefficients and C/A pair terms with sparse CPTP parameterizations.
+
+    C/A pair terms couple two distinct operator-basis directions. C-type correlation
+    coefficients give the real off-diagonal Kossakowski components; A-type active
+    coefficients give the negative imaginary components in their ordered label orientation.
 
     The ``cholesky`` chart requires matching C/A edges, or no A (real factors). Every edge
     endpoint needs an S coefficient. ``cholesky completion`` also supports nonchordal and
@@ -1998,7 +2000,7 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
             if lbl.errorgen_type != 'S':
                 edge = tuple(sorted((i, j)))
                 if i == j or edge in edges[lbl.errorgen_type]:
-                    raise ValueError("Sparse C/A pairs must have distinct endpoints and no reversed duplicates.")
+                    raise ValueError("Sparse C/A pair terms must have distinct endpoints and no reversed duplicates.")
                 edges[lbl.errorgen_type].add(edge)
         n = len(directions)
         pairs = list(edges['C'] | edges['A'])
@@ -2147,7 +2149,9 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
     def kossakowski_matrix(self):
         """Return the Hermitian coefficient matrix in ``basis_element_labels`` order.
 
-        Its diagonal contains S, and each oriented off-diagonal entry is C - i A.
+        Its diagonal contains S coefficients. C-type correlation coefficients add
+        equally to the real entries of each labelled pair. For an A-type active
+        label (i, j), K[i, j] receives -1j * A and K[j, i] receives +1j * A.
         This dense reconstruction is for inspection and inversion, not forward evaluation.
         """
         K = _np.zeros((len(self._bel_labels), len(self._bel_labels)), complex)

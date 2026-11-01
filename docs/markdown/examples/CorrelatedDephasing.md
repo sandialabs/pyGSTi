@@ -13,7 +13,7 @@ kernelspec:
 
 # Correlated dephasing with noisy Lindblad SPAM
 
-Consider commuting diagonal Hermitian noise operators $F_a$ and a real Kossakowski matrix $K\succeq0$:
+Consider commuting diagonal Hermitian noise operators $F_a$ and a real Kossakowski matrix $K \succeq 0$, interpreted as phase-noise covariance per unit time:
 
 $$\mathcal L(\rho)=-\tfrac12\sum_{ab}K_{ab}[F_a,[F_b,\rho]].$$
 
@@ -26,9 +26,9 @@ For unnormalized Pauli directions $F_i=Z_i$, this fixes all factors of two in th
 
 Spatially correlated Markovian master equations have a substantial literature; see [Jeske and Cole](https://arxiv.org/abs/1301.1381). The graph below is an explicit model hypothesis, not a claim that geometry alone makes all other Kossakowski entries zero.
 
-## A prescribed Kossakowski graph
+## A prescribed phase-noise covariance graph
 
-`LindbladErrorgen.from_correlated_dephasing` defaults to local diagonal PP/GM directions in subsystem order. Set `correlation_edges=()` for independent noise; omit it for a dense Kossakowski matrix; or give allowed pairs of direction labels. All graph constraints remain in place as the parameters change. The API's `initial_covariance` argument specifies this real Kossakowski matrix.
+`LindbladErrorgen.from_correlated_dephasing` defaults to local diagonal PP/GM directions in subsystem order. Set `correlation_edges=()` for independent phase noise; omit it for a dense phase-noise covariance matrix; or give allowed pairs of direction labels. All graph constraints remain in place as the parameters change. The API's `initial_covariance` argument specifies this real Kossakowski matrix. Its off-diagonal entries are C-type correlation coefficients; A-type active pair terms are excluded by the real-matrix restriction.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -37,11 +37,11 @@ from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
 
 directions = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
 edges = [(directions[i], directions[(i + 1) % 4]) for i in range(4)]
-covariance = np.diag([.028, .033, .025, .030])
+phase_covariance = np.diag([.028, .033, .025, .030])
 for (i, j), value in zip(((0, 1), (1, 2), (2, 3), (0, 3)), (.007, -.006, .005, .004)):
-    covariance[i, j] = covariance[j, i] = value
+    phase_covariance[i, j] = phase_covariance[j, i] = value
 errorgen = LindbladErrorgen.from_correlated_dephasing(
-    QubitSpace(4), edges, initial_covariance=covariance
+    QubitSpace(4), edges, initial_covariance=phase_covariance
 )
 assert errorgen.num_params == 8
 channel = ExpErrorgenOp(errorgen)
@@ -55,10 +55,10 @@ from pygsti.baseobjs import Basis
 
 space = QubitSpace(4)
 prep_channel = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
-    space, edges, initial_covariance=.3 * covariance
+    space, edges, initial_covariance=.3 * phase_covariance
 ))
 meas_channel = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
-    space, edges, initial_covariance=.2 * covariance
+    space, edges, initial_covariance=.2 * phase_covariance
 ))
 reference_state = StaticState(stdmx_to_vec(np.ones((16, 16)) / 16, 'pp'),
                               basis='pp', state_space=space)
@@ -76,9 +76,9 @@ assert model.num_params == 24  # Independent 8-parameter gate, prep, and measure
 assert model.probabilities(())[('+',)] < 1  # Noisy SPAM even with no idle.
 ```
 
-All four directions have support weight one, and every C term has union weight two. A weight cutoff alone would allow correlations on the two absent edges. The cycle graph instead has 8 Kossakowski parameters per channel, compared with 4 for independent noise and 10 for a dense matrix. Its induced cycle requires Cholesky completion. Completion covers the numerically positive-definite interior; dense/chordal fill-free support also includes zero and collective rank-one limits.
+All four directions have support weight one, and every C-type pair term has union weight two. A weight cutoff alone would allow nonzero phase-noise covariance on the two absent edges. The cycle graph instead has 8 Kossakowski parameters per channel, compared with 4 for independent noise and 10 for a dense matrix. Its induced cycle requires Cholesky completion. Completion covers the numerically positive-definite interior; dense/chordal fill-free support also includes zero and collective rank-one limits.
 
-For qudits the default includes each subsystem's $d-1$ diagonal Gell-Mann directions. Explicit `basis_element_labels` can select higher-body diagonal noise, for example `('ZI', 'IZ', 'ZZ')` on two qubits. A stochastic `S(ZZ)` term is different from a covariance `C(ZI,IZ)` term. The local-$Z_i$ experiment below does not attempt to infer arbitrary higher-body noise.
+For qudits the default includes each subsystem's $d-1$ diagonal Gell-Mann directions. Explicit `basis_element_labels` can select higher-body diagonal noise, for example `('ZI', 'IZ', 'ZZ')` on two qubits. A stochastic `S(ZZ)` term is different from a C-type correlation pair term `C(ZI, IZ)`. The former describes stochastic joint Pauli errors while contributing to the diagonal of $K$; the latter is an off-diagonal phase-noise covariance in this model. The local-$Z_i$ experiment below does not attempt to infer arbitrary higher-body noise.
 
 ## Jointly fitting SPAM and gate errors
 
@@ -94,7 +94,7 @@ $$\begin{aligned}
 \langle Y_iY_j\rangle&=\tfrac12(e^{-q_-(t)}-e^{-q_+(t)}).
 \end{aligned}$$
 
-Individual Ramsey means reveal only diagonal entries. XX alone loses the sign of the pair correlation; YY retains it and has linear sensitivity at zero correlation. Multiple durations distinguish the gate matrix from the SPAM intercept. Zero-duration data directly constrain that intercept. Two-qubit cross-correlation spectroscopy with other control/readout schemes is discussed by [Szańkowski et al.](https://arxiv.org/abs/1507.03897), and experimentally demonstrated by [von Lüpke et al.](https://arxiv.org/abs/1912.04982).
+Individual Ramsey means reveal only diagonal entries. XX alone loses the sign of the off-diagonal phase-noise covariance; YY retains it and has linear sensitivity when that covariance is zero. Multiple durations distinguish the gate matrix from the SPAM intercept. Zero-duration data directly constrain that intercept. Two-qubit cross-correlation spectroscopy with other control/readout schemes is discussed by [Szańkowski et al.](https://arxiv.org/abs/1507.03897), and experimentally demonstrated by [von Lüpke et al.](https://arxiv.org/abs/1912.04982).
 
 There is an exact ambiguity: replacing $K_p\mapsto K_p+D$ and $K_m\mapsto K_m-D$ preserves every probability whenever both matrices remain physical. We fit both channels freely, without fixing either to its generating value. Only $K_g$ and $K_p+K_m$ are compared to truth; the separate fitted SPAM matrices are representatives of this ambiguity.
 
@@ -133,10 +133,10 @@ The script checks the noisy-SPAM formulas against explicit pyGSTi models with co
 
 ## Two limitations worth checking explicitly
 
-First, hard-zeroing entries of a valid Kossakowski matrix can destroy positive semidefiniteness. The script starts with $\mathbf1\mathbf1^T+0.1I$ on three directions and deletes its $(0,2)$ correlation. The resulting matrix has a negative eigenvalue despite every remaining pair satisfying its two-by-two PSD inequality. Sparse positivity is a constraint on the whole matrix.
+First, hard-zeroing entries of a valid Kossakowski matrix can destroy positive semidefiniteness. The script starts with $\mathbf1\mathbf1^T+0.1I$ on three directions and deletes its off-diagonal entry at $(0, 2)$ and its transpose. The resulting matrix has a negative eigenvalue despite every remaining pair satisfying its two-by-two PSD inequality. Sparse positivity is a constraint on the whole matrix.
 
-Second, this constructor uses a real Kossakowski matrix. A more general quantum pure-dephasing generator can have a complex PSD Kossakowski matrix on diagonal Hermitian directions. Its imaginary correlations generate coherence phases that need not be expressible as a diagonal Hamiltonian. A Hamiltonian produces phases $h_y-h_x$, whose sum around any cycle of basis states is zero. The companion script constructs a valid two-qubit S/C/A generator with zero population transfer and a nonzero phase-cycle sum. Those phase terms require the existing lower-level complex coefficient blocks; the real-matrix factory does not infer them.
+Second, this constructor uses a real Kossakowski matrix. A more general quantum pure-dephasing generator can have a complex PSD Kossakowski matrix on diagonal Hermitian directions. Its A-type active pair terms, represented by imaginary off-diagonal Kossakowski components, generate coherence phases that need not be expressible as a diagonal Hamiltonian. A Hamiltonian produces phases $h_y-h_x$, whose sum around any cycle of basis states is zero. The companion script constructs a valid two-qubit S/C/A generator with zero population transfer and a nonzero phase-cycle sum. Those phase terms require the existing lower-level complex coefficient blocks; the real-matrix factory does not infer them.
 
-A nonzero phase cycle is not, by itself, evidence of a quantum bath: a classical Poisson process applying diagonal unitaries can also produce one. The script includes that counterexample. The distinction here is between the stated Gaussian covariance-plus-Hamiltonian model and more general dephasing processes.
+A nonzero phase cycle is not, by itself, evidence of a quantum bath: a classical Poisson process applying diagonal unitaries can also produce one. The script includes that counterexample. The distinction here is between the stated Gaussian phase-noise covariance model with a diagonal Hamiltonian and more general dephasing processes.
 
 A constant Markovian generator is also a modeling assumption. For colored or non-Gaussian phase noise, or noise under noncommuting control during the interval, the time dependence and effective operator basis need separate investigation. Here the fitted time dependence and selected commuting directions are fixed by the stated hypothesis.

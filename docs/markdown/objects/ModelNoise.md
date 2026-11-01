@@ -21,12 +21,14 @@ from pygsti.models import modelnoise as mn
 ```
 
 ## Standard noise types
-There are three standard types of noise that can be added to operations in pyGSTi: depolarization, stochastic, and Lindbladian.  The first two types are common in the literature, while the third, "Lindbladian", needs a bit more explanation.  Many types of gate errors can be represented in terms of an *error generator*.  If $G$ is a noisy gate (a CPTP map) and $G_0$ is it's ideal counterpart, then if we write $G = e^{\Lambda}G_0$ then $\Lambda$ is called the gate's *error generator*.  A `LindbladErrorgen` object, exponentiated using a `ExpErrorgenOp` object represent this $e^{\Lambda}$ in pyGSTi.  If we write $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i + \sum_{i\neq j} \alpha_{ij} F_{ij}$ then, when the $F_i/F_{ij}$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i/\alpha_{ij}$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  PyGSTi has three specific generator types (where $P_i$ is a Pauli operator or tensor product of Pauli operators):
+There are three standard types of noise that can be added to operations in pyGSTi: depolarization, stochastic, and Lindbladian.  The first two types are common in the literature, while the third, "Lindbladian", needs a bit more explanation.  Many types of gate errors can be represented in terms of an *error generator*.  If $G$ is a noisy gate (a CPTP map) and $G_0$ is it's ideal counterpart, then if we write $G = e^{\Lambda}G_0$ then $\Lambda$ is called the gate's *error generator*.  A `LindbladErrorgen` object, exponentiated using a `ExpErrorgenOp` object represent this $e^{\Lambda}$ in pyGSTi.  If we write $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i + \sum_{i\neq j} \alpha_{ij} F_{ij}$ then, when the $F_i/F_{ij}$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i/\alpha_{ij}$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  PyGSTi uses the following elementary generator types (where $P_i$ is a Pauli operator or tensor product of Pauli operators):
 
 - **Hamiltonian**: $H_i : \rho \rightarrow -i[P_i,\rho]$
 - **Stochastic**: $S_i : \rho \rightarrow P_i \rho P_i - \rho$
-- **Correlated**: $C_{ij} : \rho \rightarrow P_i \rho P_j + P_j \rho P_i - \frac{1}{2}\{\{P_i,P_j\}, \rho\}$
-- **Affine/Active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j + P_j \rho P_i + \frac{1}{2}\{[P_i,P_j], \rho\}\right)$
+- **C-type correlation**: $C_{ij} : \rho \rightarrow P_i \rho P_j + P_j \rho P_i - \frac{1}{2}\{\{P_i,P_j\}, \rho\}$
+- **A-type active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j - P_j \rho P_i + \frac{1}{2}\{[P_i, P_j], \rho\}\right)$
+
+C/A pair terms are indexed by two distinct operator-basis directions. C-type correlation coefficients give the real off-diagonal Kossakowski components; A-type active coefficients give the negative imaginary components in their ordered label orientation. Stochastic joint Pauli errors such as `S(ZZ)` can also be physically correlated while contributing to the diagonal of that matrix.
 
 See our paper on [the taxonomy of small errors](https://arxiv.org/abs/2103.01928v1) for a more theoretical foundation of error generators.
 
@@ -37,8 +39,8 @@ Many of the model construction functions take arguments that allow users to add 
 - `lindblad_error_coeffs`: Values are a dict where the key has the form `(<type>, <basis_elements>)` and the values are the $\alpha_i$ coefficients in the sum of Lindblad terms, which are then exponentiated to give the final noise. The type includes:
   - `'H'` for Hamiltonian errors
   - `'S'` for Pauli-stochastic errors
-  - `'C'` for correlated Pauli-stochastic errors
-  - `'A'` for affine/active errors
+  - `'C'` for C-type correlation pair terms
+  - `'A'` for A-type active pair terms
   
   and strings of `I`, `X`, `Y`, and `Z` can be used to label a Pauli basis element. 
 
@@ -443,7 +445,7 @@ print(cloudmodel.num_params, "params because 1 H-type and a Hermitian 3x3 block 
 
 `LindbladErrorgen.from_weight_limited` constructs a CPTP Lindblad error generator whose selected elementary-error support remains fixed when its parameters change. The stochastic directions index a Kossakowski matrix $K$, with $K_{ii}=S_i$ and $K_{ij}=C_{ij}-iA_{ij}$ for an oriented pair $(i,j)$. Its sparse Cholesky factor makes $K$ positive semidefinite for every parameter vector.
 
-Direction weight counts the subsystems on which the operator is nonidentity. A C/A pair's weight counts the **union** of its two supports. Thus `C(XII, IXX)` has weight three, even though each direction has weight at most two. Each C/A endpoint must also be an allowed S direction. Limits are specified independently by sector; an omitted limit leaves that sector unrestricted.
+Direction weight counts the subsystems on which the operator is nonidentity. A C/A pair term's weight counts the **union** of its two operator directions' supports. Thus `C(XII, IXX)` has weight three, even though each direction has weight at most two. Each C/A pair-term endpoint must also be an allowed S direction. Limits are specified independently by sector; an omitted limit leaves that sector unrestricted.
 
 For example, create independent post-gate errors with one-body Hamiltonian terms and S/C/A terms of weight at most two:
 
@@ -558,15 +560,15 @@ Common S/C/A weight three on four or more qubits also selects completion automat
 
 Completed blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. The resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
 
-## Correlated dephasing Kossakowski graphs
+## Correlated dephasing with phase-noise covariance graphs
 
-`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real Kossakowski matrix to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
+`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real phase-noise covariance matrix to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
 
 $$\mathcal L(\rho)=-\tfrac12\sum_{ab}K_{ab}[F_a,[F_b,\rho]],\qquad K\succeq0.$$
 
-The constructor uses S and C, with no H or A. These are real Gaussian Markovian phase-noise covariances, not a colored-noise spectrum or the entire quantum pure-dephasing family. The graph encodes covariance zeros; it does not encode zeros in an inverse covariance or follow automatically from device layout.
+The constructor uses S coefficients and C-type correlation pair terms, with no H or A. The Kossakowski matrix is the real Gaussian Markovian phase-noise covariance per unit time, not a colored-noise spectrum or the entire quantum pure-dephasing family. The graph encodes covariance zeros; it does not encode zeros in an inverse covariance or follow automatically from device layout.
 
-For example, use a four-cycle with positive and negative correlations:
+For example, use a four-cycle with positive and negative off-diagonal phase-noise covariances:
 
 ```{code-cell} ipython3
 from pygsti.baseobjs import QubitSpace
@@ -612,8 +614,8 @@ assert phase_model.num_params == 24
 print(phase_model.probabilities(('Gi',)))
 ```
 
-The cycle is nonchordal and automatically uses completion. Pass `correlation_edges=()` for independent noise or omit it for a dense covariance. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
+The cycle is nonchordal and automatically uses completion. Pass `correlation_edges=()` for independent noise or omit it for a dense phase-noise covariance matrix. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
 
 All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero for fill-free, positive diagonal for completion, and configurable `initial_stochastic_rate` and `completion_normalization`. Completion requires a numerically positive-definite covariance after diagonal scaling; singular inputs are rejected. Tiny overall rates and strongly unequal diagonal scales alone do not cause that numerical-rank rejection. Dense/chordal fill-free graphs can represent collective rank-one covariance exactly.
 
-For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; pair correlations are needed to identify off-diagonal entries. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters per channel, versus $n(n+1)/2$ for a dense matrix on the same directions. These are different hypotheses even though all directions have support weight one. The [correlated-dephasing experiment](../examples/CorrelatedDephasing.md) jointly fits independent gate, preparation, and pre-measurement channels in each of these families, using composed Lindblad SPAM as above.
+For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; XX/YY pair measurements are needed to identify off-diagonal phase-noise covariance entries in this experiment. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters per channel, versus $n(n+1)/2$ for a dense matrix on the same directions. These are different hypotheses even though all directions have support weight one. The [correlated-dephasing experiment](../examples/CorrelatedDephasing.md) jointly fits independent gate, preparation, and pre-measurement channels in each of these families, using composed Lindblad SPAM as above.

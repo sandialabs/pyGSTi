@@ -43,9 +43,9 @@ The existing Hermitian-basis interface gives a convenient, redundant constructio
 
 Allow S on every selected direction and C/A only within each group. The Kossakowski graph is two disjoint cliques, so ordinary fill-free sparse Cholesky applies, including PSD boundary points and zero noise. Hamiltonian directions are confined to the computational group.
 
-With $Z=\operatorname{diag}(1,1,-1)$, computational directions are even under $F\mapsto ZFZ$ and transfer directions are odd. The coefficient mask forbids correlations between even and odd directions. Each resulting Lindblad term preserves the block-diagonal state space. Merely removing Hamiltonian leakage terms would not impose this condition on a general dissipator.
+With $Z=\operatorname{diag}(1,1,-1)$, computational directions are even under $F\mapsto ZFZ$ and transfer directions are odd. The coefficient mask forbids C/A pair terms between even and odd directions. Each resulting Lindblad term preserves the block-diagonal state space. Merely removing Hamiltonian leakage terms would not impose this condition on a general dissipator.
 
-The omitted $Z_2$ direction is scalar on each block: its stochastic dissipator vanishes on allowed states, and its correlations with computational directions reduce to Hamiltonian terms already included. Keeping it would add more redundant parameters.
+The omitted $Z_2$ direction is scalar on each block: its stochastic dissipator vanishes on allowed states, and its C/A pair terms with computational directions reduce to Hamiltonian terms already included. Keeping it would add more redundant parameters.
 
 ```{code-cell} ipython3
 import itertools
