@@ -51,6 +51,16 @@ def _build_truth(target):
     return truth
 
 
+def _pre_projector_damping_instrument(basis, gamma=0.1):
+    """Amplitude damping before a projective Z measurement, with no assignment error. Outcome 0
+    leaves the qubit in |0> whatever its input, so its effect is diag(1, gamma) and its
+    post-measurement gate is a reset."""
+    kraus = {'p0': [np.array([[1, 0], [0, 0]]), np.array([[0, np.sqrt(gamma)], [0, 0]])],
+             'p1': [np.array([[0, 0], [0, np.sqrt(1 - gamma)]])]}
+    return Instrument({lbl: op.FullArbitraryOp.from_kraus_operators([k.astype(complex) for k in ks], basis).to_dense()
+                       for lbl, ks in kraus.items()})
+
+
 def _build_edesign(target):
     germs = smq1Q_XZ.germs(qubit_labels=QL)[:4]
     germs.append(Circuit([[]], line_labels=QL))
@@ -79,11 +89,12 @@ class ColdInstrumentFitTester(unittest.TestCase):
 
     OPT = {'maxiter': 150}
 
-    def _fit(self, data, target, parameterization):
+    def _fit(self, data, target, parameterization, optimizer=None):
         mdl = target.copy()
         mdl.set_all_parameterizations(parameterization)
         proto = GateSetTomography(initial_model=GSTInitialModel(model=mdl, target_model=target),
-                                  gaugeopt_suite=None, optimizer=self.OPT, verbosity=0, name=parameterization)
+                                  gaugeopt_suite=None, optimizer=optimizer or self.OPT, verbosity=0,
+                                  name=parameterization)
         results = proto.run(data, disable_checkpointing=True)
         return mdl, results.estimates[parameterization].models['final iteration estimate']
 
@@ -96,6 +107,28 @@ class ColdInstrumentFitTester(unittest.TestCase):
 
         _, tp_mdl = self._fit(data, target, 'full TP')
         _, lnd_mdl = self._fit(data, target, 'CPTPLND')
+
+        tp_2dll = pygsti.tools.two_delta_logl(tp_mdl, ds, circuits)
+        lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)
+        self.assertLessEqual(lnd_2dll, 1.2 * tp_2dll + 20.0,
+                             f"CPTPLND 2dlogl {lnd_2dll:.1f} vs full TP {tp_2dll:.1f}")
+        self.assertGreater(_min_member_choi_eig(lnd_mdl), -1e-6)
+
+    def test_cold_cptplnd_fit_of_pre_projector_damping(self):
+        # Outcome 0's post-measurement gate must become a reset while its effect leaves the projector,
+        # but at the ideal instrument neither move pays off alone: the gate's rates are invisible while
+        # the effect is projective, and dB/dC vanishes at zero rates. Ordinary steps stall near
+        # 2 delta log L 3,900 here; coefficient-space steps on the instrument's blocks reach TP quality.
+        target = _build_target()
+        edesign = _build_edesign(target)
+        circuits = edesign.all_circuits_needing_data
+        truth = _build_truth(target)
+        truth[INST_LBL] = _pre_projector_damping_instrument(truth.basis)
+        ds = pygsti.data.simulate_data(truth, circuits, num_samples=5000, seed=2026)
+        data = ProtocolData(edesign, ds)
+
+        _, tp_mdl = self._fit(data, target, 'full TP')
+        _, lnd_mdl = self._fit(data, target, 'CPTPLND', optimizer={**self.OPT, 'coefficient_steps': True})
 
         tp_2dll = pygsti.tools.two_delta_logl(tp_mdl, ds, circuits)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)
