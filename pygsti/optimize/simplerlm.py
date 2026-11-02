@@ -605,8 +605,8 @@ def simplish_leastsq(
         - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
           only searches when a trigger fires (the `max_dx_scale` clip activated, the step
           is large relative to `|x|`, or the trial's objective norm is non-finite).
-          `'always'` searches on every trial step.  `'none'` never searches (except on a
-          degenerate first iteration; see Notes).  The primary motivation is robustness
+          `'always'` searches on every trial step.  `'none'` never searches, except on a step
+          computed from a shifted point (see Notes).  The primary motivation is robustness
           against a full LM step leaving the good basin, not speed.
         - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
           in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
@@ -656,8 +656,10 @@ def simplish_leastsq(
     `(J^T J + mu M^T M) dp = -J^T f` and sets `db = M dp`; the trial point is the projection of
     `B + db` onto the positive semidefinite cone, factored back into `C`, and the line search follows
     `B + t db`.  Blocks with an eigenvalue below `coefficient_shift**2` are evaluated at
-    `B + coefficient_shift**2 I`, where `M` is invertible; in those iterations the Jacobian and the
-    objective are taken at that shifted point.  Only the diagonal blocks of the damping change, so
+    `B + coefficient_shift**2 I`, where `M` is invertible.  In those iterations `J^T J`, and the
+    rows of `J^T f` for the shifted blocks, come from the Jacobian at that shifted point, while the
+    residual and the other rows of `J^T f` are taken at `x` itself; as with the first-iteration shift,
+    the step is always line-searched from `x`.  Only the diagonal blocks of the damping change, so
     distributed `J^T J` arrays and the linear solve are used unchanged.
     """
     linesearch = dict(linesearch) if linesearch else {}
@@ -899,8 +901,8 @@ def simplish_leastsq(
                 resource_alloc.host_comm_barrier()
                 f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x
                 global_eval_x = global_shifted_x
+                force_linesearch = True  # a step computed at a shifted point is always line-searched from x
                 if num_zero_cols > 0:
-                    force_linesearch = True
                     printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "
                                 "Jacobian at a point shifted by %g in those coordinates"
                                 % (num_zero_cols, len(global_x), JAC_SHIFT), 2)
