@@ -27,7 +27,7 @@ from typing import Any
 
 
 class SelectiveDense(Layer):
-    def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True, trainable : bool = True
+    def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True, trainable : bool = True,
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
                  kernel_constraint=None, bias_constraint=None, **kwargs) -> None:
