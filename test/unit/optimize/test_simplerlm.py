@@ -260,6 +260,22 @@ class CoefficientStepTester(BaseCase):
             np.testing.assert_array_equal(out[0], ref[0])
             self.assertEqual(out[2], ref[2])
 
+    def test_steps_from_a_shifted_point_are_line_searched(self):
+        # The block starts at C = 0, so the first step is computed at a shifted point. Even with
+        # linesearch mode 'none' it is line-searched: after the full-step trial comes one at t = beta.
+        trial_x4 = []
+
+        def obj(x, oob_check=False):
+            trial_x4.append(x[4])
+            return self.obj(x)
+
+        ari = _ari.UndistributedArraysInterface(7, 5)
+        lm.simplish_leastsq(obj, self.jac, np.zeros(5), max_iter=1, f_norm2_tol=1e-20, arrays_interface=ari,
+                            coefficient_blocks=self.blocks, coefficient_iters=1, linesearch={'mode': 'none'})
+        moved = [v for v in trial_x4 if v != 0.0]  # x[4] moves linearly along the step
+        self.assertGreaterEqual(len(moved), 2)
+        self.assertAlmostEqual(moved[1], 0.25 * moved[0])
+
     def test_coefficient_blocks_reject_x_limits(self):
         with self.assertRaises(ValueError):
             self.solve(coefficient_blocks=self.blocks, coefficient_iters=1,
