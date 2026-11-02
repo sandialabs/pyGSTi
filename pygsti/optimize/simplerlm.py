@@ -187,15 +187,16 @@ class SimplerLMOptimizer(Optimizer):
         defaults; missing keys (or a `None` dict) take those defaults.
 
     coefficient_steps : dict or bool, optional
-        Opt-in: take the first iterations' steps for the Cholesky-parameterized Lindblad blocks
+        Take the first iterations' steps for the Cholesky-parameterized (CPTPLND) Lindblad blocks
         inside the model's instruments (each instrument's shared POVM error map and the error maps
         of its post-measurement gates, as built by
         :meth:`~pygsti.modelmembers.instruments.Instrument.from_effects`) in their coefficient
         matrices `B = C C^dagger` rather than in the Cholesky factors `C`.  At zero noise the
         derivative of `B` with respect to `C` vanishes, so a fit started from an ideal instrument
-        cannot otherwise raise those rates; see `simplish_leastsq`'s `coefficient_blocks`.
-        `None` or `False` (the default) disables this; `True` enables it with the defaults below.
-        A dict enables it and may set:
+        cannot otherwise raise those rates; see `simplish_leastsq`'s `coefficient_blocks`.  The
+        blocks are found automatically, and a model whose instruments have none (or that has no
+        instruments) is optimized exactly as without this option.  `None` (the default) or `True`
+        enables it with the defaults below; `False` disables it.  A dict enables it and may set:
 
         - `'blocks'` (default `'instruments'`): which blocks; `'instruments'` is the only choice.
         - `'shift'` (default `1e-2`): blocks whose `B` has an eigenvalue below `shift**2` are
@@ -250,10 +251,10 @@ class SimplerLMOptimizer(Optimizer):
 
     @classmethod
     def _normalize_coefficient_steps(cls, coefficient_steps):
-        if coefficient_steps is None or coefficient_steps is False:
+        if coefficient_steps is False:
             return None
         opts = dict(cls.COEFFICIENT_STEP_DEFAULTS)
-        if coefficient_steps is not True:
+        if coefficient_steps is not None and coefficient_steps is not True:
             unknown = set(coefficient_steps) - set(opts)
             if unknown:
                 raise ValueError("Unrecognized `coefficient_steps` keys: %s" % sorted(unknown))
@@ -282,7 +283,7 @@ class SimplerLMOptimizer(Optimizer):
             'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold,
             'lsvec_mode': self.lsvec_mode,
             'linesearch': self.linesearch,
-            'coefficient_steps': self.coefficient_steps
+            'coefficient_steps': self.coefficient_steps if self.coefficient_steps is not None else False
         })
         return state
 
