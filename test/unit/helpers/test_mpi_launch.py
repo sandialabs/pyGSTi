@@ -4,6 +4,8 @@ Each test lays out fake MPI binaries in a temporary directory and replaces the
 subprocess call with canned ``--version`` output, so no MPI install is needed.
 """
 
+import os
+
 import test.helpers.mpi_launch as mpi_launch
 
 # What Ubuntu 26.04's Open MPI 5.0.10 prints for `mpiexec --version`: it can't
@@ -24,7 +26,7 @@ def _install_fakes(monkeypatch, directory, outputs):
     for name in outputs:
         (directory / name).touch()
     monkeypatch.setattr(
-        mpi_launch, '_version_output', lambda executable: outputs[executable.rsplit('/', 1)[-1]])
+        mpi_launch, '_version_output', lambda executable: outputs[os.path.basename(executable)])
     return str(directory / 'mpiexec')
 
 
@@ -64,7 +66,7 @@ def test_ompi_info_elsewhere_on_path_does_not_count(monkeypatch, tmp_path):
         'ompi_info': 'Open MPI v5.0.10\n',
     })
     (mpich_dir / 'ompi_info').unlink()
-    monkeypatch.setenv('PATH', f'{mpich_dir}:{ompi_dir}')
+    monkeypatch.setenv('PATH', os.pathsep.join([str(mpich_dir), str(ompi_dir)]))
     assert mpi_launch.openmpi_extra_args(launcher) == []
 
 
