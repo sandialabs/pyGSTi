@@ -676,6 +676,118 @@ class _OtherCholesky(_BlockParameterization):
         return _Polynomial(polyTerms, mpv)
 
 
+# Coordinates of an `_OtherCholesky` block, for optimizers that step in the coefficient matrix itself.
+# The block's n*n real parameters, reshaped to (n, n), hold a lower-triangular factor C with real
+# diagonal: C[i, i] = P[i, i] and C[i, j] = P[i, j] + 1j * P[j, i] for i > j.  Its coefficient matrix
+# is B = C C^dagger.  The "coefficient coordinates" b of a Hermitian B use the same layout for B's
+# lower triangle: b[i, i] = B[i, i], b[i, j] = Re B[i, j] and b[j, i] = Im B[i, j] for i > j.
+
+def cholesky_params_to_factor(params, n):
+    """
+    The lower-triangular factor C held by an `_OtherCholesky` block's `n*n` real parameters.
+
+    Parameters
+    ----------
+    params : numpy.ndarray
+        Length-`n**2` real parameter vector, in the block's layout.
+
+    n : int
+        The block's number of elementary error generators.
+
+    Returns
+    -------
+    numpy.ndarray
+        Complex `(n, n)` lower-triangular matrix with real diagonal.
+    """
+    P = _np.asarray(params, 'd').reshape((n, n))
+    C = _np.tril(P).astype(complex)
+    C += 1j * _np.tril(P.T, -1)
+    return C
+
+
+def cholesky_factor_to_params(C):
+    """
+    Inverse of :func:`cholesky_params_to_factor`: the `n*n` real parameters of a lower-triangular `C`.
+
+    The imaginary parts of `C`'s diagonal, and its strictly upper triangle, are ignored.
+    """
+    n = C.shape[0]
+    P = _np.tril(C.real)
+    P += _np.triu(C.imag.T, 1)
+    return P.reshape(n * n)
+
+
+def hermitian_to_coefficient_coords(B):
+    """The `n*n` real coefficient coordinates of a Hermitian matrix `B` (the layout above)."""
+    return cholesky_factor_to_params(_np.tril(B))
+
+
+def coefficient_coords_to_hermitian(b, n):
+    """Inverse of :func:`hermitian_to_coefficient_coords`."""
+    L = cholesky_params_to_factor(b, n)
+    return L + _np.tril(L, -1).conj().T
+
+
+def cholesky_coords_jacobian(C):
+    """
+    The real `(n**2, n**2)` derivative of the coefficient coordinates of `B = C C^dagger`
+    with respect to the parameters of `C`, at `C`.
+
+    It is invertible exactly when `C` is.
+    """
+    n = C.shape[0]
+    M = _np.empty((n * n, n * n), 'd')
+    for k in range(n * n):
+        e = _np.zeros(n * n, 'd')
+        e[k] = 1.0
+        dC = cholesky_params_to_factor(e, n)
+        M[:, k] = hermitian_to_coefficient_coords(dC @ C.conj().T + C @ dC.conj().T)
+    return M
+
+
+def psd_cholesky_factor(B, tol=-1.0):
+    """
+    Project a Hermitian matrix onto the positive semidefinite cone and factor it as `C C^dagger`
+    with `C` lower-triangular, as an `_OtherCholesky` block requires.
+
+    Negative eigenvalues of `B` are set to zero.  The projected matrix is factored by
+    :func:`~pygsti.tools.matrixtools.pivoted_cholesky`, which handles rank deficiency, giving
+    `B = F F^dagger` with `F` the row-permuted pivoted factor (not triangular).  A QR
+    factorization `F^dagger = Q R` then gives the triangular factor `C = R^dagger`, padded with
+    zero columns past the rank, with its diagonal made real and non-negative.
+
+    Parameters
+    ----------
+    B : numpy.ndarray
+        Hermitian `(n, n)` matrix (only its Hermitian part is used).
+
+    tol : float, optional
+        Rank tolerance passed to :func:`~pygsti.tools.matrixtools.pivoted_cholesky`; negative
+        selects LAPACK's default.
+
+    Returns
+    -------
+    numpy.ndarray
+        Complex `(n, n)` lower-triangular `C` with real non-negative diagonal.
+    """
+    n = B.shape[0]
+    B = 0.5 * (B + B.conj().T)
+    evals, U = _np.linalg.eigh(B)
+    B = (U * _np.clip(evals, 0.0, None)) @ U.conj().T
+    C = _np.zeros((n, n), complex)
+    L, perm, rank = _mt.pivoted_cholesky(B, tol)
+    if rank == 0:
+        return C
+    F = L[_np.argsort(perm), :rank]           # B = F F^dagger
+    R = _np.linalg.qr(F.conj().T, mode='r')   # F^dagger = Q R, so B = R^dagger R; R is upper-trapezoidal
+    C[:, :rank] = R.conj().T
+    d = _np.diag(C)[:rank]
+    absd = _np.abs(d)
+    phases = _np.where(absd > 0, d / _np.where(absd > 0, absd, 1.0), 1.0)
+    C[:, :rank] *= phases.conj()             # C -> C D with D unitary diagonal leaves C C^dagger unchanged
+    return C
+
+
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
     Class for storing and managing the parameters associated with particular subblocks of error-generator
