@@ -258,55 +258,6 @@ def is_pos_def(mx: _np.ndarray, tol: float = 1e-9, attempt_cholesky: bool = Fals
     return all([ev > -tol for ev in evals])
 
 
-def pivoted_cholesky(mx: _np.ndarray, tol: float = -1.0) -> tuple[_np.ndarray, _np.ndarray, int]:
-    """
-    Cholesky factorization with complete pivoting of a Hermitian positive semidefinite matrix.
-
-    Wraps LAPACK's ``?pstrf`` (``dpstrf`` for real input, ``zpstrf`` for complex input), which
-    stops at the numerical rank, so rank-deficient matrices factor stably.
-
-    Parameters
-    ----------
-    mx : numpy.ndarray
-        Hermitian positive semidefinite `(n, n)` matrix.  Only its lower triangle is read.
-
-    tol : float, optional
-        The factorization stops once the largest remaining pivot is at or below `tol`.  A
-        negative value (the default) uses LAPACK's default, `n * eps * max(diag(mx))`.
-
-    Returns
-    -------
-    L : numpy.ndarray
-        `(n, n)` lower-triangular factor whose columns `rank:` are zero.
-    perm : numpy.ndarray
-        Integer permutation with `mx[numpy.ix_(perm, perm)] == L @ L.conj().T` up to rounding, so
-        `L[numpy.argsort(perm)]` is a (generally not triangular) factor of `mx` itself.
-    rank : int
-        The numerical rank: the number of pivots above `tol`.
-
-    Notes
-    -----
-    For an indefinite matrix the factorization stops at the first pivot that is not positive, so
-    `L @ L.conj().T` then reproduces only part of `mx`.  Project onto the positive semidefinite
-    cone first if `mx` may be indefinite.
-    """
-    mx = _np.asarray(mx)
-    if mx.ndim != 2 or mx.shape[0] != mx.shape[1]:
-        raise ValueError("`mx` must be a square matrix, got shape %s" % (mx.shape,))
-    n = mx.shape[0]
-    if n == 0:
-        return _np.zeros((0, 0), mx.dtype), _np.zeros(0, int), 0
-    a = _np.array(mx, dtype=complex if _np.iscomplexobj(mx) else float, order='F')
-    pstrf, = _spl.get_lapack_funcs(('pstrf',), (a,))
-    c, piv, rank, info = pstrf(a, tol=tol, lower=1, overwrite_a=1)
-    if info < 0:
-        raise ValueError("LAPACK %spstrf: argument %d had an illegal value" % (pstrf.typecode, -info))
-    # info > 0 only reports that the computed rank is below n
-    L = _np.tril(c)
-    L[:, rank:] = 0
-    return L, piv - 1, int(rank)
-
-
 def is_valid_density_mx(mx: _np.ndarray, tol: float = 1e-9) -> bool:
     """
     Test whether mx is a valid density matrix (hermitian, positive-definite, and unit trace).

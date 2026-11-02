@@ -19,7 +19,6 @@ import scipy as _scipy
 
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
-from pygsti.modelmembers.operations import lindbladcoefficients as _lc
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -185,27 +184,7 @@ class SimplerLMOptimizer(Optimizer):
         LM step when it looks untrusted.  See `simplish_leastsq`'s `linesearch` parameter
         for the recognized keys (`'mode'`, `'beta'`, `'max_evals'`, `'kappa'`) and their
         defaults; missing keys (or a `None` dict) take those defaults.
-
-    coefficient_steps : dict or bool, optional
-        Take the first iterations' steps for the Cholesky-parameterized (CPTPLND) Lindblad blocks
-        inside the model's instruments (each instrument's shared POVM error map and the error maps
-        of its post-measurement gates, as built by
-        :meth:`~pygsti.modelmembers.instruments.Instrument.from_effects`) in their coefficient
-        matrices `B = C C^dagger` rather than in the Cholesky factors `C`.  At zero noise the
-        derivative of `B` with respect to `C` vanishes, so a fit started from an ideal instrument
-        cannot otherwise raise those rates; see `simplish_leastsq`'s `coefficient_blocks`.  The
-        blocks are found automatically, and a model whose instruments have none (or that has no
-        instruments) is optimized exactly as without this option.  `None` (the default) or `True`
-        enables it with the defaults below; `False` disables it.  A dict enables it and may set:
-
-        - `'blocks'` (default `'instruments'`): which blocks; `'instruments'` is the only choice.
-        - `'shift'` (default `1e-2`): blocks whose `B` has an eigenvalue below `shift**2` are
-          differentiated at `B + shift**2 I`.
-        - `'iters'` (default `10`): the number of outer iterations, at the start of each call to
-          :meth:`run`, that use coefficient-space steps; later iterations are ordinary.
     """
-
-    COEFFICIENT_STEP_DEFAULTS = {'blocks': 'instruments', 'shift': 1e-2, 'iters': 10}
 
     @classmethod
     def cast(cls, obj):
@@ -217,7 +196,7 @@ class SimplerLMOptimizer(Optimizer):
 
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=None, first_fditer=None, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal",
-                 linesearch=None, coefficient_steps=None):
+                 linesearch=None):
 
         super().__init__()
         for name, value in (('fditer', fditer), ('first_fditer', first_fditer)):
@@ -247,26 +226,6 @@ class SimplerLMOptimizer(Optimizer):
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
         self.lsvec_mode = lsvec_mode
         self.linesearch = linesearch
-        self.coefficient_steps = self._normalize_coefficient_steps(coefficient_steps)
-
-    @classmethod
-    def _normalize_coefficient_steps(cls, coefficient_steps):
-        if coefficient_steps is False:
-            return None
-        opts = dict(cls.COEFFICIENT_STEP_DEFAULTS)
-        if coefficient_steps is not None and coefficient_steps is not True:
-            unknown = set(coefficient_steps) - set(opts)
-            if unknown:
-                raise ValueError("Unrecognized `coefficient_steps` keys: %s" % sorted(unknown))
-            opts.update(coefficient_steps)
-        if opts['blocks'] != 'instruments':
-            raise ValueError("`coefficient_steps['blocks']` must be 'instruments', got %r" % (opts['blocks'],))
-        if not opts['shift'] > 0:
-            raise ValueError("`coefficient_steps['shift']` must be > 0, got %r" % (opts['shift'],))
-        if int(opts['iters']) != opts['iters'] or opts['iters'] < 0:
-            raise ValueError("`coefficient_steps['iters']` must be a non-negative integer, got %r" % (opts['iters'],))
-        opts['shift'], opts['iters'] = float(opts['shift']), int(opts['iters'])
-        return opts
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -282,8 +241,7 @@ class SimplerLMOptimizer(Optimizer):
             'called_objective_function_methods': self.called_objective_methods,
             'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold,
             'lsvec_mode': self.lsvec_mode,
-            'linesearch': self.linesearch,
-            'coefficient_steps': self.coefficient_steps if self.coefficient_steps is not None else False
+            'linesearch': self.linesearch
         })
         return state
 
@@ -298,8 +256,7 @@ class SimplerLMOptimizer(Optimizer):
                    oob_check_mode=state['out_of_bounds_check_mode'],
                    serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'],
                    lsvec_mode=state.get('lsvec_mode', 'normal'),
-                   linesearch=state.get('linesearch', None),
-                   coefficient_steps=state.get('coefficient_steps', None))
+                   linesearch=state.get('linesearch', None))
 
     def run(self, objective: TimeIndependentMDCObjectiveFunction, profiler, printer):
 
@@ -345,9 +302,6 @@ class SimplerLMOptimizer(Optimizer):
         else:
             ari = _ari.UndistributedArraysInterface(nEls, nP)
 
-        coef = self.coefficient_steps
-        coefficient_blocks = _instrument_cholesky_blocks(objective.model) if coef is not None else None
-
         opt_x, converged, msg, mu, nu, norm_f, f = simplish_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
@@ -365,10 +319,7 @@ class SimplerLMOptimizer(Optimizer):
             arrays_interface=ari,
             serial_solve_proc_threshold=self.serial_solve_proc_threshold,
             x_limits=x_limits,
-            verbosity=printer - 1, profiler=profiler,
-            coefficient_blocks=coefficient_blocks,
-            coefficient_shift=coef['shift'] if coef is not None else 1e-2,
-            coefficient_iters=coef['iters'] if coef is not None else 0)
+            verbosity=printer - 1, profiler=profiler)
 
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
@@ -415,95 +366,13 @@ def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
     return mu, nu, msg
 
 
-def _instrument_cholesky_blocks(model):
-    """
-    The Cholesky-parameterized Lindblad coefficient blocks inside `model`'s instruments.
-
-    These are the `('other', 'cholesky')` blocks of every :class:`LindbladErrorgen` reachable from an
-    instrument member: for instruments built by
-    :meth:`~pygsti.modelmembers.instruments.Instrument.from_effects`, the shared POVM error map and the
-    post-measurement gates' error maps.
-
-    Returns
-    -------
-    list
-        `(indices, n)` pairs: the block's `n*n` global parameter indices, in the layout of
-        :func:`~pygsti.modelmembers.operations.lindbladcoefficients.cholesky_params_to_factor`.
-    """
-    instruments = getattr(model, 'instruments', None)
-    if not instruments:
-        return []
-    seen, blocks = set(), []
-
-    def visit(obj):
-        if id(obj) in seen:
-            return
-        seen.add(id(obj))
-        coefficient_blocks = getattr(obj, 'coefficient_blocks', None)
-        if coefficient_blocks is not None and obj.gpindices is not None:
-            gp = obj.gpindices_as_array()
-            offset = 0
-            for blk in coefficient_blocks:
-                npar = blk.num_params
-                if blk._block_type == 'other' and blk._param_mode == 'cholesky':
-                    blocks.append((gp[offset:offset + npar].copy(), len(blk._bel_labels)))
-                offset += npar
-            if offset != len(gp):
-                raise ValueError("Unexpected parameter layout in %s: its coefficient blocks hold %d parameters "
-                                 "but it has %d" % (type(obj).__name__, offset, len(gp)))
-        for sub in obj.submembers():
-            visit(sub)
-
-    for inst in instruments.values():
-        for member in inst.values():
-            visit(member)
-    return blocks
-
-
-class _CoefficientBlock(object):
-    """One Cholesky-parameterized block of the parameter vector, for coefficient-space steps."""
-
-    def __init__(self, indices, n):
-        self.indices = _np.asarray(indices, dtype=int)
-        self.n = int(n)
-        self.M = None    # d(coefficient coordinates)/d(parameters), set per outer iteration
-        self.MtM = None
-
-    def factor(self, global_x):
-        return _lc.cholesky_params_to_factor(global_x[self.indices], self.n)
-
-    def coefficients(self, global_x):
-        C = self.factor(global_x)
-        return C @ C.conj().T
-
-
-def _coefficient_jtj_max_diagonal(blocks, ari):
-    """
-    The largest diagonal element of `J^T J` in the blocks' coefficient coordinates,
-    `diag(M^{-T} JTJ_bb M^{-1})`, from each block's (possibly distributed) local rows `b.jtj_block`.
-    """
-    largest = 0.0
-    u, v = ari.allocate_jtf(), ari.allocate_jtf()
-    for b in blocks:
-        T = _np.linalg.inv(b.M)
-        for a in range(T.shape[1]):
-            u[:] = 0.0
-            v[:] = 0.0
-            u[b.rows] = T[b.local, a]
-            v[b.rows] = b.jtj_block @ T[:, a]
-            largest = max(largest, float(ari.dot_x(u, v)))
-    ari.deallocate_jtf(u)
-    ari.deallocate_jtf(v)
-    return largest
-
-
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None,
-    linesearch=None, coefficient_blocks=None, coefficient_shift=1e-2, coefficient_iters=0
+    linesearch=None
     ):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
@@ -605,8 +474,8 @@ def simplish_leastsq(
         - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
           only searches when a trigger fires (the `max_dx_scale` clip activated, the step
           is large relative to `|x|`, or the trial's objective norm is non-finite).
-          `'always'` searches on every trial step.  `'none'` never searches, except on a step
-          computed from a shifted point (see Notes).  The primary motivation is robustness
+          `'always'` searches on every trial step.  `'none'` never searches (except on a
+          degenerate first iteration; see Notes).  The primary motivation is robustness
           against a full LM step leaving the good basin, not speed.
         - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
           in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
@@ -615,20 +484,6 @@ def simplish_leastsq(
           performed per line search.
         - `'kappa'` (default `1.0`) : scale factor for the `'guarded'` oversize trigger:
           a search is triggered when `|dx|^2 > kappa^2 * |x|^2`.
-
-    coefficient_blocks : list, optional
-        `(indices, n)` pairs, each naming the `n*n` parameters of a Cholesky-parameterized Lindblad
-        coefficient block (layout of
-        :func:`~pygsti.modelmembers.operations.lindbladcoefficients.cholesky_params_to_factor`).
-        For the first `coefficient_iters` outer iterations these blocks are stepped in their
-        coefficient matrices `B = C C^dagger`; see Notes.  Cannot be combined with `x_limits`.
-
-    coefficient_shift : float, optional
-        Blocks whose `B` has an eigenvalue below `coefficient_shift**2` are differentiated at
-        `B + coefficient_shift**2 I`.
-
-    coefficient_iters : int, optional
-        The number of initial outer iterations that use coefficient-space steps.
 
     Returns
     -------
@@ -646,21 +501,6 @@ def simplish_leastsq(
     therefore computes its step from the Jacobian and objective at `x0` shifted by `JAC_SHIFT`
     along those coordinates, and always line-searches that step from `x0`, whatever
     `linesearch['mode']` says.
-
-    That repair is local to the first iteration and to columns that are exactly zero. A
-    Cholesky-parameterized block `B = C C^dagger` has a vanishing derivative wherever `C` is
-    rank-deficient, which can persist, and coupled blocks can hide each other (a post-measurement
-    gate's rates do not affect any probability while its measurement effect is projective).
-    `coefficient_blocks` addresses this.  With `M` the derivative of a block's coefficient
-    coordinates `b` with respect to its parameters `p`, a Levenberg step in `b` solves
-    `(J^T J + mu M^T M) dp = -J^T f` and sets `db = M dp`; the trial point is the projection of
-    `B + db` onto the positive semidefinite cone, factored back into `C`, and the line search follows
-    `B + t db`.  Blocks with an eigenvalue below `coefficient_shift**2` are evaluated at
-    `B + coefficient_shift**2 I`, where `M` is invertible.  In those iterations `J^T J`, and the
-    rows of `J^T f` for the shifted blocks, come from the Jacobian at that shifted point, while the
-    residual and the other rows of `J^T f` are taken at `x` itself; as with the first-iteration shift,
-    the step is always line-searched from `x`.  Only the diagonal blocks of the damping change, so
-    distributed `J^T J` arrays and the linear solve are used unchanged.
     """
     linesearch = dict(linesearch) if linesearch else {}
     linesearch.setdefault('mode', 'guarded')
@@ -713,43 +553,6 @@ def simplish_leastsq(
         ari.allscatter_x(x_limits[:, 1], x_upper_limits)
     max_norm_dx = (max_dx_scale**2) * len(global_x) if max_dx_scale else None
     # ^ don't let any component change by more than ~max_dx_scale
-
-    coef_blocks = [_CoefficientBlock(idx, n) for idx, n in (coefficient_blocks or [])]
-    if coef_blocks:
-        if x_limits is not None:
-            raise ValueError("`coefficient_blocks` cannot be combined with `x_limits`")
-        if not coefficient_shift > 0:
-            raise ValueError("`coefficient_shift` must be > 0, got %s" % str(coefficient_shift))
-        coef_mask = _np.zeros(len(global_x), bool)
-        for b in coef_blocks:
-            coef_mask[b.indices] = True
-        local_coef_mask = ari.allocate_jtf()
-        ari.allscatter_x(coef_mask.astype('d'), local_coef_mask)
-        local_coef_mask = local_coef_mask > 0.5
-        # global parameter index of each local row of a 'jtj'-type array
-        jtj_rows, jtj_row_globals = ari.jtj_diag_indices(JTJ)
-        local_row_of = _np.full(len(global_x), -1, dtype=int)
-        local_row_of[jtj_row_globals] = jtj_rows
-        global_dx = _np.zeros(len(global_x), 'd')
-        global_dy = _np.zeros(len(global_x), 'd')
-
-    def coef_path(t):
-        """Trial point `x + t*dx` with the coefficient blocks moved along `B + t*db` (projected), in global_new_x."""
-        global_new_x[:] = global_x + t * global_dx
-        for b in coef_blocks:
-            B = b.coefficients(global_x) + t * _lc.coefficient_coords_to_hermitian(global_dy[b.indices], b.n)
-            global_new_x[b.indices] = _lc.cholesky_factor_to_params(_lc.psd_cholesky_factor(B))
-        ari.allscatter_x(global_new_x, new_x)
-
-    def coef_step_norm2():
-        """Squared size of the step global_x -> global_new_x, measuring each block by its coefficients."""
-        d = global_new_x - global_x
-        d[coef_mask] = 0.0
-        total = float(d @ d)
-        for b in coef_blocks:
-            db = _lc.hermitian_to_coefficient_coords(b.coefficients(global_new_x) - b.coefficients(global_x))
-            total += float(db @ db)
-        return total
 
     # NOTE: all "norm" variables below (norm_f, norm_dx, norm_x, max_norm_dx, and the
     # ari.norm2_* helpers) are *squared* 2-norms, not norms. E.g. a log line reading
@@ -855,75 +658,41 @@ def simplish_leastsq(
             minus_JTf *= -1
 
             force_linesearch = False
-            active_blocks = coef_blocks if k < coefficient_iters else []
-            deficient = [b for b in active_blocks
-                         if _np.linalg.eigvalsh(b.coefficients(global_x)).min() < coefficient_shift**2]
-            num_zero_cols = 0
             if k == 0:
                 # Zero columns of J at x0 (e.g. Cholesky coordinates of a Lindblad generator at
                 # zero noise) leave those coordinates stuck. Compute the step from J and f at
                 # x0 + JAC_SHIFT on just those coordinates, then line-search it from x0 itself.
                 jtj_diag = JTJ[ari.jtj_diag_indices(JTJ)]
                 zero_cols = jtj_diag <= ZERO_COLUMN_RTOL**2 * ari.max_x(jtj_diag)
-                if active_blocks:
-                    zero_cols &= ~local_coef_mask  # these take coefficient-space steps instead
                 num_zero_cols = int(round(ari.norm2_x(zero_cols.astype('d'))))
-            global_eval_x = global_x
-            if num_zero_cols > 0 or deficient:
-                if active_blocks:
-                    # Keep the residual, and the exact gradient on the other coordinates, at x itself: a
-                    # gradient taken at the shifted point is not a descent direction near a minimum.
-                    f_at_x = f.copy()  # obj_fn may reuse its memory
-                    minus_JTf_at_x = minus_JTf.copy()
-                global_shifted_x = global_x.copy()
                 if num_zero_cols > 0:
                     shift = ari.allocate_jtf()
                     shift[:] = JAC_SHIFT * zero_cols
+                    global_shifted_x = global_x.copy()
                     ari.allgather_x(shift, global_shifted_x)
                     ari.deallocate_jtf(shift)
                     global_shifted_x += global_x
                     if x_limits is not None:
                         global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
-                for b in deficient:
-                    # rank-deficient coefficient block: differentiate at B + shift^2 I, where dB/dC is invertible
-                    B_shifted = b.coefficients(global_x) + coefficient_shift**2 * _np.eye(b.n)
-                    global_shifted_x[b.indices] = _lc.cholesky_factor_to_params(_np.linalg.cholesky(B_shifted))
-                shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
-                resource_alloc.host_comm_barrier()
-                Jac = jac_fn(global_shifted_x)
-                resource_alloc.host_comm_barrier()
-                ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
-                ari.fill_jtf(Jac, f_at_x if active_blocks else shifted_f, minus_JTf)
-                minus_JTf *= -1
-                if active_blocks:
-                    shifted_rows = local_coef_mask | zero_cols if num_zero_cols > 0 else local_coef_mask
-                    minus_JTf[~shifted_rows] = minus_JTf_at_x[~shifted_rows]
-                resource_alloc.host_comm_barrier()
-                f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x
-                global_eval_x = global_shifted_x
-                force_linesearch = True  # a step computed at a shifted point is always line-searched from x
-                if num_zero_cols > 0:
+                    shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
+                    resource_alloc.host_comm_barrier()
+                    Jac = jac_fn(global_shifted_x)
+                    resource_alloc.host_comm_barrier()
+                    ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
+                    ari.fill_jtf(Jac, shifted_f, minus_JTf)
+                    minus_JTf *= -1
+                    resource_alloc.host_comm_barrier()
+                    f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x0
+                    force_linesearch = True
                     printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "
                                 "Jacobian at a point shifted by %g in those coordinates"
                                 % (num_zero_cols, len(global_x), JAC_SHIFT), 2)
-                if deficient:
-                    printer.log("    %d of %d coefficient blocks are rank-deficient; using the Jacobian at "
-                                "B + %g I for those blocks" % (len(deficient), len(active_blocks),
-                                                               coefficient_shift**2), 2)
 
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
 
             norm_JTf = ari.infnorm_x(minus_JTf)
             norm_x = ari.norm2_x(x)
             pre_reg_data = ari.jtj_pre_regularization_data(JTJ)
-            for b in active_blocks:
-                # M maps a parameter step to a coefficient step; the damping on the block becomes mu * M^T M
-                b.M = _lc.cholesky_coords_jacobian(b.factor(global_eval_x))
-                b.MtM = b.M.T @ b.M
-                rows = local_row_of[b.indices]
-                b.local = rows >= 0
-                b.rows = rows[b.local]
-                b.jtj_block = _np.asarray(JTJ[b.rows[:, None], b.indices[None, :]]).copy()
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -936,8 +705,6 @@ def simplish_leastsq(
 
             if k == 0:
                 max_jtj_diag = ari.jtj_max_diagonal_element(JTJ)
-                if active_blocks:  # scale mu to the curvature in coefficient coordinates too
-                    max_jtj_diag = max(max_jtj_diag, _coefficient_jtj_max_diagonal(active_blocks, ari))
                 mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
@@ -949,8 +716,6 @@ def simplish_leastsq(
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                 ari.jtj_update_regularization(JTJ, pre_reg_data, mu)
-                for b in active_blocks:  # damp coefficient-space blocks by mu * M^T M instead of mu * I
-                    JTJ[b.rows[:, None], b.indices[None, :]] = b.jtj_block + mu * b.MtM[b.local]
 
                 try:
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
@@ -968,31 +733,15 @@ def simplish_leastsq(
                 reject_msg = ""
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
 
-                if active_blocks:
-                    # dx is a parameter step; the blocks move by their coefficient steps db = M dx_block
-                    ari.allgather_x(dx, global_dx)
-                    global_dy[:] = global_dx
-                    for b in active_blocks:
-                        global_dy[b.indices] = b.M @ global_dx[b.indices]
-                    norm_dy = float(global_dy @ global_dy)
-                    if max_norm_dx and norm_dy > max_norm_dx:
-                        scale = _np.sqrt(max_norm_dx / norm_dy)
-                        dx *= scale
-                        global_dx *= scale
-                        global_dy *= scale
-                        step_clipped = True
-                    coef_path(1.0)
-                    norm_dx = coef_step_norm2()
-                else:
+                new_x[:] = x + dx
+                norm_dx = ari.norm2_x(dx)
+
+                #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                if max_norm_dx and norm_dx > max_norm_dx:
+                    dx *= _np.sqrt(max_norm_dx / norm_dx)
                     new_x[:] = x + dx
                     norm_dx = ari.norm2_x(dx)
-
-                    #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                    if max_norm_dx and norm_dx > max_norm_dx:
-                        dx *= _np.sqrt(max_norm_dx / norm_dx)
-                        new_x[:] = x + dx
-                        norm_dx = ari.norm2_x(dx)
-                        step_clipped = True
+                    step_clipped = True
 
                 #apply x limits (bounds)
                 if x_limits is not None:
@@ -1043,10 +792,7 @@ def simplish_leastsq(
                     best_norm = norm_new_f if _np.isfinite(norm_new_f) else _np.inf
                     t = ls_beta
                     for _ in range(ls_max_evals):
-                        if active_blocks:
-                            coef_path(t)
-                        else:
-                            new_x[:] = x + t * dx
+                        new_x[:] = x + t * dx
                         ari.allgather_x(new_x, global_new_x)
                         trial_norm = ari.norm2_f(obj_fn(global_new_x))
                         if _np.isfinite(trial_norm) and trial_norm < best_norm:
@@ -1059,17 +805,10 @@ def simplish_leastsq(
                         dx *= best_t
                         norm_dx = ari.norm2_x(dx)
                         step_shrunk_by_ls = True
-                        if active_blocks:
-                            global_dx *= best_t
-                            global_dy *= best_t
 
                     # Re-evaluate at the (possibly rescaled) dx: the trial evals above clobbered
                     # obj_fn's internally-owned memory, so `new_f`/`norm_new_f` no longer reflect x + dx.
-                    if active_blocks:
-                        coef_path(1.0)
-                        norm_dx = coef_step_norm2()
-                    else:
-                        new_x[:] = x + dx
+                    new_x[:] = x + dx
                     ari.allgather_x(new_x, global_new_x)
                     new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
                     if not oob_ok:
@@ -1087,10 +826,7 @@ def simplish_leastsq(
                     break
 
                 # dL = expected decrease in ||F||^2 from linear model
-                if active_blocks:  # dx^T (mu * D dx + minus_JTf), where dx^T D dx = |dy|^2
-                    dL = ari.dot_x(dx, minus_JTf) + mu * float(global_dy @ global_dy)
-                else:
-                    dL = ari.dot_x(dx, mu * dx + minus_JTf)
+                dL = ari.dot_x(dx, mu * dx + minus_JTf)
                 dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
                 printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
