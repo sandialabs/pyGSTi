@@ -124,8 +124,9 @@ class ColdInstrumentFitTester(unittest.TestCase):
     def test_cold_cptplnd_fit_of_pre_projector_damping(self):
         # Outcome 0's post-measurement gate must become a reset while its effect leaves the projector,
         # but at the ideal instrument neither move pays off alone: the gate's rates are invisible while
-        # the effect is projective, and dB/dC vanishes at zero rates. Ordinary steps stall near
-        # 2 delta log L 3,900 here; coefficient-space steps on the instrument's blocks reach TP quality.
+        # the effect is projective, and dB/dC vanishes at zero rates. With coefficient_steps=False the
+        # fit stalls near 2 delta log L 3,900 here; the default coefficient-space steps on the
+        # instrument's blocks reach TP quality.
         target = _build_target()
         edesign = _build_edesign(target)
         circuits = edesign.all_circuits_needing_data
@@ -135,7 +136,7 @@ class ColdInstrumentFitTester(unittest.TestCase):
         data = ProtocolData(edesign, ds)
 
         _, tp_mdl = self._fit(data, target, 'full TP')
-        _, lnd_mdl = self._fit(data, target, 'CPTPLND', optimizer={**self.OPT, 'coefficient_steps': True})
+        _, lnd_mdl = self._fit(data, target, 'CPTPLND')
 
         tp_2dll = pygsti.tools.two_delta_logl(tp_mdl, ds, circuits)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)

@@ -269,10 +269,10 @@ class CoefficientStepTester(BaseCase):
 class CoefficientStepOptionTester(BaseCase):
 
     def test_option_normalization_and_validation(self):
-        self.assertIsNone(lm.SimplerLMOptimizer().coefficient_steps)
+        defaults = {'blocks': 'instruments', 'shift': 1e-2, 'iters': 10}
+        self.assertEqual(lm.SimplerLMOptimizer().coefficient_steps, defaults)  # on by default
+        self.assertEqual(lm.SimplerLMOptimizer(coefficient_steps=True).coefficient_steps, defaults)
         self.assertIsNone(lm.SimplerLMOptimizer(coefficient_steps=False).coefficient_steps)
-        self.assertEqual(lm.SimplerLMOptimizer(coefficient_steps=True).coefficient_steps,
-                         {'blocks': 'instruments', 'shift': 1e-2, 'iters': 10})
         self.assertEqual(lm.SimplerLMOptimizer(coefficient_steps={'iters': 3}).coefficient_steps,
                          {'blocks': 'instruments', 'shift': 1e-2, 'iters': 3})
         for bad in ({'blocks': 'all'}, {'shift': 0.0}, {'iters': -1}, {'iters': 1.5}, {'speed': 2}):
@@ -280,12 +280,14 @@ class CoefficientStepOptionTester(BaseCase):
                 lm.SimplerLMOptimizer(coefficient_steps=bad)
 
     def test_serialization_roundtrip(self):
-        opt = lm.SimplerLMOptimizer(coefficient_steps={'shift': 1e-3})
-        state = opt._to_nice_serialization()
+        for value in ({'shift': 1e-3}, False):
+            opt = lm.SimplerLMOptimizer(coefficient_steps=value)
+            state = opt._to_nice_serialization()
+            self.assertEqual(lm.SimplerLMOptimizer._from_nice_serialization(state).coefficient_steps,
+                             opt.coefficient_steps)
+        del state['coefficient_steps']  # as saved before this option existed: take the default
         self.assertEqual(lm.SimplerLMOptimizer._from_nice_serialization(state).coefficient_steps,
-                         opt.coefficient_steps)
-        del state['coefficient_steps']  # as saved before this option existed
-        self.assertIsNone(lm.SimplerLMOptimizer._from_nice_serialization(state).coefficient_steps)
+                         lm.SimplerLMOptimizer().coefficient_steps)
 
     def test_instrument_cholesky_blocks(self):
         from pygsti.modelmembers.instruments import Instrument
