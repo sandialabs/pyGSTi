@@ -600,3 +600,42 @@ class ZvalsInt64Tester(BaseCase):
         second = mt.zvals_int64_to_dense(0b10, 2)
         self.assertArraysAlmostEqual(first, self.pp_computational_superket((1, 0)))
         self.assertArraysAlmostEqual(second, self.pp_computational_superket((0, 1)))
+
+
+class PivotedCholeskyTester(BaseCase):
+
+    def _check(self, A, expected_rank, **kwargs):
+        L, perm, rank = mt.pivoted_cholesky(A, **kwargs)
+        self.assertEqual(rank, expected_rank)
+        self.assertEqual(sorted(perm), list(range(A.shape[0])))
+        np.testing.assert_allclose(L, np.tril(L))
+        np.testing.assert_allclose(L[:, rank:], 0)
+        return L, perm
+
+    def test_real_full_rank(self):
+        F = np.random.default_rng(0).standard_normal((4, 4))
+        A = F @ F.T
+        L, perm = self._check(A, 4)
+        self.assertFalse(np.iscomplexobj(L))
+        np.testing.assert_allclose(A[np.ix_(perm, perm)], L @ L.T, atol=1e-12)
+
+    def test_complex_rank_deficient(self):
+        rng = np.random.default_rng(1)
+        F = rng.standard_normal((5, 2)) + 1j * rng.standard_normal((5, 2))
+        A = F @ F.conj().T
+        L, perm = self._check(A, 2)
+        np.testing.assert_allclose(A[np.ix_(perm, perm)], L @ L.conj().T, atol=1e-12)
+        F2 = L[np.argsort(perm), :2]  # a factor of A itself
+        np.testing.assert_allclose(F2 @ F2.conj().T, A, atol=1e-12)
+
+    def test_zero_matrix(self):
+        self._check(np.zeros((3, 3)), 0)
+
+    def test_tol_sets_rank(self):
+        A = np.diag([1.0, 1e-3, 1e-9])
+        self._check(A, 3)
+        self._check(A, 2, tol=1e-6)
+
+    def test_non_square_raises(self):
+        with self.assertRaises(ValueError):
+            mt.pivoted_cholesky(np.zeros((2, 3)))
