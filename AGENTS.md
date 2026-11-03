@@ -74,7 +74,7 @@ Many code paths fork on `comm is None` vs. an `mpi4py.MPI.Comm`. The object that
 pyGSTi guards several heavy or platform-specific dependencies with try-imports and degrades gracefully:
 
 - `cvxpy` — SDP routines in [pygsti/tools/sdptools.py](pygsti/tools/sdptools.py), parts of [optools.py](pygsti/tools/optools.py) and [jamiolkowski.py](pygsti/tools/jamiolkowski.py).
-- `stim` — [pygsti/errorgenpropagation/](pygsti/errorgenpropagation/) and some of [pygsti/tools/errgenproptools.py](pygsti/tools/errgenproptools.py).
+- `stim` — [pygsti/errorgenpropagation/](pygsti/errorgenpropagation/) and some of [pygsti/tools/errorgenpropagation/](pygsti/tools/errorgenpropagation/).
 - `pymongo` — [pygsti/io/mongodb.py](pygsti/io/mongodb.py).
 - `pdflatex` (external binary) — required for PDF report generation.
 - `plotly` and `matplotlib` — required for HTML and PDF reports respectively.
