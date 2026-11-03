@@ -133,8 +133,12 @@ def _unitary_approximation(member: _np.ndarray, basis: _Basis, reference: _np.nd
     if R.shape != (udim, udim) or not _np.allclose(R.conj().T @ R, _np.eye(udim), atol=1e-8):
         raise ValueError(f"The reference must be a ({udim}, {udim}) unitary.")
 
-    I_superket = _bt.stdmx_to_vec(_np.eye(udim), basis).ravel().real
-    E_superket = (member.T @ I_superket).real
+    # E = I_k^dagger(I), whose superket in an orthonormal basis is member^dagger @ vec(I).  It is
+    # real exactly when the basis is Hermitian and the member is real; otherwise keep it complex.
+    I_superket = _bt.stdmx_to_vec(_np.eye(udim), basis).ravel()
+    E_superket = member.conj().T @ I_superket
+    if basis.is_hermitian() and _np.isreal(member).all():
+        E_superket = E_superket.real
     E_mat = _bt.vec_to_stdmx(E_superket, basis, keep_complex=True)
     E_mat = (E_mat + E_mat.conj().T) / 2
     e_vals, e_vecs = _np.linalg.eigh(E_mat)

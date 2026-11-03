@@ -15,8 +15,9 @@ P0, P1 = np.diag([1.0, 0.0]).astype(complex), np.diag([0.0, 1.0]).astype(complex
 
 
 def _superop(K, basis=PP):
-    """rho -> K rho K^dagger in `basis`."""
-    return bt.change_basis(np.kron(K, K.conj()), 'std', basis).real
+    """rho -> K rho K^dagger in `basis` (a real matrix when `basis` is Hermitian)."""
+    S = bt.change_basis(np.kron(K, K.conj()), 'std', basis)
+    return S.real if basis.is_hermitian() else S
 
 
 def _sqrtm_psd(E):
@@ -38,9 +39,10 @@ def _unitary(angles):
 class InferUnitaryFactorsTester(BaseCase):
 
     def test_one_kraus_member_is_reproduced(self):
+        # Includes the non-Hermitian 'std' basis, where member and effect superkets are complex.
         rng = np.random.default_rng(0)
-        for d in (2, 4):
-            basis = Basis.cast('pp', d**2)
+        for name, d in [('pp', 2), ('pp', 4), ('std', 2), ('std', 4)]:
+            basis = Basis.cast(name, d**2)
             V, _ = np.linalg.qr(rng.normal(size=(d, d)) + 1j * rng.normal(size=(d, d)))
             G = rng.normal(size=(d, d)) + 1j * rng.normal(size=(d, d))
             E = G @ G.conj().T
