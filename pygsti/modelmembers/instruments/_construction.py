@@ -345,14 +345,84 @@ def _parameterized_instrument(basis: _BasisLike,
         I_param = _op.convert(I_static, povm_errormap, basis)
         povm_errormap = I_param.factorops[1]
 
+    gate_ops = {lbl: _parameterize_gate(gate, basis, gate_parameterization) for lbl, gate in gates.items()}
+    return _assemble_members(basis, effect_superkets, povm_errormap, gate_ops)
+
+
+def _assemble_members(basis: _Basis, effect_superkets: dict[str, _np.ndarray], povm_errormap: _op.LinearOperator,
+                      gate_ops: dict[str, _op.LinearOperator]) -> dict[str, _op.ComposedOp]:
+    """
+    The members `ComposedOp([RootConjOperator(E_k), G_k])`, with the effects `E_k` drawn from one
+    :class:`ComposedPOVM` (`povm_errormap` over the static `effect_superkets`) and `G_k` from `gate_ops`.
+    """
     static_effects = {lbl: _pv.StaticPOVMEffect(E_superket)
                       for lbl, E_superket in effect_superkets.items()}
-    base_povm = _BasePOVM(static_effects)
-    composed_povm = _pv.ComposedPOVM(povm_errormap, base_povm)
+    composed_povm = _pv.ComposedPOVM(povm_errormap, _BasePOVM(static_effects))
+    return {lbl: _op.ComposedOp([_op.RootConjOperator(composed_povm[lbl], basis), gate_op])
+            for lbl, gate_op in gate_ops.items()}
 
-    member_ops = dict()
-    for lbl, gate in gates.items():
-        root = _op.RootConjOperator(composed_povm[lbl], basis)
-        member_ops[lbl] = _op.ComposedOp([root, _parameterize_gate(gate, basis, gate_parameterization)])
 
-    return member_ops
+def _effect_then_gate_parts(instrument) -> tuple[_op.LinearOperator, dict[str, _np.ndarray],
+                                                 dict[str, _op.LinearOperator]] | None:
+    """
+    The parts of an instrument in effect-then-gate form, or None if it isn't in that form.
+
+    The form is the one :func:`_assemble_members` builds: every member is
+    `ComposedOp([RootConjOperator(effect_k), gate_k])`, and the effects are those of one
+    :class:`ComposedPOVM`, i.e. they compose static effects with one shared error map.
+    Returns that error map, the static effect superkets, and the gates.
+    """
+    errormaps, effect_superkets, gates = [], dict(), dict()
+    for lbl, member in instrument.items():
+        if not (isinstance(member, _op.ComposedOp) and len(member.factorops) == 2
+                and isinstance(member.factorops[0], _op.RootConjOperator)):
+            return None
+        effect = member.factorops[0].submembers()[0]
+        if not isinstance(effect, _pv.ComposedPOVMEffect) or effect.effect_vec.num_params != 0:
+            return None
+        errormaps.append(effect.error_map)
+        effect_superkets[lbl] = _np.array(effect.effect_vec.to_dense('HilbertSchmidt')).ravel()
+        gates[lbl] = member.factorops[1]
+    if not errormaps or any(m is not errormaps[0] for m in errormaps):
+        return None
+    return errormaps[0], effect_superkets, gates
+
+
+def _gate_as_lindblad(gate: _op.LinearOperator, to_type: str, basis: _Basis) -> _op.LinearOperator:
+    """
+    Convert a post-measurement gate to the Lindblad type `to_type`, as an error map composed
+    onto a static unitary, without changing its value.
+
+    A gate that already has that form, `ComposedOp([StaticUnitaryOp(U), error_map])`, keeps `U`
+    and has only its error map converted, which for an exponentiated error generator changes the
+    coefficient blocks' parameterization and nothing else.  Any other gate is based on the
+    nearest unitary channel (itself, for a :class:`StaticUnitaryOp`), with the error map that
+    takes that channel to the gate.  The result shares no state with `gate`.
+    """
+    if (isinstance(gate, _op.ComposedOp) and len(gate.factorops) == 2
+            and isinstance(gate.factorops[0], _op.StaticUnitaryOp)):
+        base, error_map = gate.factorops
+        # Copy first: converting an exponentiated error generator reuses its coefficient arrays.
+        return _op.ComposedOp([base.copy(), _op.convert(error_map.copy(), to_type, basis, ideal_operation='identity')])
+    if isinstance(gate, _op.StaticUnitaryOp):
+        base = gate
+    else:
+        # The gate need not be CP (e.g. a 'full TP' gate), so don't enforce it here; converting
+        # to a CP-constrained type then fails, as it does for any non-CP gate.
+        _, U, _ = _unitary_approximation(_np.asarray(gate.to_dense('HilbertSchmidt')), basis, error_tol=_np.inf)
+        base = _op.StaticUnitaryOp(U, basis)
+    return _op.convert(gate, to_type, basis, ideal_operation=base, flatten_structure=True)
+
+
+def _converted_effect_then_gate_members(parts, to_type: str, povm_paramtype: str,
+                                        basis: _Basis) -> dict[str, _op.ComposedOp]:
+    """
+    Members equal to those of an effect-then-gate instrument, with `parts` from
+    :func:`_effect_then_gate_parts`, reparameterized: the static effects stay, the shared POVM
+    error map becomes a `povm_paramtype` error map, and each gate becomes a `to_type` Lindblad gate
+    (see :func:`_gate_as_lindblad`).  The members share no state with the original instrument's.
+    """
+    errormap, effect_superkets, gates = parts
+    errormap = _op.convert(errormap.copy(), povm_paramtype, basis, ideal_operation='identity')
+    gate_ops = {lbl: _gate_as_lindblad(gate, to_type, basis) for lbl, gate in gates.items()}
+    return _assemble_members(basis, effect_superkets, errormap, gate_ops)

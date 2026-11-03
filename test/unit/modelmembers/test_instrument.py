@@ -496,6 +496,70 @@ class FromEffectsTester(BaseCase):
             self.assertTrue(lo - 1e-12 <= evals[0] and evals[-1] <= hi + 1e-12)
 
 
+class LindbladConvertTester(BaseCase):
+    """A Lindblad `convert` of an instrument in effect-then-gate form keeps its members exactly."""
+
+    def setUp(self):
+        self.basis = std.target_model().basis
+        self.effects = {'p0': np.diag([1.0, 0.0]), 'p1': np.diag([0.0, 1.0])}
+        self.rng = np.random.default_rng(4)
+
+    def _members(self, instrument):
+        return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}
+
+    def _fitted(self, gate_parameterization='CPTPLND'):
+        # Away from zero error, so that every member has several Kraus operators.
+        instrument = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)},
+                                             self.basis, gate_parameterization=gate_parameterization)
+        instrument.from_vector(instrument.to_vector() + 0.05 * self.rng.standard_normal(instrument.num_params))
+        return instrument
+
+    def _assert_same_members(self, a, b):
+        for k, mx in self._members(a).items():
+            np.testing.assert_allclose(self._members(b)[k], mx, atol=1e-12)
+
+    def test_lindblad_to_lindblad(self):
+        instrument = self._fitted()
+        for to_type in ('CPTPLND', 'GLND'):
+            converted = convert(instrument, to_type, self.basis)
+            self._assert_same_members(instrument, converted)
+            self.assertEqual(converted.num_params, instrument.num_params)
+
+    def test_converted_instrument_shares_no_state(self):
+        # Changing the converted instrument must leave the original, and so a second conversion
+        # of it, unchanged.
+        instrument = self._fitted()
+        before = self._members(instrument)
+        converted = convert(instrument, 'GLND', self.basis)
+        converted.from_vector(converted.to_vector() + 0.01)
+        self._assert_same_members(instrument, convert(instrument, 'GLND', self.basis))
+        for k, mx in before.items():
+            np.testing.assert_allclose(self._members(instrument)[k], mx, atol=1e-14)
+
+    def test_static_gates_get_zero_error_maps(self):
+        static = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)},
+                                         self.basis, gate_parameterization='static')
+        converted = convert(static, 'CPTPLND', self.basis)
+        direct = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)}, self.basis)
+        self._assert_same_members(direct, converted)
+        self.assertEqual(converted.num_params, direct.num_params)
+
+    def test_full_tp_gates(self):
+        # A perturbed 'full TP' gate need not be CP: GLND represents it exactly, CPTPLND cannot.
+        instrument = self._fitted('full TP')
+        self._assert_same_members(instrument, convert(instrument, 'GLND', self.basis))
+        with self.assertRaises(ValueError):
+            convert(instrument, 'CPTPLND', self.basis)
+
+    def test_fitted_model_reparameterizes(self):
+        model = std.target_model()
+        model.instruments['Iz'] = self._fitted()
+        before = self._members(model.instruments['Iz'])
+        model.set_all_parameterizations('GLND')
+        for k, mx in before.items():
+            np.testing.assert_allclose(self._members(model.instruments['Iz'])[k], mx, atol=1e-12)
+
+
 def _central_difference_deriv(operator, h=1e-6):
     """Central-difference derivative of `operator.to_dense()`, in the layout of `deriv_wrt_params`."""
     p0 = operator.to_vector()
