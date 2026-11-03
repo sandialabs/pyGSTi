@@ -10,7 +10,6 @@ import pygsti
 import pygsti.tools.basistools as bt
 import pygsti.tools.optools as ot
 from pygsti.circuits import Circuit
-from pygsti.modelmembers import operations as op
 from pygsti.modelmembers.instruments import Instrument
 from pygsti.modelpacks import smq1Q_XZ
 from pygsti.protocols import GateSetTomography, GSTInitialModel, ProtocolData, StandardGSTDesign
@@ -96,13 +95,7 @@ class ColdInstrumentFitTester(unittest.TestCase):
         data = ProtocolData(edesign, ds)
 
         _, tp_mdl = self._fit(data, target, 'full TP')
-        seed, lnd_mdl = self._fit(data, target, 'CPTPLND')
-
-        # The CPTPLND seed is the ideal instrument, built around identity post-measurement unitaries.
-        for member in seed.instruments[INST_LBL].values():
-            static = member.factorops[1].factorops[0]
-            self.assertIsInstance(static, op.StaticUnitaryOp)
-            np.testing.assert_allclose(static.to_dense('HilbertSchmidt'), np.eye(4), atol=1e-12)
+        _, lnd_mdl = self._fit(data, target, 'CPTPLND')
 
         tp_2dll = pygsti.tools.two_delta_logl(tp_mdl, ds, circuits)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)

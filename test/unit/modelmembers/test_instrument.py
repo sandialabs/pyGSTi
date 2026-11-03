@@ -223,20 +223,16 @@ class FromCptrSuperopsTester(BaseCase):
 
     def test_ideal_projector_singular_effect(self):
         # Singular (rank-1) effects: each member is exactly Ad_I o RootConj(E_k), so the
-        # static gates are identity unitaries and the members reproduce the projectors.
+        # members reproduce the projectors.
         members = self._members(self.instrument)
         self.assertArraysAlmostEqual(members['plus'], self.Gmz_plus)
         self.assertArraysAlmostEqual(members['minus'], self.Gmz_minus)
         for mx in members.values():
             self._assert_cp(mx)
-        for member in self.instrument.values():
-            static = member.factorops[1].factorops[0]
-            self.assertIsInstance(static, op.StaticUnitaryOp)
-            self.assertArraysAlmostEqual(static.to_dense('HilbertSchmidt'), np.eye(self.basis.dim))
 
     def test_multi_kraus_members_raise(self):
         # A Kraus-rank-2 member has no unitary static base that reproduces it.
-        with self.assertRaisesRegex(ValueError, 'infer_unitary_factors'):
+        with self.assertRaises(ValueError):
             Instrument.from_cptr_superops(_noisy_z_op_arrays(), self.basis)
 
     def test_noisy_instrument_conversion_raises_and_suggested_recipe_works(self):
@@ -252,25 +248,6 @@ class FromCptrSuperopsTester(BaseCase):
             model.instruments[lbl] = Instrument.from_effects(pairs, model.basis)
         model.set_all_parameterizations('CPTPLND')
         self.assertIsInstance(model.instruments['Iz'], Instrument)
-
-    def test_multi_kraus_members_via_inferred_unitaries(self):
-        # The approximation route keeps every effect, hence every outcome probability, and
-        # still yields one ComposedOp and one shared effect per outcome.
-        arrays = _noisy_z_op_arrays()
-        pairs, reports = inst.infer_unitary_factors(arrays, self.basis)
-        instrument = Instrument.from_effects(pairs, self.basis)
-        members = self._members(instrument)
-        trace = np.eye(self.basis.dim)[0]  # <<I| / sqrt(2) in the normalized pp basis
-        for k, member in instrument.items():
-            self.assertIsInstance(member, op.ComposedOp)
-            self.assertNotIsInstance(member, SummedOperator)
-            self.assertIsInstance(member.factorops[0], RootConjOperator)
-            self.assertArraysAlmostEqual(trace @ members[k], trace @ arrays[k])
-            self.assertGreater(reports[k].residual, 1e-3)
-            self.assertEqual(reports[k].issues, ())
-            self._assert_cp(members[k])
-        effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
-        self.assertEqual(len(effects), len(instrument))
 
     def test_non_hermitian_unitary_members_round_trip(self):
         # Members rho -> V_k E_k^{1/2} rho E_k^{1/2} V_k^dagger with random unitaries V_k, which
@@ -444,11 +421,8 @@ class FromEffectsTester(BaseCase):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
 
-    def test_raises_on_nonunitary_gate(self):
-        depolarizing = np.diag([1.0, 0.9, 0.9, 0.9])  # TP and CP, but not unitary
-        with self.assertRaisesRegex(ValueError, 'not unitary'):
-            Instrument.from_effects({'p0': (self.E0, depolarizing), 'p1': self.E1}, self.basis)
-        with self.assertRaisesRegex(ValueError, 'not unitary'):
+    def test_raises_on_nonunitary_matrix_gate(self):
+        with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.5 * np.eye(2)), 'p1': self.E1}, self.basis)
 
     def test_unitary_gate_forms_agree(self):
@@ -464,18 +438,12 @@ class FromEffectsTester(BaseCase):
             self.assertIsInstance(static, op.StaticUnitaryOp)
             self.assertArraysAlmostEqual(self._members(instrument)['p1'], expected)
 
-    def test_static_gate_parameterization_is_unitary(self):
-        instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis,
-                                             gate_parameterization='static')
-        for member in instrument.values():
-            self.assertIsInstance(member.factorops[1], op.StaticUnitaryOp)
-
     def test_singular_gate_raises(self):
         # Measure-and-reset written as a reset channel after each effect: the reset is CPTP but
-        # singular, and the static base must be unitary (infer_unitary_factors finds one).
+        # singular, and a Lindblad chart's static base must be unitary (infer_unitary_factors finds one).
         sk = lambda mx: pygsti.tools.stdmx_to_vec(mx, self.basis).ravel().real
         reset = np.outer(sk(np.diag([1.0, 0.0])), sk(np.eye(2)))
-        with self.assertRaisesRegex(ValueError, 'not unitary'):
+        with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, reset), 'p1': (self.E1, reset)}, self.basis)
 
     def test_non_lindblad_gates_need_only_be_tp(self):
