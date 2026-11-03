@@ -44,6 +44,16 @@ def _noisy_z_op_arrays(gamma=0.05, theta=np.deg2rad(10), eps=0.02):
     return {'p0': R0, 'p1': R1}
 
 
+#: X(pi/2), a unitary that is not Hermitian and does not commute with Z-basis effects, so a
+#: member built with U^dagger in place of U differs from the intended one.
+GXPI2 = np.array([[1, -1j], [-1j, 1]], dtype=complex) / np.sqrt(2)
+
+
+def _kraus_superop(K, basis):
+    """rho -> K rho K^dagger in a Hermitian `basis`, from the textbook std-basis form kron(K, conj(K))."""
+    return pygsti.tools.change_basis(np.kron(K, K.conj()), 'std', basis).real
+
+
 def _weak_z_op_arrays(off_eigenvalue):
     """Dense CPTR superops for a weak Z measurement with diagonal effects.
 
@@ -140,7 +150,8 @@ class FromCptrSuperopsTester(BaseCase):
         self.E0, self.E1, self.Gmz_plus, self.Gmz_minus = z_measurement_projectors(model)
         self.basis = model.basis
         # The default fixture is an ideal projective Z measurement: each effect is a
-        # rank-1 projector (singular E_k), which exercises the gate kernel completion.
+        # rank-1 projector (singular E_k), so the member leaves part of its unitary
+        # undetermined and the identity completes it.
         self.op_arrays = {'plus': self.Gmz_plus, 'minus': self.Gmz_minus}
         self.instrument = Instrument.from_cptr_superops(self.op_arrays, self.basis)
 
@@ -211,35 +222,54 @@ class FromCptrSuperopsTester(BaseCase):
     # --- numerical correctness: effect-then-CPTP-gate reconstruction ---
 
     def test_ideal_projector_singular_effect(self):
-        # Singular (rank-1) effects: the recovered gate is the canonical CPTP
-        # completion G_k = Q_k + P_k; the members reproduce the ideal projectors and
-        # are completely positive.
+        # Singular (rank-1) effects: each member is exactly Ad_I o RootConj(E_k), so the
+        # members reproduce the projectors.
         members = self._members(self.instrument)
         self.assertArraysAlmostEqual(members['plus'], self.Gmz_plus)
         self.assertArraysAlmostEqual(members['minus'], self.Gmz_minus)
         for mx in members.values():
             self._assert_cp(mx)
 
-    def test_rank2_members_stay_single_composed_op(self):
-        # A Kraus-rank-2 member still yields a single ComposedOp (no SummedOperator)
-        # and a single shared effect per outcome, while reproducing the input.
-        arrays = _noisy_z_op_arrays()
+    def test_multi_kraus_members_raise(self):
+        # A Kraus-rank-2 member has no unitary static base that reproduces it.
+        with self.assertRaises(ValueError):
+            Instrument.from_cptr_superops(_noisy_z_op_arrays(), self.basis)
+
+    def test_noisy_instrument_conversion_raises_and_suggested_recipe_works(self):
+        # A model's conversion surfaces the instrument's own error, which names the recipe:
+        # replace each instrument by its unitary approximation, then convert the model.
+        model = std.target_model()
+        model.instruments['Iz'] = TPInstrument(list(_noisy_z_op_arrays().items()))
+        with self.assertRaises(ValueError) as caught:
+            model.copy().set_all_parameterizations('CPTPLND')
+        self.assertIn('infer_unitary_factors', str(caught.exception))
+        for lbl, instrument in list(model.instruments.items()):
+            pairs, _ = inst.infer_unitary_factors(instrument, model.basis)
+            model.instruments[lbl] = Instrument.from_effects(pairs, model.basis)
+        model.set_all_parameterizations('CPTPLND')
+        self.assertIsInstance(model.instruments['Iz'], Instrument)
+
+    def test_non_hermitian_unitary_members_round_trip(self):
+        # Members rho -> V_k E_k^{1/2} rho E_k^{1/2} V_k^dagger with random unitaries V_k, which
+        # Ad_{V_k^dagger} in place of Ad_{V_k} would not reproduce.
+        rng = np.random.default_rng(3)
+        G = rng.normal(size=(2, 2)) + 1j * rng.normal(size=(2, 2))
+        w, Q = np.linalg.eigh(G @ G.conj().T)
+        effects = [(Q * w / (1.1 * w.max())) @ Q.conj().T]
+        effects.append(np.eye(2) - effects[0])
+        arrays = {}
+        for lbl, E in zip(('p0', 'p1'), effects):
+            V, _ = np.linalg.qr(rng.normal(size=(2, 2)) + 1j * rng.normal(size=(2, 2)))
+            w, Q = np.linalg.eigh(E)
+            arrays[lbl] = _kraus_superop(V @ (Q * np.sqrt(w)) @ Q.conj().T, self.basis)
         instrument = Instrument.from_cptr_superops(arrays, self.basis)
         members = self._members(instrument)
-        for k, member in instrument.items():
-            self.assertIsInstance(member, op.ComposedOp)
-            self.assertNotIsInstance(member, SummedOperator)
-            self.assertIsInstance(member.factorops[0], RootConjOperator)
-            self.assertArraysAlmostEqual(members[k], arrays[k])
-            self._assert_cp(members[k])
-        effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
-        self.assertEqual(len(effects), len(instrument))
+        for lbl in arrays:
+            self.assertArraysAlmostEqual(members[lbl], arrays[lbl])
 
-    def test_perturbed_projector_kernel_threshold(self):
-        # A small effect eigenvalue *above* trunc_tol is kept (exact reconstruction);
-        # one *below* trunc_tol is treated as kernel and completed (reconstruction
-        # then degrades only in that barely-measured direction).  Both stay CP and TP.
-        for off, recon_atol in [(1e-5, 1e-6), (1e-9, 1e-3)]:
+    def test_nearly_projective_effects_reconstruct_exactly(self):
+        # One-Kraus members reconstruct exactly however small an effect eigenvalue is.
+        for off in (1e-5, 1e-9):
             arrays = _weak_z_op_arrays(off)
             instrument = Instrument.from_cptr_superops(arrays, self.basis)
             members = self._members(instrument)
@@ -247,7 +277,7 @@ class FromCptrSuperopsTester(BaseCase):
             np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
             for k, mx in members.items():
                 self._assert_cp(mx)
-                np.testing.assert_allclose(mx, arrays[k], atol=recon_atol)
+                np.testing.assert_allclose(mx, arrays[k], atol=1e-12)
 
     def test_raises_when_members_not_tp(self):
         # Effects E_k = I_k^dagger(I) that do not sum to I -> not a TP channel.
@@ -352,16 +382,13 @@ class FromEffectsTester(BaseCase):
             self.assertGreaterEqual(viol, -1e-8)
 
     def test_unitary_gate_and_matrix_effect(self):
-        # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
-        from pygsti.tools import optools as ot
+        # A post-measurement X(pi/2) on outcome p1, and effects given as 2x2 matrices.
         proj0 = np.array([[1, 0], [0, 0]], dtype=complex)
         proj1 = np.array([[0, 0], [0, 1]], dtype=complex)
-        Z = np.array([[1, 0], [0, -1]], dtype=complex)
         members = self._members(Instrument.from_effects(
-            {'p0': (proj0, np.eye(2)), 'p1': (proj1, Z)}, self.basis))
-        expected_p1 = ot.unitary_to_superop(Z, self.basis) @ ot.rootconj_superop(self.E1, self.basis)
+            {'p0': (proj0, np.eye(2)), 'p1': (proj1, GXPI2)}, self.basis))
         self.assertArraysAlmostEqual(members['p0'], self.Gmz_plus)
-        self.assertArraysAlmostEqual(members['p1'], expected_p1)
+        self.assertArraysAlmostEqual(members['p1'], _kraus_superop(GXPI2 @ proj1, self.basis))
 
     def test_relaxed_cp_full_tp_gate(self):
         # 'full TP' relaxes the per-member CP constraint while keeping the instrument
@@ -393,6 +420,125 @@ class FromEffectsTester(BaseCase):
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+
+    def test_raises_on_nonunitary_matrix_gate(self):
+        with self.assertRaises(ValueError):
+            Instrument.from_effects({'p0': (self.E0, 0.5 * np.eye(2)), 'p1': self.E1}, self.basis)
+
+    def test_unitary_gate_forms_agree(self):
+        # A unitary, its superoperator, and a LinearOperator holding it each build the member
+        # rho -> U P1 rho P1 U^dagger.
+        from pygsti.tools import optools as ot
+        P1 = np.diag([0.0, 1.0]).astype(complex)
+        expected = _kraus_superop(GXPI2 @ P1, self.basis)
+        forms = [GXPI2, ot.unitary_to_superop(GXPI2, self.basis), op.StaticUnitaryOp(GXPI2, self.basis)]
+        for g in forms:
+            instrument = Instrument.from_effects({'p0': self.E0, 'p1': (self.E1, g)}, self.basis)
+            static = instrument['p1'].factorops[1].factorops[0]
+            self.assertIsInstance(static, op.StaticUnitaryOp)
+            self.assertArraysAlmostEqual(self._members(instrument)['p1'], expected)
+
+    def test_singular_gate_raises(self):
+        # Measure-and-reset written as a reset channel after each effect: the reset is CPTP but
+        # singular, and a Lindblad chart's static base must be unitary (infer_unitary_factors finds one).
+        sk = lambda mx: pygsti.tools.stdmx_to_vec(mx, self.basis).ravel().real
+        reset = np.outer(sk(np.diag([1.0, 0.0])), sk(np.eye(2)))
+        with self.assertRaises(ValueError):
+            Instrument.from_effects({'p0': (self.E0, reset), 'p1': (self.E1, reset)}, self.basis)
+
+    def test_non_lindblad_gates_need_only_be_tp(self):
+        # 'full TP' and 'static' freeze no unitary base, so the reset above is a valid gate there:
+        # each member is rho -> Tr(P_k rho) |0><0|.
+        sk = lambda mx: pygsti.tools.stdmx_to_vec(mx, self.basis).ravel().real
+        projectors = {'p0': np.diag([1.0, 0.0]), 'p1': np.diag([0.0, 1.0])}
+        reset = np.outer(sk(projectors['p0']), sk(np.eye(2)))
+        for gate_parameterization in ('full TP', 'static'):
+            instrument = Instrument.from_effects({k: (P, reset) for k, P in projectors.items()}, self.basis,
+                                                 gate_parameterization=gate_parameterization)
+            for k, mx in self._members(instrument).items():
+                self.assertArraysAlmostEqual(mx, np.outer(sk(projectors['p0']), sk(projectors[k])))
+
+    def test_reachable_effects_keep_spectra_and_linear_relations(self):
+        # The docstring's warning: every reachable effect is M^dagger(E_k) for one unital M^dagger,
+        # so spectra stay in the supplied intervals and linear relations among the effects persist.
+        # Three commuting qubit effects have a relation sum_k c_k E_k = 0 besides sum_k E_k = I.
+        effects = {'a': np.diag([0.9, 0.1]), 'b': np.diag([0.06, 0.3]), 'c': np.diag([0.04, 0.6])}
+        coeffs = np.linalg.svd(np.array([np.diag(e) for e in effects.values()]).T)[2][-1]
+        instrument = Instrument.from_effects(effects, self.basis)
+        rng = np.random.default_rng(0)
+        instrument.from_vector(0.05 * rng.standard_normal(instrument.num_params))
+        E = {k: member.factorops[0].submembers()[0].to_dense() for k, member in instrument.items()}
+        moved = E['a'] - pygsti.tools.stdmx_to_vec(effects['a'], self.basis).ravel()
+        self.assertGreater(np.linalg.norm(moved), 1e-3)
+        self.assertArraysAlmostEqual(sum(c * e for c, e in zip(coeffs, E.values())), np.zeros(self.basis.dim))
+        for k, superket in E.items():
+            evals = np.linalg.eigvalsh(pygsti.tools.vec_to_stdmx(superket, self.basis))
+            lo, hi = np.linalg.eigvalsh(effects[k])[[0, -1]]
+            self.assertTrue(lo - 1e-12 <= evals[0] and evals[-1] <= hi + 1e-12)
+
+
+class LindbladConvertTester(BaseCase):
+    """A Lindblad `convert` of an instrument in effect-then-gate form keeps its members exactly."""
+
+    def setUp(self):
+        self.basis = std.target_model().basis
+        self.effects = {'p0': np.diag([1.0, 0.0]), 'p1': np.diag([0.0, 1.0])}
+        self.rng = np.random.default_rng(4)
+
+    def _members(self, instrument):
+        return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}
+
+    def _fitted(self, gate_parameterization='CPTPLND'):
+        # Away from zero error, so that every member has several Kraus operators.
+        instrument = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)},
+                                             self.basis, gate_parameterization=gate_parameterization)
+        instrument.from_vector(instrument.to_vector() + 0.05 * self.rng.standard_normal(instrument.num_params))
+        return instrument
+
+    def _assert_same_members(self, a, b):
+        for k, mx in self._members(a).items():
+            np.testing.assert_allclose(self._members(b)[k], mx, atol=1e-12)
+
+    def test_lindblad_to_lindblad(self):
+        instrument = self._fitted()
+        for to_type in ('CPTPLND', 'GLND'):
+            converted = convert(instrument, to_type, self.basis)
+            self._assert_same_members(instrument, converted)
+            self.assertEqual(converted.num_params, instrument.num_params)
+
+    def test_converted_instrument_shares_no_state(self):
+        # Changing the converted instrument must leave the original, and so a second conversion
+        # of it, unchanged.
+        instrument = self._fitted()
+        before = self._members(instrument)
+        converted = convert(instrument, 'GLND', self.basis)
+        converted.from_vector(converted.to_vector() + 0.01)
+        self._assert_same_members(instrument, convert(instrument, 'GLND', self.basis))
+        for k, mx in before.items():
+            np.testing.assert_allclose(self._members(instrument)[k], mx, atol=1e-14)
+
+    def test_static_gates_get_zero_error_maps(self):
+        static = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)},
+                                         self.basis, gate_parameterization='static')
+        converted = convert(static, 'CPTPLND', self.basis)
+        direct = Instrument.from_effects({'p0': self.effects['p0'], 'p1': (self.effects['p1'], GXPI2)}, self.basis)
+        self._assert_same_members(direct, converted)
+        self.assertEqual(converted.num_params, direct.num_params)
+
+    def test_full_tp_gates(self):
+        # A perturbed 'full TP' gate need not be CP: GLND represents it exactly, CPTPLND cannot.
+        instrument = self._fitted('full TP')
+        self._assert_same_members(instrument, convert(instrument, 'GLND', self.basis))
+        with self.assertRaises(ValueError):
+            convert(instrument, 'CPTPLND', self.basis)
+
+    def test_fitted_model_reparameterizes(self):
+        model = std.target_model()
+        model.instruments['Iz'] = self._fitted()
+        before = self._members(model.instruments['Iz'])
+        model.set_all_parameterizations('GLND')
+        for k, mx in before.items():
+            np.testing.assert_allclose(self._members(model.instruments['Iz'])[k], mx, atol=1e-12)
 
 
 def _central_difference_deriv(operator, h=1e-6):
