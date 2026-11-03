@@ -478,6 +478,18 @@ class FromEffectsTester(BaseCase):
         with self.assertRaisesRegex(ValueError, 'not unitary'):
             Instrument.from_effects({'p0': (self.E0, reset), 'p1': (self.E1, reset)}, self.basis)
 
+    def test_non_lindblad_gates_need_only_be_tp(self):
+        # 'full TP' and 'static' freeze no unitary base, so the reset above is a valid gate there:
+        # each member is rho -> Tr(P_k rho) |0><0|.
+        sk = lambda mx: pygsti.tools.stdmx_to_vec(mx, self.basis).ravel().real
+        projectors = {'p0': np.diag([1.0, 0.0]), 'p1': np.diag([0.0, 1.0])}
+        reset = np.outer(sk(projectors['p0']), sk(np.eye(2)))
+        for gate_parameterization in ('full TP', 'static'):
+            instrument = Instrument.from_effects({k: (P, reset) for k, P in projectors.items()}, self.basis,
+                                                 gate_parameterization=gate_parameterization)
+            for k, mx in self._members(instrument).items():
+                self.assertArraysAlmostEqual(mx, np.outer(sk(projectors['p0']), sk(projectors[k])))
+
     def test_reachable_effects_keep_spectra_and_linear_relations(self):
         # The docstring's warning: every reachable effect is M^dagger(E_k) for one unital M^dagger,
         # so spectra stay in the supplied intervals and linear relations among the effects persist.

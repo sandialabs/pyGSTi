@@ -151,15 +151,15 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
                      povm_errormap: _op.LinearOperator | str = 'CPTPLND', atol: float = 1e-6) -> Instrument:
         r"""
         Construct a parameterized instrument from measurement effects and optional
-        post-measurement unitaries.
+        post-measurement gates.
 
         Each member is built in the canonical *measure-then-gate* form
 
             I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),
 
         a soft measurement of the POVM effect `E_k` followed by the
-        post-measurement gate `G_k`, whose value at zero error is the unitary
-        channel of the supplied `U_k`.  The effects `{E_k}` are gathered
+        post-measurement gate `G_k`, whose value at zero error is the supplied
+        gate.  The effects `{E_k}` are gathered
         into a single shared :class:`ComposedPOVM` whose CP-constrained error map
         keeps every `E_k` positive and makes them sum to the identity. Each
         gate `G_k` is parameterized independently.
@@ -173,9 +173,10 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         become a *frozen static base*, onto which zero-initialized error maps are
         composed: the instrument they describe is the chart's zero-error point,
         and all noise lives in the Lindblad parameters.  For all practical
-        purposes the ideal post-measurement conditional gate is unitary, so the
-        gates must be unitary; a noisy frozen base would bound what a fit can
-        reach.
+        purposes the ideal post-measurement conditional gate is unitary, so these
+        parameterizations need unitary gates; a noisy frozen base would bound
+        what a fit can reach.  `'full TP'` and `'static'` have no such base and
+        accept any TP gate.
 
         .. warning::
             The supplied effects `E_k` also bound which effects a fit can reach.
@@ -202,8 +203,10 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             a physically meaningful POVM.
 
             Each `gate` is a `d x d` unitary, None (the identity), or a
-            `d**2 x d**2` superoperator or :class:`LinearOperator` that is a
-            unitary channel.  A non-unitary gate raises ValueError.
+            `d**2 x d**2` superoperator or :class:`LinearOperator`.  For a Lindblad
+            `gate_parameterization` the gate must be a unitary channel, and a
+            non-unitary gate raises ValueError; `'full TP'` and `'static'` accept
+            any TP gate.
 
         basis : _BasisLike
             The basis in which dense arrays are represented.
@@ -220,18 +223,20 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             used as the shared error map of the effects' :class:`ComposedPOVM`.
 
         atol : float, optional
-            Absolute tolerance for the per-gate unitarity check and the completeness check.
+            Absolute tolerance for the per-gate TP and unitarity checks and the completeness check.
 
         Returns
         -------
         Instrument
         """
         from pygsti.modelmembers.instruments._construction import (
-            _normalize_effects_and_gates, _parameterized_instrument
+            _is_lindblad_type, _normalize_effects_and_gates, _parameterized_instrument
         )
-        basis, superkets, unitaries = _normalize_effects_and_gates(members, basis, atol)
+        basis, superkets, gates = _normalize_effects_and_gates(
+            members, basis, atol, require_unitary=_is_lindblad_type(gate_parameterization)
+        )
         member_ops = _parameterized_instrument(
-            basis, superkets, unitaries, gate_parameterization, povm_errormap
+            basis, superkets, gates, gate_parameterization, povm_errormap
         )
         return Instrument(member_ops)
 

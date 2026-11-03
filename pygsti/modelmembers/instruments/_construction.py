@@ -85,14 +85,16 @@ def _validate_gate_parameterization(gate_parameterization: str) -> None:
         f"type ('CPTPLND', 'GLND', 'H+S', 'H+s', ...), 'full TP', or 'static'.")
 
 
-def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLike, atol: float = 1e-6
+def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLike, atol: float = 1e-6,
+                                 require_unitary: bool = True
                                  ) -> tuple[_Basis, dict[str, _np.ndarray], dict[str, _np.ndarray]]:
     """
     Normalize a `{label: (effect, gate)}` (or `{label: effect}`) mapping into
-    separate dicts of effect superkets and post-measurement unitaries.
+    separate dicts of effect superkets and post-measurement gates.
 
-    Each gate must be unitary: a unitary matrix, or a superoperator or
-    :class:`LinearOperator` that is a unitary channel.
+    With `require_unitary`, as a Lindblad gate parameterization needs, each gate must be
+    unitary: a unitary matrix, or a superoperator or :class:`LinearOperator` that is a
+    unitary channel.  Otherwise any TP superoperator or :class:`LinearOperator` is accepted.
 
     Validates that the effects satisfy the
     POVM completeness relation `sum_k E_k == I` (i.e. the instrument is TP).
@@ -107,21 +109,25 @@ def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLi
         `effect` (gate defaults to the identity).  `effect` may be a length-
         `d**2` superket in `basis`, a Hermitian `d x d` matrix, or a
         :class:`POVMEffect`.  `gate` may be a `d**2 x d**2` superop, a
-        `d x d` unitary, `None`, or a :class:`LinearOperator`, and must be unitary.
+        `d x d` unitary, `None`, or a :class:`LinearOperator`.
 
     basis : Basis or str
         The basis in which dense arrays are represented.  If a string, the
         dimension is inferred from the first effect.
 
     atol : float, optional
-        Absolute tolerance for the per-gate unitarity check and the completeness check.
+        Absolute tolerance for the per-gate TP and unitarity checks and the completeness check.
+
+    require_unitary : bool, optional
+        Whether every gate must be unitary.
 
     Returns
     -------
     basis : Basis
     effect_superkets : dict[label, numpy.ndarray]
-    unitaries : dict[label, numpy.ndarray]
-        The `d x d` post-measurement unitaries.
+    gates : dict[label, numpy.ndarray]
+        The post-measurement gates: `d x d` unitaries, or with `require_unitary` False, a
+        `d**2 x d**2` superoperator for each gate not given as a unitary matrix.
     """
     def _effect_of(val: MemberSpec) -> EffectSpec:
         return val[0] if isinstance(val, tuple) else val
@@ -168,17 +174,22 @@ def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLi
         raise ValueError(f"Gate has shape {arr.shape}; expected a ({dim}, {dim}) "
                          f"superoperator or a ({udim}, {udim}) unitary.")
 
-    def as_unitary(label, gate: GateSpec) -> _np.ndarray:
+    def as_gate(label, gate: GateSpec) -> _np.ndarray:
         if gate is None:
             return _np.eye(udim, dtype=complex)
         arr = None if hasattr(gate, 'to_dense') else _np.asarray(gate)
         if arr is not None and arr.shape == (udim, udim):
             if not _np.allclose(arr.conj().T @ arr, _np.eye(udim), atol=atol):
-                raise ValueError(_nonunitary_gate_message(label, "it is not a unitary matrix"))
+                if require_unitary:
+                    raise ValueError(_nonunitary_gate_message(label, "it is not a unitary matrix"))
+                raise ValueError(f"The post-measurement gate for outcome {label!r} is a ({udim}, {udim}) matrix but "
+                                 f"not unitary; give a non-unitary gate as a ({dim}, {dim}) superoperator.")
             return arr.astype(complex)
         G_superop = as_superop(gate)
         if not _np.allclose(I_superket @ G_superop, I_superket, atol=atol):
             raise ValueError(f"The post-measurement gate for outcome {label!r} is not TP.")
+        if not require_unitary:
+            return G_superop
         try:
             _, U, report = _unitary_approximation(G_superop, basis)
         except ValueError as e:
@@ -194,7 +205,7 @@ def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLi
     effect_sum = _np.zeros((udim, udim), dtype=complex)
     for label, val in members.items():
         E_superket = as_superket(_effect_of(val))
-        gate = as_unitary(label, _gate_of(val))
+        gate = as_gate(label, _gate_of(val))
         # rootconj_superop validates 0 <= E_k <= I and raises/warns otherwise.
         _ot.rootconj_superop(E_superket, basis)
         superkets[label] = E_superket
@@ -214,9 +225,10 @@ _HAND_BUILT_NOTE = ("To freeze a general channel G as the static gate anyway, as
 
 
 def _nonunitary_gate_message(label, reason: str) -> str:
-    return (f"The post-measurement gate for outcome {label!r} is not unitary: {reason}. An instrument "
-            "member's static post-measurement gate is unitary; noise in the post-measurement dynamics "
-            "belongs in the gate's parameters. " + _HAND_BUILT_NOTE)
+    return (f"The post-measurement gate for outcome {label!r} is not unitary: {reason}. A Lindblad gate "
+            "parameterization composes its error map onto a unitary static gate; noise in the post-measurement "
+            "dynamics belongs in the error map's parameters. gate_parameterization='full TP' or 'static' accepts "
+            "any TP gate. " + _HAND_BUILT_NOTE)
 
 
 def _unitary_members_from_cptr(op_arrays: dict[str, _np.ndarray], basis: _Basis, error_tol: float = 1e-6,
