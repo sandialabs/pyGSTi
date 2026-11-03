@@ -44,6 +44,16 @@ def _noisy_z_op_arrays(gamma=0.05, theta=np.deg2rad(10), eps=0.02):
     return {'p0': R0, 'p1': R1}
 
 
+#: X(pi/2), a unitary that is not Hermitian and does not commute with Z-basis effects, so a
+#: member built with U^dagger in place of U differs from the intended one.
+GXPI2 = np.array([[1, -1j], [-1j, 1]], dtype=complex) / np.sqrt(2)
+
+
+def _kraus_superop(K, basis):
+    """rho -> K rho K^dagger in a Hermitian `basis`, from the textbook std-basis form kron(K, conj(K))."""
+    return pygsti.tools.change_basis(np.kron(K, K.conj()), 'std', basis).real
+
+
 def _weak_z_op_arrays(off_eigenvalue):
     """Dense CPTR superops for a weak Z measurement with diagonal effects.
 
@@ -261,6 +271,24 @@ class FromCptrSuperopsTester(BaseCase):
         effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
         self.assertEqual(len(effects), len(instrument))
 
+    def test_non_hermitian_unitary_members_round_trip(self):
+        # Members rho -> V_k E_k^{1/2} rho E_k^{1/2} V_k^dagger with random unitaries V_k, which
+        # Ad_{V_k^dagger} in place of Ad_{V_k} would not reproduce.
+        rng = np.random.default_rng(3)
+        G = rng.normal(size=(2, 2)) + 1j * rng.normal(size=(2, 2))
+        w, Q = np.linalg.eigh(G @ G.conj().T)
+        effects = [(Q * w / (1.1 * w.max())) @ Q.conj().T]
+        effects.append(np.eye(2) - effects[0])
+        arrays = {}
+        for lbl, E in zip(('p0', 'p1'), effects):
+            V, _ = np.linalg.qr(rng.normal(size=(2, 2)) + 1j * rng.normal(size=(2, 2)))
+            w, Q = np.linalg.eigh(E)
+            arrays[lbl] = _kraus_superop(V @ (Q * np.sqrt(w)) @ Q.conj().T, self.basis)
+        instrument = Instrument.from_cptr_superops(arrays, self.basis)
+        members = self._members(instrument)
+        for lbl in arrays:
+            self.assertArraysAlmostEqual(members[lbl], arrays[lbl])
+
     def test_nearly_projective_effects_reconstruct_exactly(self):
         # One-Kraus members reconstruct exactly however small an effect eigenvalue is.
         for off in (1e-5, 1e-9):
@@ -376,16 +404,13 @@ class FromEffectsTester(BaseCase):
             self.assertGreaterEqual(viol, -1e-8)
 
     def test_unitary_gate_and_matrix_effect(self):
-        # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
-        from pygsti.tools import optools as ot
+        # A post-measurement X(pi/2) on outcome p1, and effects given as 2x2 matrices.
         proj0 = np.array([[1, 0], [0, 0]], dtype=complex)
         proj1 = np.array([[0, 0], [0, 1]], dtype=complex)
-        Z = np.array([[1, 0], [0, -1]], dtype=complex)
         members = self._members(Instrument.from_effects(
-            {'p0': (proj0, np.eye(2)), 'p1': (proj1, Z)}, self.basis))
-        expected_p1 = ot.unitary_to_superop(Z, self.basis) @ ot.rootconj_superop(self.E1, self.basis)
+            {'p0': (proj0, np.eye(2)), 'p1': (proj1, GXPI2)}, self.basis))
         self.assertArraysAlmostEqual(members['p0'], self.Gmz_plus)
-        self.assertArraysAlmostEqual(members['p1'], expected_p1)
+        self.assertArraysAlmostEqual(members['p1'], _kraus_superop(GXPI2 @ proj1, self.basis))
 
     def test_relaxed_cp_full_tp_gate(self):
         # 'full TP' relaxes the per-member CP constraint while keeping the instrument
@@ -426,15 +451,17 @@ class FromEffectsTester(BaseCase):
             Instrument.from_effects({'p0': (self.E0, 0.5 * np.eye(2)), 'p1': self.E1}, self.basis)
 
     def test_unitary_gate_forms_agree(self):
-        # A unitary, its superoperator, and a LinearOperator holding it build the same chart.
+        # A unitary, its superoperator, and a LinearOperator holding it each build the member
+        # rho -> U P1 rho P1 U^dagger.
         from pygsti.tools import optools as ot
-        Z = np.array([[1, 0], [0, -1]], dtype=complex)
-        forms = [Z, ot.unitary_to_superop(Z, self.basis), op.StaticUnitaryOp(Z, self.basis)]
-        built = [Instrument.from_effects({'p0': self.E0, 'p1': (self.E1, g)}, self.basis) for g in forms]
-        for instrument in built:
+        P1 = np.diag([0.0, 1.0]).astype(complex)
+        expected = _kraus_superop(GXPI2 @ P1, self.basis)
+        forms = [GXPI2, ot.unitary_to_superop(GXPI2, self.basis), op.StaticUnitaryOp(GXPI2, self.basis)]
+        for g in forms:
+            instrument = Instrument.from_effects({'p0': self.E0, 'p1': (self.E1, g)}, self.basis)
             static = instrument['p1'].factorops[1].factorops[0]
             self.assertIsInstance(static, op.StaticUnitaryOp)
-            self.assertArraysAlmostEqual(self._members(instrument)['p1'], self._members(built[0])['p1'])
+            self.assertArraysAlmostEqual(self._members(instrument)['p1'], expected)
 
     def test_static_gate_parameterization_is_unitary(self):
         instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis,
