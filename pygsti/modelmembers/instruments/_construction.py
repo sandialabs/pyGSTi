@@ -243,9 +243,12 @@ def _unitary_members_from_cptr(op_arrays: dict[str, _np.ndarray], basis: _Basis,
         raise ValueError(
             "No unitary static base reproduces instrument member(s) " + ", ".join(inexact) + ": a member "
             "factors as rho -> U E^{1/2} rho E^{1/2} U^dagger with U unitary only if it has a single Kraus operator. "
-            "To start from the effect-preserving unitary approximation, use "
-            "pygsti.modelmembers.instruments.infer_unitary_factors with Instrument.from_effects; the "
-            "Lindblad parameters can then fit the remaining noise. " + _HAND_BUILT_NOTE)
+            "To start from the effect-preserving unitary approximation instead, and let the Lindblad parameters "
+            "fit the remaining noise, build the instrument as\n"
+            "    from pygsti.modelmembers.instruments import Instrument, infer_unitary_factors\n"
+            "    pairs, reports = infer_unitary_factors(op_arrays, basis)\n"
+            "    instrument = Instrument.from_effects(pairs, basis, gate_parameterization, povm_errormap)\n"
+            + _HAND_BUILT_NOTE)
     return superkets, unitaries
 
 

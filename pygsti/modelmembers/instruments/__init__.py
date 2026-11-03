@@ -119,7 +119,17 @@ def convert(
     # single Kraus operator (as ideal instruments do).
     op_arrays   = {k: v.to_dense('HilbertSchmidt') for (k, v) in instrument.items()}
     povm_errmap = _op.LindbladParameterization.minimal_cp_paramtype(to_type)
-    out = Instrument.from_cptr_superops(
-        op_arrays, basis, gate_parameterization=to_type, povm_errormap=povm_errmap
-    )
+    try:
+        out = Instrument.from_cptr_superops(
+            op_arrays, basis, gate_parameterization=to_type, povm_errormap=povm_errmap
+        )
+    except ValueError as e:
+        raise ValueError(
+            f"Cannot convert this instrument to {to_type!r}; see the error above. In a model, first replace each "
+            "instrument by its effect-preserving unitary approximation:\n"
+            "    from pygsti.modelmembers.instruments import Instrument, infer_unitary_factors\n"
+            "    for lbl, inst in list(mdl.instruments.items()):\n"
+            "        pairs, reports = infer_unitary_factors(inst, mdl.basis)\n"
+            "        mdl.instruments[lbl] = Instrument.from_effects(pairs, mdl.basis)\n"
+            f"    mdl.set_all_parameterizations({to_type!r})") from e
     return out

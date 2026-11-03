@@ -229,6 +229,19 @@ class FromCptrSuperopsTester(BaseCase):
         with self.assertRaisesRegex(ValueError, 'infer_unitary_factors'):
             Instrument.from_cptr_superops(_noisy_z_op_arrays(), self.basis)
 
+    def test_noisy_instrument_conversion_raises_and_suggested_recipe_works(self):
+        # The recipe in convert's error message: replace each instrument by its unitary
+        # approximation, then convert the model.
+        model = std.target_model()
+        model.instruments['Iz'] = TPInstrument(list(_noisy_z_op_arrays().items()))
+        with self.assertRaises(ValueError):
+            convert(model.instruments['Iz'], 'CPTPLND', model.basis)
+        for lbl, instrument in list(model.instruments.items()):
+            pairs, _ = inst.infer_unitary_factors(instrument, model.basis)
+            model.instruments[lbl] = Instrument.from_effects(pairs, model.basis)
+        model.set_all_parameterizations('CPTPLND')
+        self.assertIsInstance(model.instruments['Iz'], Instrument)
+
     def test_multi_kraus_members_via_inferred_unitaries(self):
         # The approximation route keeps every effect, hence every outcome probability, and
         # still yields one ComposedOp and one shared effect per outcome.
