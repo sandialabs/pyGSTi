@@ -10,7 +10,9 @@ Tools for the propagation of error generators through circuits.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-import warnings
+import warnings as _warnings
+import copy as _copy
+import functools as _functools
 import gc as _gc
 from contextlib import contextmanager as _contextmanager
 try:
@@ -19,7 +21,7 @@ except ImportError:
     msg = "Stim is required for use of the error generator propagation tools module, " \
           "and it does not appear to be installed. If you intend to use this module please update" \
           " your environment."
-    warnings.warn(msg)
+    _warnings.warn(msg)
 
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
@@ -29,11 +31,33 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _Co
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, bel_product_str as _bel_product_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.circuits import Circuit as _Circuit
+from pygsti.models.model import Model as _Model
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
+from pygsti.tools.mptools import (
+    determine_num_workers as _determine_num_workers,
+    measure_multiprocessing_ipc_latency as _measure_ipc_latency,
+    SharedWorkerPool as _SharedWorkerPool,
+    parallel_2d_grid_map as _parallel_2d_grid_map,
+    lpt_partition as _lpt_partition,
+    parallel_pair_reduce as _parallel_pair_reduce,
+    warn_if_insufficient_memory as _warn_if_insufficient_memory,
+    resolve_pool_workers as _resolve_pool_workers,
+    _pool_scope,
+    WORKER_PROCESS_BASELINE_BYTES as _WORKER_PROCESS_BASELINE_BYTES,
+)
+
 from functools import wraps as _wraps
 from itertools import chain, product
+import math as _math
 from math import factorial
-from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, cast as _cast
+import sys as _sys
+import time as _time
+from types import MappingProxyType as _MappingProxyType
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, Final, cast as _cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import multiprocessing.pool as _mppool
+
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
                                           num_qubits: int) -> tuple[stim.PauliString, ...]:
@@ -395,9 +419,770 @@ def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDi
 
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
+# Standard packages to pre-warm in worker processes for error generator propagation (read-only: pass
+# it as `prewarm_packages` when creating a `SharedWorkerPool` for these routines).
+EGPROP_PREWARM_PACKAGES: Final[tuple[str, ...]] = ("numpy", "stim", "pygsti.tools.fasterrgencalc")
+
+# Default multi-scale threshold table (sensible hardcoded absolute cutoffs across qubit scales). It is
+# read-only (a mapping of read-only mappings); use `configure_errorgen_propagation_parallelization` to
+# override individual cutoffs.
+DEFAULT_PARALLEL_THRESHOLDS: Final[_MappingProxyType] = _MappingProxyType({
+    'small': _MappingProxyType({   # n <= 16 qubits
+        'min_km_alpha': 1000,
+        'min_magnus_pairs': 4,
+        'min_magnus_terms': 100,
+        'min_layer_prop_depth': 16,
+        'min_terms_commuting_product': 1000,
+    }),
+    'medium': _MappingProxyType({  # 16 < n <= 64 qubits
+        'min_km_alpha': 500,
+        'min_magnus_pairs': 2,
+        'min_magnus_terms': 50,
+        'min_layer_prop_depth': 8,
+        'min_terms_commuting_product': 500,
+    }),
+    'large': _MappingProxyType({   # n > 64 qubits
+        'min_km_alpha': 250,
+        'min_magnus_pairs': 2,
+        'min_magnus_terms': 50,
+        'min_layer_prop_depth': 4,
+        'min_terms_commuting_product': 250,
+    }),
+})
+
+# Manual overrides configured via configure_errorgen_propagation_parallelization
+_MANUAL_PARALLEL_OVERRIDES: dict[str, Any] = {}
+
+# Names of the parallelized operations accepted by `force_parallel` / `force_serial`.
+_PARALLEL_OPERATIONS = frozenset({'alpha', 'magnus', 'layer_prop', 'commuting_product'})
+
+
+def configure_errorgen_propagation_parallelization(
+    min_km_alpha: Optional[int] = None,
+    min_magnus_pairs: Optional[int] = None,
+    min_terms_per_magnus_pair: Optional[int] = None,
+    min_layer_prop_depth: Optional[int] = None,
+    min_terms_commuting_product: Optional[int] = None,
+    force_parallel: Optional[Union[bool, Sequence[str]]] = None,
+    force_serial: Optional[Union[bool, Sequence[str]]] = None,
+    reset_to_defaults: bool = False,
+) -> dict[str, Any]:
+    """
+    Manually configure or override the parallelization threshold criteria
+    for error generator propagation workflows.
+
+    Parameters
+    ----------
+    min_km_alpha : int, optional
+        Minimum generator-outcome workload product W = K * M required to engage
+        2D grid parallelization in `bulk_alpha` and `bulk_alpha_pauli`. Workloads
+        with K * M below this cutoff execute via the sequential execution.
+    min_magnus_pairs : int, optional
+        Minimum number of layer pairs (L * (L - 1) / 2) required to engage chunked
+        parallel pairwise reduction in `_second_order_magnus_term` and `magnus_expansion`.
+    min_terms_per_magnus_pair : int, optional
+        Minimum average error generator terms per layer required to engage parallel
+        Magnus expansion.
+    min_layer_prop_depth : int, optional
+        Minimum circuit layer depth (L) required to engage chunked layer propagation
+        in `ErrorGeneratorPropagator.propagate_errorgens`.
+    min_terms_commuting_product : int, optional
+        Minimum workload product W = n1 * n2 of term counts in the two input dictionaries
+        required to engage parallel bilinear slicing in `_commuting_product`.
+    force_parallel : bool, str, or sequence of str, optional
+        If True, unconditionally enables multiprocessing across all operations regardless
+        of workload size. If an operation name or a sequence of operation names (any of
+        'alpha', 'magnus', 'layer_prop', 'commuting_product'), forces parallelization only
+        for the named operations. False clears any previous setting.
+    force_serial : bool, str, or sequence of str, optional
+        If True, unconditionally forces single-threaded sequential execution across all
+        operations, bypassing multiprocessing. If an operation name or a sequence of operation
+        names, forces sequential execution only for the named operations. False clears any
+        previous setting. An operation may not be forced both parallel and serial.
+    reset_to_defaults : bool, optional (default False)
+        If True, clears all dynamic profiling calibrations and manual overrides,
+        restoring pyGSTi's default multi-scale threshold table.
+
+    Returns
+    -------
+    dict
+        Dictionary showing the currently active configuration and threshold cutoffs.
+    """
+    if reset_to_defaults:
+        _MANUAL_PARALLEL_OVERRIDES.clear()
+        if "_ACTIVE_PARALLEL_THRESHOLDS" in globals():
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("dynamic_calibrated", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
+        return {"status": "reset_to_defaults",
+                "defaults": {tier: dict(cutoffs) for tier, cutoffs in DEFAULT_PARALLEL_THRESHOLDS.items()}}
+
+    # Validate the force settings against the combined (existing + requested) state before
+    # mutating anything, so an invalid call leaves the configuration unchanged.
+    new_force_parallel = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False) if force_parallel is None \
+        else _normalize_forced_operations(force_parallel, "force_parallel")
+    new_force_serial = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False) if force_serial is None \
+        else _normalize_forced_operations(force_serial, "force_serial")
+    par_ops = set(_PARALLEL_OPERATIONS) if new_force_parallel is True else set(new_force_parallel or ())
+    ser_ops = set(_PARALLEL_OPERATIONS) if new_force_serial is True else set(new_force_serial or ())
+    if par_ops & ser_ops:
+        raise ValueError(f"Operations {sorted(par_ops & ser_ops)} cannot be forced both parallel and serial. "
+                         "Clear one of the settings (e.g. force_serial=False) first.")
+
+    if min_km_alpha is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"] = int(min_km_alpha)
+    if min_magnus_pairs is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_magnus_pairs"] = int(min_magnus_pairs)
+    if min_terms_per_magnus_pair is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_terms_per_magnus_pair"] = int(min_terms_per_magnus_pair)
+    if min_layer_prop_depth is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_layer_prop_depth"] = int(min_layer_prop_depth)
+    if min_terms_commuting_product is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"] = int(min_terms_commuting_product)
+    if force_parallel is not None:
+        _MANUAL_PARALLEL_OVERRIDES["force_parallel"] = new_force_parallel
+    if force_serial is not None:
+        _MANUAL_PARALLEL_OVERRIDES["force_serial"] = new_force_serial
+
+    return _copy.deepcopy(_MANUAL_PARALLEL_OVERRIDES)
+
+
+def _normalize_forced_operations(value: Union[bool, str, Sequence[str]], arg_name: str) -> Union[bool, tuple[str, ...]]:
+    """
+    Normalize a `force_parallel`/`force_serial` setting to either a bool or a tuple of
+    validated operation names (a bare string is treated as a single operation name).
+    """
+    if isinstance(value, (bool, _np.bool_)):
+        return bool(value)
+    if isinstance(value, str):
+        value = (value,)
+    try:
+        ops = tuple(value)
+    except TypeError:
+        raise TypeError(f"{arg_name} must be a bool, an operation name, or a sequence of operation names; "
+                        f"got {value!r}.")
+    unknown = [op for op in ops if op not in _PARALLEL_OPERATIONS]
+    if unknown:
+        raise ValueError(f"Unknown operation name(s) {unknown} in {arg_name}; "
+                         f"expected any of {sorted(_PARALLEL_OPERATIONS)}.")
+    return ops
+
+
+def _forced_parallelism_mode(operation: str) -> Optional[bool]:
+    """
+    The manually forced execution mode for `operation`: False if it is forced serial,
+    True if it is forced parallel, and None if neither applies. Serial takes precedence.
+    """
+    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, tuple) and operation in force_ser):
+        return False
+    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, tuple) and operation in force_par):
+        return True
+    return None
+
+
+def _qubit_scale_tier(n_qubits: int) -> str:
+    """The row of the default threshold table ('small', 'medium' or 'large') for `n_qubits`."""
+    return 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
+
+
+# Memory of one stim.PauliString (Python object plus its SIMD-aligned bit buffers): measured at
+# ~240 bytes for up to ~128 qubits, growing by roughly a byte per 4 additional qubits beyond that.
+_STIM_PAULISTRING_BASE_BYTES = 240
+
+# Memory of one slot of a Python dict (hash, key and value pointers, plus the index entry), scaled
+# for the dict's typical fill factor.
+_DICT_SLOT_BYTES = 64
+
+
+@_functools.lru_cache(maxsize=None)
+def measure_lse_entry_size(n_qubits: int) -> int:
+    """
+    Estimate the memory in bytes of a worst-case (C- or A-type, full-weight) `LocalStimErrorgenLabel`
+    dictionary entry with a real rate: the label instance and its attribute dictionary, its two
+    stim.PauliStrings and their cached string forms, its cached support mask, the rate, and the
+    dictionary slot. Results are cached per qubit count.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit.
+
+    Returns
+    -------
+    int
+        Memory in bytes consumed by a single dictionary entry holding a LocalStimErrorgenLabel and real rate.
+    """
+    n = max(1, int(n_qubits))
+    lbl = _LSE("C", [stim.PauliString("X" * n), stim.PauliString("Z" * n)])
+    mask = lbl.support_mask  # cached on the instance by the commutator routines
+    return (
+        _sys.getsizeof(lbl)
+        + _sys.getsizeof(lbl.__dict__)
+        + _sys.getsizeof(lbl.basis_element_labels)
+        + 2 * (_STIM_PAULISTRING_BASE_BYTES + n // 4)
+        + _sys.getsizeof(lbl._hashable_basis_element_labels)
+        + sum(_sys.getsizeof(s) for s in lbl._hashable_basis_element_labels)
+        + _sys.getsizeof(lbl._hashable_string_rep)
+        + _sys.getsizeof(mask)
+        + _sys.getsizeof(1.0)
+        + _DICT_SLOT_BYTES
+    )
+
+
+def _string_entry_size(n_qubits: int) -> int:
+    """
+    Memory in bytes of one entry of a string-keyed rate dictionary (as exchanged with and merged
+    from worker processes), keyed by a worst-case (two-Pauli) `_hashable_string_rep`.
+    """
+    n = max(1, int(n_qubits))
+    return _sys.getsizeof('C' + 'X' * (2 * n)) + _sys.getsizeof(1.0) + _DICT_SLOT_BYTES
+
+
+def _num_distinct_errorgen_labels(n_qubits: int) -> int:
+    """
+    The number of distinct elementary error generator labels on `n_qubits` qubits: 4^n - 1 each of
+    H and S type (one non-identity Pauli), and (4^n - 1)(4^n - 2)/2 each of C and A type (an
+    unordered pair of distinct non-identity Paulis).
+    """
+    m = 4**int(n_qubits) - 1
+    return 2 * m + m * (m - 1)
+
+
+def estimate_magnus_peak_memory(
+    n_qubits: int,
+    n_layers: int,
+    avg_errorgens_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+    magnus_order: int = 2,
+) -> int:
+    """
+    Worst-case estimate of the additional peak memory in bytes (beyond the calling process's
+    existing footprint) needed by a Magnus expansion, from summary statistics of its input. This
+    assumes every pair of terms in every pair of layers emits the maximal number of new terms,
+    capped by the number of distinct labels on `n_qubits` qubits, and so can grossly overestimate
+    the memory needed by large, local workloads. `magnus_expansion` itself uses a tighter estimate
+    computed from the supports of the actual input terms.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit.
+    n_layers : int
+        Number of error generator layers (L).
+    avg_errorgens_per_layer : int
+        Average number of elementary error generator terms per layer (K).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+    magnus_order : int, optional (default 2)
+        Order of the Magnus expansion (1, 2, or 3).
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    if magnus_order not in (1, 2, 3):
+        raise ValueError(f"magnus_order must be 1, 2, or 3, got {magnus_order}.")
+
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
+    bytes_per_term = measure_lse_entry_size(n_qubits)
+    max_distinct_terms = _num_distinct_errorgen_labels(n_qubits)
+
+    K = avg_errorgens_per_layer
+    # In the worst case, each pair of elementary error generators in a layer pair emits at most 4 terms
+    max_terms_per_pair = min(4 * (K ** 2), max_distinct_terms) if K > 0 else 0
+
+    if magnus_order == 1 or n_layers <= 1:
+        input_bytes = n_layers * K * bytes_per_term
+        return int(master_base + input_bytes)
+
+    n_pairs = (n_layers * (n_layers - 1)) // 2
+    pairs_per_worker = max(1, n_pairs // max(1, w))
+    p1_worker_buffer = min(pairs_per_worker * max_terms_per_pair, max_distinct_terms) * bytes_per_term
+
+    if magnus_order == 2:
+        total_bytes = master_base + (w * worker_base) + (w * p1_worker_buffer)
+        return int(total_bytes)
+
+    # magnus_order == 3: Two-phase parallel evaluation with held columns and outer commutators
+    col_terms = min((n_layers - 1) * max_terms_per_pair, max_distinct_terms)
+    held_columns_bytes = n_layers * col_terms * bytes_per_term
+
+    outer_per_worker = max(1, n_layers // max(1, w))
+    outer_terms_per_task = min(4 * K * max(1, col_terms), max_distinct_terms)
+    p2_worker_buffer = min(outer_per_worker * outer_terms_per_task, max_distinct_terms) * bytes_per_term
+
+    worker_buffer = max(p1_worker_buffer, p2_worker_buffer)
+    total_bytes = master_base + held_columns_bytes + (w * worker_base) + (w * worker_buffer)
+    return int(total_bytes)
+
+
+def _num_labels_with_support_at_most(n_qubits: int, max_support: int) -> int:
+    """
+    The number of distinct elementary error generator labels on `n_qubits` qubits whose (combined)
+    support has at most `max_support` qubits.
+
+    Labels are counted by their exact support set S, of size k, outside of which all Paulis are the
+    identity (there are C(n, k) such sets):
+
+    - H/S labels: one Pauli that is non-identity on every qubit of S, so 3^k of each type.
+    - C/A labels: an unordered pair of distinct non-identity Paulis that together cover S. There are
+      15^k ordered pairs of Paulis covering S (any of the 16 pairs of single-qubit Paulis except
+      (I, I) on each qubit), of which 3^k have P = Q and 2 * 3^k have one Pauli equal to the identity,
+      leaving 15^k - 3 * 3^k ordered pairs of distinct non-identity Paulis. The labels store their two
+      Paulis in sorted order, so each unordered pair is one label: (15^k - 3 * 3^k) / 2 pairs, each
+      giving a C and an A label, i.e. 15^k - 3 * 3^k C/A labels in total.
+
+    In total each support set holds 2 * 3^k + 15^k - 3 * 3^k = 15^k - 3^k labels. For
+    `max_support >= n_qubits` this is `_num_distinct_errorgen_labels(n_qubits)`.
+    """
+    n = int(n_qubits)
+    s = max(0, min(n, int(max_support)))
+    return sum(_math.comb(n, k) * (15**k - 3**k) for k in range(1, s + 1))
+
+
+def _layer_support_statistics(errorgen_layers: list[_ErrorgenDict], n_qubits: int):
+    """
+    Per-layer support statistics of a list of error generator layers.
+
+    Returns
+    -------
+    sizes : numpy.ndarray of shape (L,)
+        Number of terms in each layer.
+    qubit_counts : numpy.ndarray of shape (L, n_qubits)
+        `qubit_counts[i, q]` is the number of terms of layer i acting non-trivially on qubit q.
+    max_weight : int
+        The largest support size (number of qubits acted on) of any term.
+    """
+    num_layers = len(errorgen_layers)
+    nbytes = (n_qubits + 7) // 8
+    sizes = _np.array([len(layer) for layer in errorgen_layers], dtype=_np.float64)
+    qubit_counts = _np.zeros((num_layers, n_qubits), dtype=_np.float64)
+    max_weight = 0
+    for i, layer in enumerate(errorgen_layers):
+        if not layer:
+            continue
+        # support masks are cached on the labels (and needed by the commutator routines anyway)
+        buf = b''.join(lbl.support_mask.to_bytes(nbytes, 'little') for lbl in layer)
+        bits = _np.unpackbits(_np.frombuffer(buf, dtype=_np.uint8).reshape(len(layer), nbytes),
+                              axis=1, bitorder='little')[:, :n_qubits]
+        qubit_counts[i] = bits.sum(axis=0)
+        max_weight = max(max_weight, int(bits.sum(axis=1).max()))
+    return sizes, qubit_counts, max_weight
+
+
+def _estimate_magnus_peak_memory_from_layers(errorgen_layers: list[_ErrorgenDict], n_qubits: int,
+                                             num_workers: int = 1, magnus_order: int = 2) -> int:
+    """
+    Estimate the additional peak memory in bytes needed by `magnus_expansion` for the given layers,
+    using the supports of the actual input terms. Compared to the worst-case
+    `estimate_magnus_peak_memory`, this
+
+    1. counts only pairs of terms with overlapping support (pairs acting on disjoint qubits commute
+       and are skipped by the commutator routines), bounding the number of overlapping pairs
+       between layers i and j by sum_q c_i[q] c_j[q], where c_i[q] is the number of terms of
+       layer i acting on qubit q;
+    2. caps the number of distinct output terms by locality: a commutator's output acts within the
+       union of its inputs' supports, so second-order (third-order) terms have support of at most
+       2w (3w) qubits, w being the largest input support;
+    3. models every intermediate result as a dictionary, whose memory is set by its number of
+       distinct keys, min(emitted terms, distinct-label cap), rather than by the number of emitted terms.
+
+    The estimate assumes every overlapping pair emits the maximal number (4) of terms, so it is
+    still an upper bound in that respect.
+    """
+    num_layers = len(errorgen_layers)
+    if magnus_order < 2 or num_layers < 2:
+        return 0
+
+    entry = measure_lse_entry_size(n_qubits)
+    str_entry = _string_entry_size(n_qubits)
+    sizes, counts, max_weight = _layer_support_statistics(errorgen_layers, n_qubits)
+    cap2 = float(_num_labels_with_support_at_most(n_qubits, 2 * max_weight))
+
+    # 1. bound on overlapping term pairs for every layer pair (i > j)
+    pair_overlaps = _np.minimum(counts @ counts.T, _np.outer(sizes, sizes))
+    lower = _np.tril(pair_overlaps, k=-1)
+    pair_emissions = 4.0 * lower  # terms emitted by each layer-pair commutator
+    distinct_first = min(float(sizes.sum()), float(_num_distinct_errorgen_labels(n_qubits)))
+    distinct_second = min(float(pair_emissions.sum()), cap2)
+
+    # magnus_expansion holds the first- and second-order dictionaries, their sum, and its truncated copy.
+    final_entries = distinct_first + 3.0 * distinct_second
+
+    if magnus_order == 2:
+        if num_workers <= 1:
+            return int(final_entries * entry)
+        # Main process: merged string-keyed dict, then the materialized survivors (accounted above).
+        # Each worker holds the inputs and the (label- and string-keyed) result of its largest task.
+        largest_task = min(float(pair_emissions.max()), cap2)
+        worker = (2.0 * sizes.max() + largest_task) * entry + largest_task * str_entry
+        return int(final_entries * entry + distinct_second * str_entry
+                   + num_workers * (worker + _WORKER_PROCESS_BASELINE_BYTES))
+
+    # magnus_order == 3
+    cap3 = float(_num_labels_with_support_at_most(n_qubits, 3 * max_weight))
+    row_terms = pair_emissions.sum(axis=1)  # emitted into row i (pairs (i, k), k < i)
+    col_terms = pair_emissions.sum(axis=0)  # emitted into column k (pairs (i, k), i > k)
+    prefix_terms = _np.minimum(_np.cumsum(row_terms), cap2)  # size bound of the running row sum R_i
+    suffix_terms = _np.minimum(_np.cumsum(col_terms[::-1])[::-1], cap2)  # running column sum C_k
+
+    # Per-qubit bounds on the terms of R_i / C_k acting on qubit q: an output of pair (a, b) acts within
+    # supp(a) | supp(b), so outputs of layer pair (j, k) touching q number at most 4 (c_j[q] K_k + K_j c_k[q]).
+    cum_sizes = _np.concatenate(([0.0], _np.cumsum(sizes)[:-1]))            # sum_{k<j} K_k
+    cum_counts = _np.vstack((_np.zeros(n_qubits), _np.cumsum(counts, axis=0)[:-1]))  # sum_{k<j} c_k
+    row_q = 4.0 * (counts * cum_sizes[:, None] + sizes[:, None] * cum_counts)
+    prefix_q = _np.minimum(_np.cumsum(row_q, axis=0), prefix_terms[:, None])
+    rev_sizes = _np.concatenate((_np.cumsum(sizes[::-1])[::-1][1:], [0.0]))   # sum_{j>k} K_j
+    rev_counts = _np.vstack((_np.cumsum(counts[::-1], axis=0)[::-1][1:], _np.zeros(n_qubits)))
+    col_q = 4.0 * (counts * rev_sizes[:, None] + sizes[:, None] * rev_counts)
+    suffix_q = _np.minimum(_np.cumsum(col_q[::-1], axis=0)[::-1], suffix_terms[:, None])
+
+    # third-order emissions: [A(i), R_i] and [A(k), C_k], restricted to overlapping pairs
+    outer_row = 4.0 * _np.minimum(sizes * prefix_terms, (counts * prefix_q).sum(axis=1))
+    outer_col = 4.0 * _np.minimum(sizes * suffix_terms, (counts * suffix_q).sum(axis=1))
+    distinct_third = min(float(outer_row.sum() + outer_col.sum()), cap3)
+    final_entries += 3.0 * distinct_third
+
+    held_columns = float(_np.minimum(col_terms, cap2).sum())
+    if num_workers <= 1:
+        # held columns, the running sum and its truncated copy, plus the final dictionaries
+        return int((final_entries + held_columns + 2.0 * distinct_second) * entry)
+
+    # Parallel: the main process keeps every pairwise result plus the rows and columns as string-keyed
+    # dicts, and materializes every prefix R_i and suffix C_k as label-keyed dicts for the outer tasks.
+    pairwise = float(_np.minimum(pair_emissions[pair_emissions > 0], cap2).sum())
+    rows = float(_np.minimum(row_terms, cap2).sum())
+    main = (pairwise + rows + held_columns) * str_entry \
+        + float(prefix_terms.sum() + suffix_terms.sum()) * entry + final_entries * entry
+    largest_p1 = min(float(pair_emissions.max()), cap2)
+    largest_p2 = min(float(max(outer_row.max(), outer_col.max())), cap3)
+    largest_acc = float(max(prefix_terms.max(), suffix_terms.max()))
+    worker = max((2.0 * sizes.max() + largest_p1) * entry + largest_p1 * str_entry,
+                 (sizes.max() + largest_acc + largest_p2) * entry + largest_p2 * str_entry)
+    return int(main + num_workers * (worker + _WORKER_PROCESS_BASELINE_BYTES))
+
+
+def estimate_taylor_peak_memory(
+    n_qubits: int,
+    num_errorgens: int,
+    order: int = 1,
+    num_workers: Union[int, str, None] = "auto",
+) -> int:
+    """
+    Worst-case estimate of the additional peak memory in bytes (beyond the calling process's
+    existing footprint) needed by an error generator Taylor expansion.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit / error generator.
+    num_errorgens : int
+        Number of elementary error generator terms in the generator (K).
+    order : int, optional (default 1)
+        Order of the Taylor expansion (>= 1).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    if order < 1:
+        raise ValueError(f"order must be an integer >= 1, got {order}.")
+
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
+    entry_bytes = measure_lse_entry_size(n_qubits)
+    max_distinct_terms = _num_distinct_errorgen_labels(n_qubits)
+
+    K = num_errorgens
+    if order == 1 or K == 0:
+        return int(master_base + K * entry_bytes)
+
+    current_k_terms = K
+    total_retained_terms = K
+    max_worker_buffer_bytes = 0
+
+    for k in range(2, order + 1):
+        prev_terms = current_k_terms
+        current_k_terms = min(K * prev_terms * 7, max_distinct_terms)
+        total_retained_terms += current_k_terms
+
+        if w > 1:
+            slice_terms = max(1, K // w)
+            worker_task_terms = min(slice_terms * prev_terms * 7, max_distinct_terms)
+            worker_mem = (prev_terms + worker_task_terms) * entry_bytes
+            max_worker_buffer_bytes = max(max_worker_buffer_bytes, worker_mem)
+        else:
+            max_worker_buffer_bytes = max(max_worker_buffer_bytes, current_k_terms * entry_bytes)
+
+    retained_bytes = total_retained_terms * entry_bytes
+    total_bytes = master_base + retained_bytes + (w * worker_base) + (w * max_worker_buffer_bytes)
+    return int(total_bytes)
+
+
+def _should_parallelize_magnus(
+    num_layers: int,
+    avg_terms_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+    n_qubits: Optional[int] = None,
+) -> bool:
+    """
+    Internal helper: determines whether Magnus expansion should be parallelized across layer pairs.
+    """
+    if n_qubits is None:
+        raise ValueError("n_qubits must be specified as an integer >= 1.")
+    if not isinstance(n_qubits, (int, _np.integer)) or n_qubits < 1:
+        raise ValueError(f"n_qubits must be an integer >= 1, got {n_qubits}.")
+
+    workers = _determine_num_workers(num_workers)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
+        return False
+    n_pairs = (num_layers * (num_layers - 1)) // 2
+    if n_pairs < 1:
+        return False
+
+    forced = _forced_parallelism_mode("magnus")
+    if forced is not None:
+        return forced
+
+    # Each manual override replaces only its own default-table cutoff.
+    cutoffs = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]
+    min_pairs = _MANUAL_PARALLEL_OVERRIDES.get("min_magnus_pairs", cutoffs['min_magnus_pairs'])
+    min_terms = _MANUAL_PARALLEL_OVERRIDES.get("min_terms_per_magnus_pair", cutoffs['min_magnus_terms'])
+    return n_pairs >= min_pairs and avg_terms_per_layer >= min_terms
+
+
+def _should_parallelize_commuting_product(
+    n_qubits: int,
+    num_terms_1: int,
+    num_terms_2: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> bool:
+    """
+    Internal helper: determines whether commuting product should be parallelized via bilinear slicing.
+    """
+    if n_qubits is None:
+        raise ValueError("n_qubits must be specified as an integer >= 1.")
+    if not isinstance(n_qubits, (int, _np.integer)) or n_qubits < 1:
+        raise ValueError(f"n_qubits must be an integer >= 1, got {n_qubits}.")
+
+    workers = _determine_num_workers(num_workers)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
+        return False
+
+    w = num_terms_1 * num_terms_2
+    if w <= 0:
+        return False
+
+    forced = _forced_parallelism_mode("commuting_product")
+    if forced is not None:
+        return forced
+
+    if "min_terms_commuting_product" in _MANUAL_PARALLEL_OVERRIDES:
+        return w >= _MANUAL_PARALLEL_OVERRIDES["min_terms_commuting_product"]
+
+    threshold = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]['min_terms_commuting_product']
+    return w >= threshold
+
+
+def _lse_from_string_rep(rep: str, n: int) -> _LSE:
+    """Reconstruct a LocalStimErrorgenLabel from its cached string representation."""
+    typ = rep[0]
+    if typ in ('H', 'S'):
+        s = rep[1:]
+        return _LSE(typ, (stim.PauliString(s),), pauli_str_reps=(s,))
+    else:
+        s1 = rep[1 : 1 + n]
+        s2 = rep[1 + n :]
+        return _LSE(typ, (stim.PauliString(s1), stim.PauliString(s2)), pauli_str_reps=(s1, s2))
+
+
+def _merge_string_dictionaries(d1: dict[str, float], d2: dict[str, float]) -> dict[str, float]:
+    """
+    Binary reduction merging string rate dictionaries by summing overlapping rates. Updates and
+    returns `d1` in place (avoiding a copy of the whole running total at every step of a reduction),
+    so `d1` must not be referenced elsewhere; `d2` is not modified.
+    """
+    get = d1.get
+    for k, v in d2.items():
+        d1[k] = get(k, 0.0) + v
+    return d1
+
+
+class _MagnusPairEvaluator:
+    """Worker task evaluating commutators for a single pair of layers (picklable under spawn)."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, pair):
+        with _cyclic_gc_paused():
+            l1, l2 = pair
+            target = {}
+            _accumulate_layer_pairwise_commutators(
+                target, l1, l2, self.identity, addl_weight=0.5, truncation_threshold=self.threshold
+            )
+            return {k._hashable_string_rep: v for k, v in target.items()}
+
+
+class _MagnusPhase1PairEvaluator:
+    """Worker task evaluating commutators for a single pair of layers in Phase 1 of Magnus expansion."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, item):
+        with _cyclic_gc_paused():
+            i, k, l1, l2 = item
+            target = {}
+            _accumulate_layer_pairwise_commutators(
+                target, l1, l2, self.identity, truncation_threshold=self.threshold
+            )
+            return {(i, k): {lbl._hashable_string_rep: rate for lbl, rate in target.items()}}
+
+
+class _MagnusPhase2Evaluator:
+    """Worker task evaluating outer commutators for Phase 2 of joint 2nd/3rd order Magnus expansion."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, task):
+        with _cyclic_gc_paused():
+            layer, acc, weight = task
+            target = {}
+            _accumulate_layer_pairwise_commutators(
+                target, layer, acc, self.identity, addl_weight=weight, truncation_threshold=self.threshold
+            )
+            return {lbl._hashable_string_rep: rate for lbl, rate in target.items()}
+
+
+def _merge_pair_indexed_string_dictionaries(d1: dict, d2: dict) -> dict:
+    """
+    Binary reduction merging (i, k) layer-pair indexed string rate dictionaries additively. Updates and
+    returns `d1` in place (including its per-pair dictionaries), so `d1` must not be referenced
+    elsewhere. The per-pair dictionaries of `d2` that are new to `d1` are stored in it by reference, so
+    `d2` must not be used (or modified) afterwards either.
+    """
+    for pair_key, rates in d2.items():
+        sub = d1.get(pair_key)
+        if sub is None:
+            d1[pair_key] = rates
+        else:
+            get = sub.get
+            for lbl, rate in rates.items():
+                sub[lbl] = get(lbl, 0.0) + rate
+    return d1
+
+
+def _generate_balanced_magnus_pairs(
+    errorgen_layers: list[_ErrorgenDict],
+    num_workers: int,
+    alpha: float = 0.45,
+    include_indices: bool = False,
+) -> tuple[list[Any], list[float]]:
+    """
+    Decompose Magnus layer pairs into load-balanced tasks using Dynamic Worker-Budget
+    Capacity Slicing with order-preserving strided partitioning.
+
+    Parameters
+    ----------
+    errorgen_layers : list of dicts
+        List of error generator layer dictionaries.
+    num_workers : int
+        Active worker process count.
+    alpha : float, optional (default 0.45)
+        Fraction of ideal worker capacity defining the maximum task budget.
+    include_indices : bool, optional (default False)
+        If True, tasks include layer indices (i, k, ...) for Phase 1 of 3rd-order expansion.
+
+    Returns
+    -------
+    tasks : list
+        List of task tuples.
+    task_weights : list of float
+        Estimated computational weights corresponding to each task.
+    """
+    num_layers = len(errorgen_layers)
+    if num_layers <= 1:
+        return [], []
+
+    raw_pairs = []
+    total_work = 0.0
+    for i in range(num_layers):
+        for j in range(i):
+            w = len(errorgen_layers[i]) * len(errorgen_layers[j])
+            raw_pairs.append((i, j, errorgen_layers[i], errorgen_layers[j], w))
+            total_work += w
+
+    w_ideal = total_work / max(1, num_workers)
+    t_max = alpha * w_ideal
+
+    tasks = []
+    task_weights = []
+
+    for i, j, l1, l2, w in raw_pairs:
+        if w <= t_max or num_workers <= 2 or t_max <= 0:
+            s_ij = 1
+        else:
+            s_ideal = int(_math.ceil(w / t_max))
+            max_terms = max(len(l1), len(l2))
+            s_ij = min(s_ideal, max_terms)
+
+        if s_ij <= 1:
+            if include_indices:
+                tasks.append((i, j, l1, l2))
+            else:
+                tasks.append((l1, l2))
+            task_weights.append(float(w))
+        else:
+            w_slice = float(w) / s_ij
+            if len(l1) >= len(l2):
+                # Slice first operand l1; l2 remains intact
+                items = list(l1.items())
+                for k in range(s_ij):
+                    sub = dict(items[k::s_ij])
+                    if include_indices:
+                        tasks.append((i, j, sub, l2))
+                    else:
+                        tasks.append((sub, l2))
+                    task_weights.append(w_slice)
+            else:
+                # Slice second operand l2; l1 remains intact (OPERAND ORDER PRESERVED)
+                items = list(l2.items())
+                for k in range(s_ij):
+                    sub = dict(items[k::s_ij])
+                    if include_indices:
+                        tasks.append((i, j, l1, sub))
+                    else:
+                        tasks.append((l1, sub))
+                    task_weights.append(w_slice)
+
+    return tasks, task_weights
+
+
 @_with_cyclic_gc_paused
 def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
-                     truncation_threshold: float = 1e-14) -> _ErrorgenDict:
+                     truncation_threshold: float = 1e-14,
+                     num_workers: Union[int, str, None] = None,
+                     pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _ErrorgenDict:
     """
     Function for computing the nth-order magnus expansion for a set of error generator layers.
     Please see https://arxiv.org/abs/0810.5488 or https://en.wikipedia.org/wiki/Magnus_expansion
@@ -415,6 +1200,13 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     truncation_threshold : float, optional (default 1e-14)
         Threshold for which any error generators with magnitudes below this value
         are truncated.
+
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential execution; pass 'auto'
+        or an integer to enable parallel execution across layer pairs).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
         
     Returns
     -------
@@ -448,20 +1240,37 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     new_errorgen_layer = [first_order_dict]
 
     # precompute an identity string for comparisons in commutator calculations (None if every layer is empty,
-    # in which case no commutators are computed).
+    # in which case no commutators are computed). Scans forward to find the first non-empty layer to determine n_q.
     identity = None
     for layer in errorgen_layers:
         if layer:
             identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
             break
 
+    # NOTE: The automatic memory headroom check for the Magnus expansion is disabled for now. Empirical
+    # testing (4 to 100 qubits, orders 2 and 3, serial and parallel) found that both the worst-case
+    # estimate (`estimate_magnus_peak_memory`) and the support-aware estimate
+    # (`_estimate_magnus_peak_memory_from_layers`) overestimate actual memory use by too much to be
+    # practically useful at present.
+    #
+    # if len(errorgen_layers) > 1 and magnus_order >= 2 and identity is not None:
+    #     n_q = len(identity)
+    #     workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
+    #     _warn_if_insufficient_memory(
+    #         _estimate_magnus_peak_memory_from_layers(errorgen_layers, n_q, num_workers=workers,
+    #                                                  magnus_order=magnus_order),
+    #         task_name="magnus_expansion"
+    #     )
+
     if magnus_order == 2:
         # second-order magnus term: (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
-        new_errorgen_layer.append(_second_order_magnus_term(errorgen_layers, identity, truncation_threshold))
+        new_errorgen_layer.append(_second_order_magnus_term(errorgen_layers, identity, truncation_threshold,
+                                                            num_workers=num_workers, pool=pool))
     else:
         # the third-order term is built from the same pairwise layer commutators as the second-order one,
         # so both are produced by a single pass over the layer pairs.
-        new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold))
+        new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold,
+                                                                      num_workers=num_workers, pool=pool))
 
     # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
     # The per-order dictionaries are each truncated, but their sums can still fall below the threshold (or cancel
@@ -475,7 +1284,9 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
 def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
-                              truncation_threshold: float = 1e-14) -> _ErrorgenDict:
+                              truncation_threshold: float = 1e-14,
+                              num_workers: Union[int, str, None] = None,
+                              pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _ErrorgenDict:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -496,6 +1307,13 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         Threshold for which any error generators with magnitudes below this value
         are truncated.
 
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential execution; pass 'auto'
+        or an integer to enable parallel execution across layer pairs).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     second_order_comm_dict : dict
@@ -503,9 +1321,11 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         rates combined according to the second order of the magnus expansion.
     """
     errorgen_pairs = []
+    pair_weights = []
     for i in range(len(errorgen_layers)):
         for j in range(i):
             errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
+            pair_weights.append(len(errorgen_layers[i]) * len(errorgen_layers[j]))
     
     # precompute an identity string for comparisons in commutator calculations if one is not provided.
     if identity is None and errorgen_layers:
@@ -513,18 +1333,44 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
             if layer:
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
-    
-    # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs, label by label.
-    second_order_comm_dict = {}
-    for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
-        _accumulate_layer_pairwise_commutators(second_order_comm_dict, errorgen_layer_1, errorgen_layer_2, identity,
-                                               addl_weight=0.5, truncation_threshold=truncation_threshold)
-    # truncate any terms which are below the truncation threshold following aggregation.
-    second_order_comm_dict = _truncated(second_order_comm_dict, truncation_threshold)
-    return second_order_comm_dict
+
+    # If every layer is empty, all commutators evaluate trivially to zero without computation.
+    if identity is None:
+        return {}
+
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+
+    n_q = len(identity)
+    avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
+
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
+        # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs sequentially
+        second_order_comm_dict = {}
+        for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
+            _accumulate_layer_pairwise_commutators(second_order_comm_dict, errorgen_layer_1, errorgen_layer_2, identity,
+                                                   addl_weight=0.5, truncation_threshold=truncation_threshold)
+        return _truncated(second_order_comm_dict, truncation_threshold)
+
+    # Parallel pairwise reduction across workers with dynamic capacity slicing and streaming reduction
+    tasks, task_weights = _generate_balanced_magnus_pairs(
+        errorgen_layers, workers, alpha=0.45, include_indices=False
+    )
+    evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
+    second_order_str_dict = _parallel_pair_reduce(
+        evaluator, tasks, _merge_string_dictionaries, num_workers=workers, pool=pool,
+        prewarm_packages=EGPROP_PREWARM_PACKAGES, pair_weights=task_weights, dynamic=True
+    )
+    if second_order_str_dict is None:
+        return {}
+    survivors = _truncated(second_order_str_dict, truncation_threshold)
+    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
-                                         truncation_threshold: float = 1e-14) -> tuple[_ErrorgenDict, _ErrorgenDict]:
+                                         truncation_threshold: float = 1e-14,
+                                         num_workers: Union[int, str, None] = None,
+                                         pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> tuple[_ErrorgenDict, _ErrorgenDict]:
     r"""
     Helper function for computing the second- and third-order correction terms in the
     magnus expansion together, from a single pass over the pairwise layer commutators.
@@ -550,12 +1396,20 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         Threshold for which any error generators with magnitudes below this value
         are truncated.
 
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential execution; pass 'auto'
+        or an integer to enable parallel execution across layer pairs and outer commutators).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     second_order_comm_dict, third_order_comm_dict : dict
         Dictionaries with the same general structure as those in `errorgen_layers`, holding the
         second- and third-order terms of the magnus expansion respectively.
     """
+
     # Write P_ik = [A(i), A(k)] for i > k for the pairwise layer commutators and group them by
     # their larger or their smaller index:
     #
@@ -577,54 +1431,161 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
     # before each outer commutator; the held columns are small (the disjoint-support skip in
     # `_accumulate_layer_pairwise_commutators` removes the pairs that would otherwise dominate
     # them) and are truncated when consumed.
+
+    if identity is None and errorgen_layers:
+        for layer in errorgen_layers:
+            if layer:
+                identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
+                break
+
+    # If every layer is empty, all commutators evaluate trivially to zero without computation.
+    if identity is None:
+        return {}, {}
+
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    n_q = len(identity)
+    avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
     num_layers = len(errorgen_layers)
-    second_order_comm_dict = {}
-    third_order_comm_dict = {}
-    held_columns = [{} for _ in range(num_layers)]
 
-    # forward pass: rows, consumed immediately.
-    running_row_sum = {}  # \sum_{j<i} row_j at weight 1/6, plus (1/12) row_i during the outer commutator.
-    for i in range(num_layers):
-        row = {}
-        for k in range(i):
-            pairwise_comm = {}
-            _accumulate_layer_pairwise_commutators(pairwise_comm, errorgen_layers[i], errorgen_layers[k], identity,
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(num_layers, avg_terms, num_workers=workers, n_qubits=n_q):
+        # Sequential execution path (100% untouched)
+        second_order_comm_dict = {}
+        third_order_comm_dict = {}
+        held_columns = [{} for _ in range(num_layers)]
+
+        # forward pass: rows, consumed immediately.
+        running_row_sum = {}  # \sum_{j<i} row_j at weight 1/6, plus (1/12) row_i during the outer commutator.
+        for i in range(num_layers):
+            row = {}
+            for k in range(i):
+                pairwise_comm = {}
+                _accumulate_layer_pairwise_commutators(pairwise_comm, errorgen_layers[i], errorgen_layers[k], identity,
+                                                       truncation_threshold=truncation_threshold)
+                column = held_columns[k]
+                for lbl, rate in pairwise_comm.items():
+                    row[lbl] = row.get(lbl, 0) + rate
+                    column[lbl] = column.get(lbl, 0) + rate
+            for lbl, rate in row.items():
+                second_order_comm_dict[lbl] = second_order_comm_dict.get(lbl, 0) + 0.5*rate
+                running_row_sum[lbl] = running_row_sum.get(lbl, 0) + (1/12)*rate
+            _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[i],
+                                                   _truncated(running_row_sum, truncation_threshold), identity,
                                                    truncation_threshold=truncation_threshold)
-            column = held_columns[k]
-            for lbl, rate in pairwise_comm.items():
-                row[lbl] = row.get(lbl, 0) + rate
-                column[lbl] = column.get(lbl, 0) + rate
-        for lbl, rate in row.items():
-            second_order_comm_dict[lbl] = second_order_comm_dict.get(lbl, 0) + 0.5*rate
-            running_row_sum[lbl] = running_row_sum.get(lbl, 0) + (1/12)*rate
-        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[i],
-                                               _truncated(running_row_sum, truncation_threshold), identity,
-                                               truncation_threshold=truncation_threshold)
-        # bring row_i up to the full weight of 1/6 for the later iterations.
-        for lbl, rate in row.items():
-            running_row_sum[lbl] += (1/12)*rate
-        running_row_sum = _truncated(running_row_sum, truncation_threshold)
+            # bring row_i up to the full weight of 1/6 for the later iterations.
+            for lbl, rate in row.items():
+                running_row_sum[lbl] += (1/12)*rate
+            running_row_sum = _truncated(running_row_sum, truncation_threshold)
 
-    # descending pass: columns (col_{n-1} is empty).
-    running_column_sum = {}  # -\sum_{j>k} col_j at weight 1/6, plus -(1/12) col_k during the outer commutator.
-    for k in range(num_layers-2, -1, -1):
-        column = _truncated(held_columns[k], truncation_threshold)
-        held_columns[k] = None
-        for lbl, rate in column.items():
-            running_column_sum[lbl] = running_column_sum.get(lbl, 0) - (1/12)*rate
-        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[k],
-                                               _truncated(running_column_sum, truncation_threshold), identity,
-                                               truncation_threshold=truncation_threshold)
-        for lbl, rate in column.items():
-            running_column_sum[lbl] -= (1/12)*rate
-        running_column_sum = _truncated(running_column_sum, truncation_threshold)
+        # descending pass: columns (col_{n-1} is empty).
+        running_column_sum = {}  # -\sum_{j>k} col_j at weight 1/6, plus -(1/12) col_k during the outer commutator.
+        for k in range(num_layers-2, -1, -1):
+            column = _truncated(held_columns[k], truncation_threshold)
+            held_columns[k] = None
+            for lbl, rate in column.items():
+                running_column_sum[lbl] = running_column_sum.get(lbl, 0) - (1/12)*rate
+            _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[k],
+                                                   _truncated(running_column_sum, truncation_threshold), identity,
+                                                   truncation_threshold=truncation_threshold)
+            for lbl, rate in column.items():
+                running_column_sum[lbl] -= (1/12)*rate
+            running_column_sum = _truncated(running_column_sum, truncation_threshold)
 
-    return (_truncated(second_order_comm_dict, truncation_threshold),
-            _truncated(third_order_comm_dict, truncation_threshold))
+        return (_truncated(second_order_comm_dict, truncation_threshold),
+                _truncated(third_order_comm_dict, truncation_threshold))
+
+    # Two-Phase Parallel Evaluation with Dynamic Capacity Slicing and Streaming Reduction
+    p1_tasks, p1_weights = _generate_balanced_magnus_pairs(
+        errorgen_layers, workers, alpha=0.45, include_indices=True
+    )
+
+    p1_evaluator = _MagnusPhase1PairEvaluator(identity, truncation_threshold)
+    p2_evaluator = _MagnusPhase2Evaluator(identity, truncation_threshold)
+
+    def _execute_magnus_phases(active_pool):
+        p1_res = _parallel_pair_reduce(
+            p1_evaluator, p1_tasks, _merge_pair_indexed_string_dictionaries,
+            pool=active_pool, pair_weights=p1_weights, dynamic=True
+        )
+        if p1_res is None:
+            p1_res = {}
+
+        rows = [{} for _ in range(num_layers)]
+        held_columns = [{} for _ in range(num_layers)]
+        for (i, k), pw_dict in p1_res.items():
+            r_i = rows[i]
+            c_k = held_columns[k]
+            for s_lbl, rate in pw_dict.items():
+                r_i[s_lbl] = r_i.get(s_lbl, 0.0) + rate
+                c_k[s_lbl] = c_k.get(s_lbl, 0.0) + rate
+
+        second_order_str = {}
+        for r in rows:
+            for s_lbl, rate in r.items():
+                second_order_str[s_lbl] = second_order_str.get(s_lbl, 0.0) + 0.5 * rate
+
+        # Intermediate prefix row sums and suffix column sums
+        R = []
+        running_row = {}
+        for i in range(num_layers):
+            curr = running_row.copy()
+            for s_lbl, rate in rows[i].items():
+                curr[s_lbl] = curr.get(s_lbl, 0.0) + (1/12) * rate
+            curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+            R.append({_lse_from_string_rep(k, n_q): v for k, v in curr_trunc.items()})
+            for s_lbl, rate in rows[i].items():
+                running_row[s_lbl] = running_row.get(s_lbl, 0.0) + (1/6) * rate
+            running_row = {k: v for k, v in running_row.items() if abs(v) > truncation_threshold}
+
+        C = []
+        running_col = {}
+        for k in range(num_layers - 2, -1, -1):
+            col = held_columns[k]
+            curr = running_col.copy()
+            for s_lbl, rate in col.items():
+                curr[s_lbl] = curr.get(s_lbl, 0.0) - (1/12) * rate
+            curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+            C.append((k, {_lse_from_string_rep(s, n_q): v for s, v in curr_trunc.items()}))
+            for s_lbl, rate in col.items():
+                running_col[s_lbl] = running_col.get(s_lbl, 0.0) - (1/6) * rate
+            running_col = {s: v for s, v in running_col.items() if abs(v) > truncation_threshold}
+
+        # Phase 2: Outer commutator tasks with LPT bin-packing
+        outer_tasks = []
+        outer_weights = []
+        for i in range(1, num_layers):
+            outer_tasks.append((errorgen_layers[i], R[i], 1.0))
+            outer_weights.append(len(errorgen_layers[i]) * len(R[i]))
+        for k, c_k in C:
+            outer_tasks.append((errorgen_layers[k], c_k, 1.0))
+            outer_weights.append(len(errorgen_layers[k]) * len(c_k))
+
+        third_order_str = _parallel_pair_reduce(
+            p2_evaluator, outer_tasks, _merge_string_dictionaries,
+            pool=active_pool, pair_weights=outer_weights, dynamic=True
+        )
+        if third_order_str is None:
+            third_order_str = {}
+
+        return second_order_str, third_order_str
+
+    if pool is not None:
+        second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(pool)
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=EGPROP_PREWARM_PACKAGES) as local_pool:
+            second_order_comm_str_dict, third_order_str_dict = _execute_magnus_phases(local_pool)
+
+    om2_survivors = _truncated(second_order_comm_str_dict, truncation_threshold)
+    om3_survivors = _truncated(third_order_str_dict, truncation_threshold)
+    return ({_lse_from_string_rep(k, n_q): v for k, v in om2_survivors.items()},
+            {_lse_from_string_rep(k, n_q): v for k, v in om3_survivors.items()})
 
 @_with_cyclic_gc_paused
 def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
-                      truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
+                      truncation_threshold: float = 1e-14,
+                      num_workers: Union[int, str, None] = None,
+                      pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> list[_ErrorgenDict]:
     r"""
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
@@ -674,7 +1635,8 @@ def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: L
                 if layer:
                     identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                     break
-        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
+        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold,
+                                                           num_workers=num_workers, pool=pool)
         zassenhaus_formula_dicts.append(second_order_comm_dict)
 
     if zassenhaus_order>=3:
@@ -721,7 +1683,7 @@ def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen
                 target[lbl] = get(lbl, 0) + rate
 
 
-def _truncated(errorgen_dict: dict[_LSE, _Rate], truncation_threshold: float) -> dict[_LSE, _Rate]:
+def _truncated(errorgen_dict: dict[Union[_LSE, str], _Rate], truncation_threshold: float) -> dict[Union[_LSE, str], _Rate]:
     """The entries of `errorgen_dict` (label -> rate) whose rate exceeds `truncation_threshold` in magnitude."""
     return {lbl: rate for lbl, rate in errorgen_dict.items() if abs(rate) > truncation_threshold}
 
@@ -3222,6 +4184,54 @@ def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_s
 
 # Courtesy of Gidney 
 # https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
+def tableau_fidelities(target_tableau: stim.Tableau, compared_tableaus: Sequence[stim.Tableau]) -> _np.ndarray:
+    """
+    Calculate the fidelities between a single target stabilizer state and a collection
+    of tableaus for stabilizer states to compare with
+
+    This function amortizes the overhead of target tableau inversion and TableauSimulator
+    instantiation across all compared tableaus.
+
+    Parameters
+    ----------
+    target_tableau : stim.Tableau
+        Stim tableau corresponding to the reference/target stabilizer state.
+    compared_tableaus : sequence of stim.Tableau
+        Collection of stim tableaus corresponding to stabilizer states to compare against.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D array of floats representing the fidelity (in probability units) for each compared tableau.
+    """
+    n_compared = len(compared_tableaus)
+    if n_compared == 0:
+        return _np.empty(0, dtype=_np.float64)
+
+    n_qubits = len(target_tableau)
+    inv_target = target_tableau.inverse()
+    sim = stim.TableauSimulator()
+    out = _np.empty(n_compared, dtype=_np.float64)
+
+    for i, comp in enumerate(compared_tableaus):
+        if len(comp) != n_qubits:
+            raise ValueError(f"Compared tableau qubit count ({len(comp)}) must match target tableau ({n_qubits}).")
+        t3 = inv_target * comp
+        sim.set_inverse_tableau(t3)
+        p = 1.0
+        for q in range(n_qubits):
+            e = sim.peek_z(q)
+            if e == -1:
+                p = 0.0
+                break
+            if e == 0:
+                p *= 0.5
+                sim.postselect_z(q, desired_value=False)
+        out[i] = p
+
+    return out
+
+
 def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
     """
     Calculate the fidelity between the stabilizer states corresponding to the given stim
@@ -3234,22 +4244,13 @@ def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
         Stim tableau for first stabilizer state.
     tableau2 : stim.Tableau
         Stim tableau for second stabilizer state.
+
+    Returns
+    -------
+    float
+        Fidelity between the two stabilizer states.
     """
-    t3 = tableau2**-1 * tableau1
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(t3)
-    p = 1
-    # note to future selves: stim uses little endian convention by default, and we typically use
-    # big endian. That doesn't make a difference in this case, but does elsewhere to be mindful to
-    # save on grief.
-    for q in range(len(t3)):
-        e = sim.peek_z(q)
-        if e == -1:
-            return 0
-        if e == 0:
-            p *= 0.5
-            sim.postselect_z(q, desired_value=False)
-    return p
+    return float(tableau_fidelities(tableau1, [tableau2])[0])
 
 def bitstring_to_tableau(bitstring: str) -> stim.Tableau:
     """
@@ -4258,7 +5259,9 @@ def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
         raise ValueError("Input must be either a string or a tuple of '0's and '1's")
 
 def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, desired_bitstring: str,
-                                      order: int = 1, truncation_threshold: float = 1e-14) -> float:
+                                      order: int = 1, truncation_threshold: float = 1e-14,
+                                      num_workers: Union[int, str, None] = None,
+                                      pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -4282,6 +5285,12 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
         Optional threshold used to truncate corrections whose corresponding rates
         are below this value.
 
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     correction : float
@@ -4294,20 +5303,23 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
     scale = 1/2**(num_random) 
     
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            #compute the taylor series approximation to the desired order.
+            taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                                num_workers=num_workers, pool=stage_pool)
+            # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    #can now do the correction computation in a single-shot.
-    alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring])
+        #can now do the correction computation in a single-shot.
+        alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring], num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
 
     alpha_errgen_prods = alphas*rates
@@ -4319,7 +5331,9 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
 # are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
 # the implementations into one function.
 def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, pauli: stim.PauliString,
-                                            order: int = 1, truncation_threshold: float = 1e-14) -> float:
+                                            order: int = 1, truncation_threshold: float = 1e-14,
+                                            num_workers: Union[int, str, None] = None,
+                                            pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -4343,6 +5357,12 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
         Optional threshold used to truncate corrections whose corresponding rates
         are below this value.
 
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     correction : float
@@ -4350,20 +5370,23 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
         selected pauli operator induced by the error generator (to specified order).
     """
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
-    if order == 1:
-        combined_taylor_dict = errorgen_dict
-    else:
-        #compute the taylor series approximation to the desired order.
-        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
-        combined_taylor_dict = {}
-        get = combined_taylor_dict.get
-        for order_dict in taylor_expansion:
-            for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+    # Share one (lazily started) pool between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            #compute the taylor series approximation to the desired order.
+            taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold,
+                                                                num_workers=num_workers, pool=stage_pool)
+            # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    #can now do the correction computation in a single-shot.
-    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli])
+        #can now do the correction computation in a single-shot.
+        alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli], num_workers=num_workers, pool=stage_pool)
     rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
     alpha_errgen_prods = alphas*rates
     correction = _np.sum(alpha_errgen_prods)
@@ -4421,12 +5444,31 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict: dict[_EEL, 
     expectation_correction = _np.linalg.multi_dot([pauli_vec.conj().T, taylor_expanded_errorgen,stabilizer_state_dmvec]).item()
     return expectation_correction
 
+def stabilizer_probabilities(tableau: stim.Tableau, bitstrings: Sequence[str]) -> _np.ndarray:
+    """
+    Calculate the output probabilities for a sequence of specified bitstrings.
+
+    Parameters
+    ----------
+    tableau : stim.Tableau
+        Stim tableau for the stabilizer state being measured.
+    bitstrings : sequence of str
+        Sequence of bitstrings (e.g. ['00', '01', ...]) to evaluate output probabilities for.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D array of output probabilities.
+    """
+    if len(bitstrings) == 0:
+        return _np.empty(0, dtype=_np.float64)
+    bitstring_tableaus = [bitstring_to_tableau(b) for b in bitstrings]
+    return tableau_fidelities(tableau, bitstring_tableaus)
+
+
 def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     Calculate the output probability for the specified output bitstring.
-    
-    TODO: Should be able to do this more efficiently for many bitstrings
-    by looking at the structure of the random support.
     
     Parameters
     ----------
@@ -4441,8 +5483,7 @@ def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> flo
     p : float
         probability of desired bitstring.
     """
-    # compute what Gidney calls the tableau fidelity (which in this case gives the probability).
-    return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
+    return float(stabilizer_probabilities(tableau, [desired_bitstring])[0])
 
 def stabilizer_pauli_expectation(tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
@@ -4475,7 +5516,9 @@ def stabilizer_pauli_expectation(tableau: stim.Tableau, pauli: stim.PauliString)
 
 def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
                                        desired_bitstring: str, order: int = 1,
-                                       truncation_threshold: float = 1e-14) -> float:
+                                       truncation_threshold: float = 1e-14,
+                                       num_workers: Union[int, str, None] = None,
+                                       pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Calculate the approximate probability of a desired bit string using an nth-order taylor series approximation.
     
@@ -4491,7 +5534,7 @@ def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit
         
     desired_bitstring : str
         String of 0's and 1's corresponding to the output bitstring being measured.
-    
+
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.
@@ -4499,7 +5542,13 @@ def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding error generator rates
         are below this value. (Used internally in computation of probability corrections)
-    
+
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     p : float
@@ -4520,12 +5569,15 @@ def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit
         errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     ideal_prob = stabilizer_probability(tableau, desired_bitstring)
-    correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
+    correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold,
+                                                   num_workers=num_workers, pool=pool)
     return ideal_prob + correction
 
 def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
                                              pauli: Union[str, stim.PauliString], order: int = 1,
-                                             truncation_threshold: float = 1e-14) -> float:
+                                             truncation_threshold: float = 1e-14,
+                                             num_workers: Union[int, str, None] = None,
+                                             pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     
@@ -4549,7 +5601,13 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], c
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding error generator rates
         are below this value. (Used internally in computation of probability corrections)
-    
+
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     expectation_value : float
@@ -4573,7 +5631,8 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], c
         errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
-    correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
+    correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold,
+                                                         num_workers=num_workers, pool=pool)
     return ideal_expectation + correction
 
 def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL, float],
@@ -4626,35 +5685,51 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL,
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
-def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
-                                         order: int = 1, truncation_threshold: float = 1e-14) -> _np.ndarray:
+
+def approximate_stabilizer_probabilities(
+    errorgen_dict: _ErrorgenDict,
+    circuit: Union[_Circuit, stim.Tableau],
+    bitstrings: Optional[Sequence[str]] = None,
+    order: int = 1,
+    truncation_threshold: float = 1e-14,
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
+) -> _np.ndarray:
     """
-    Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
-    Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
-    any more than a few qubits.
+    Calculate the approximate probability distribution over bitstrings using a Taylor series approximation.
 
     Parameters
     ----------
     errorgen_dict : dict
-        Dictionary whose keys are `ElementaryErrorgenLabel` and whose values are corresponding
-        rates.
-    
+        Dictionary whose keys are `LocalStimErrorgenLabel` or `LocalElementaryErrorgenLabel`
+        and whose values are corresponding rates. `LocalElementaryErrorgenLabel` keys are recast
+        (in canonical basis element label order) to `LocalStimErrorgenLabel`.
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
         case this should be a Clifford circuit and convertible to a stim.Tableau.
+    bitstrings : sequence of str, optional
+        Specific bitstrings to compute probabilities for. If None (default), computes
+        the exhaustive probability distribution over all 2^n bitstrings. If n > 10
+        and bitstrings is None, a UserWarning alerting to exponential scaling is issued.
 
+        Note on backwards compatibility: in pyGSTi 0.10 and earlier this function had no
+        `bitstrings` argument and its third positional argument was `order`. Callers
+        that passed `order` positionally should be updated.
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.
-    
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding error generator rates
-        are below this value. (Used internally in computation of probability corrections)
-    
+        are below this value.
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation across sensitivity grid.
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
-    p : float
-        Approximate output probability for desired bitstring.
+    p : numpy.ndarray
+        Array of approximate output probabilities.
     """
     if isinstance(circuit, _Circuit):
         tableau = circuit.convert_to_stim_tableau()
@@ -4663,21 +5738,149 @@ def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circu
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
 
-    # get set of all bit strings
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
+    if errorgen_dict and isinstance(next(iter(errorgen_dict)), (_GEEL, _LEEL)):
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
+
+    num_random = random_support(tableau)
+    if num_random > 2148:
+        raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
+
     num_qubits = len(tableau)
-    bitstrings = ["".join(bitstring) for bitstring in product(['0','1'], repeat=num_qubits)]
+    if bitstrings is None:
+        if num_qubits > 10:
+            _warnings.warn(
+                f"approximate_stabilizer_probabilities requested exhaustive distribution for {num_qubits} qubits "
+                f"(2^{num_qubits} = {2**num_qubits} bitstrings). This scales exponentially. "
+                "Consider specifying the 'bitstrings' parameter explicitly for large systems.",
+                UserWarning,
+                stacklevel=2,
+            )
+        bitstrings_list = ["".join(bitstring) for bitstring in product(['0', '1'], repeat=num_qubits)]
+    else:
+        bitstrings_list = list(bitstrings)
 
-    # initialize an array for the probabilities
-    probs = _np.zeros(2**num_qubits)
+    if len(bitstrings_list) == 0:
+        return _np.empty(0, dtype=_np.double)
 
-    for i, bitstring in enumerate(bitstrings):
-        probs[i] = approximate_stabilizer_probability(errorgen_dict, tableau, bitstring, order, truncation_threshold)
+    # Compute the Taylor series expansion once for all bitstrings, sharing one (lazily started) pool
+    # between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            taylor_expansion = error_generator_taylor_expansion(
+                errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=stage_pool
+            )
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
-    return probs
+        # Single bulk_alpha call (vectorized Cython or 2D parallel grid)
+        alphas = bulk_alpha(combined_taylor_dict, tableau, bitstrings_list, num_workers=num_workers, pool=stage_pool)
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    scale = 1.0 / (2.0 ** num_random)
+    corrections = scale * (alphas @ rates)
+
+    ideal_probs = stabilizer_probabilities(tableau, bitstrings_list)
+    return ideal_probs + corrections
+
+
+def approximate_stabilizer_pauli_expectations(
+    errorgen_dict: _ErrorgenDict,
+    circuit: Union[_Circuit, stim.Tableau],
+    paulis: Sequence[Union[str, stim.PauliString]],
+    order: int = 1,
+    truncation_threshold: float = 1e-14,
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
+) -> _np.ndarray:
+    """
+    Calculate the approximate expectation values for a sequence of Pauli observables.
+
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` or `LocalElementaryErrorgenLabel`
+        and whose values are corresponding rates. `LocalElementaryErrorgenLabel` keys are recast
+        (in canonical basis element label order) to `LocalStimErrorgenLabel`.
+    circuit : `Circuit` or `stim.Tableau`
+        A pygsti `Circuit` or stim.Tableau to compute the expectation values for.
+    paulis : sequence of str or stim.PauliString
+        Pauli operators to compute expectation values for.
+    order : int, optional (default 1)
+        Order of the Taylor series expansion for the exponentiated error generator.
+    truncation_threshold : float, optional (default 1e-14)
+        Truncation threshold for discarding small rates.
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation across sensitivity grid.
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of approximate expectation values for the requested Pauli observables.
+    """
+    if isinstance(circuit, _Circuit):
+        tableau = circuit.convert_to_stim_tableau()
+    elif isinstance(circuit, stim.Tableau):
+        tableau = circuit
+    else:
+        raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
+    if errorgen_dict and isinstance(next(iter(errorgen_dict)), (_GEEL, _LEEL)):
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
+
+    pauli_objs = [stim.PauliString(p) if isinstance(p, str) else p for p in paulis]
+    if len(pauli_objs) == 0:
+        return _np.empty(0, dtype=_np.double)
+
+    # Compute the Taylor series expansion once for all Paulis, sharing one (lazily started) pool
+    # between the Taylor expansion and the sensitivity calculation.
+    with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as stage_pool:
+        if order == 1:
+            combined_taylor_dict = errorgen_dict
+        else:
+            taylor_expansion = error_generator_taylor_expansion(
+                errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=stage_pool
+            )
+            combined_taylor_dict = {}
+            get = combined_taylor_dict.get
+            for order_dict in taylor_expansion:
+                for lbl, rate in order_dict.items():
+                    combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+
+        # Single bulk_alpha_pauli call (vectorized Cython or 2D parallel grid)
+        alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, pauli_objs, num_workers=num_workers, pool=stage_pool)
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    corrections = alphas @ rates
+
+    # Ideal expectations evaluated serially using a single pre-inverted simulator
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+    ideal_expectations = _np.empty(len(pauli_objs), dtype=_np.double)
+    for i, p in enumerate(pauli_objs):
+        if p.sign != 1:
+            s = p.sign
+            up = p / s
+        else:
+            s = 1
+            up = p
+        ideal_expectations[i] = _real_if_close(s * sim.peek_observable_expectation(up))
+
+    return ideal_expectations + corrections
 
 @_with_cyclic_gc_paused
 def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 1,
-                                     truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
+                                     truncation_threshold: float = 1e-14,
+                                     num_workers: Union[int, str, None] = None,
+                                     pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> list[_ErrorgenDict]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -4694,7 +5897,17 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding rates
-        are below this value.
+        are below this value. The intermediate powers of the generator from which the higher orders
+        are built are truncated at this threshold too. In a parallel evaluation (`num_workers` or `pool`)
+        the workers drop partial sums below the threshold divided by their number of tasks, so the
+        result can differ from the serial one by up to about the threshold, and terms whose magnitude is
+        close to the threshold may be kept by one and dropped by the other.
+
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation across commuting product slices.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
 
     Returns
     -------
@@ -4705,39 +5918,136 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     """
        
  
-    taylor_order_terms = [dict() for _ in range(order)]
+    taylor_order_terms = [{} for _ in range(order)]
 
     for lbl, rate in errorgen_dict.items():
         if abs(rate) > truncation_threshold:
             taylor_order_terms[0][lbl] = rate
 
     if order > 1 and errorgen_dict:
+        n_q = len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
+        workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
+        _warn_if_insufficient_memory(
+            estimate_taylor_peak_memory(n_q, len(errorgen_dict), order=order, num_workers=workers),
+            task_name="error_generator_taylor_expansion"
+        )
         # The k-th order term is (1/k!) L^k with L = sum_i rate_i * L_i. Composition is bilinear, so
         # the k-th power is built from the aggregated (k-1)-th power, L^k = L o L^(k-1): every
         # generator of `errorgen_dict` is composed with every term of the previous power once,
         # instead of re-composing the tail of each k-tuple of generators (which repeats the same
         # compositions for every leading generator). L and L^(k-1) commute, so the product is
         # formed by `_commuting_product` from anticommutators, L o L^(k-1) = ½{L, L^(k-1)} (see its
-        # docstring). The powers are kept untruncated between orders (only the returned copies
-        # are truncated), which is what makes [L, L^(k-1)] = 0 exact. Only the square gets the
-        # unordered-pair halving of `_commuting_product`; forming even powers from two equal
-        # factors instead (L^4 = ½{L^2, L^2}) would extend it, but costs ½|L^2|^2 pairs against
-        # |L||L^3| and was measured at 0.8-0.9x on inputs with few generators and 2.3x slower on
-        # a 75-generator input, so every power is L o L^(k-1).
+        # docstring). Only the square gets the unordered-pair halving of `_commuting_product`;
+        # forming even powers from two equal factors instead (L^4 = ½{L^2, L^2}) would extend it,
+        # but costs ½|L^2|^2 pairs against |L||L^3| and was measured at 0.8-0.9x on inputs with few
+        # generators and 2.3x slower on a 75-generator input, so every power is L o L^(k-1).
+        #
+        # The powers are truncated at `truncation_threshold` between orders (as are the returned,
+        # 1/k!-scaled copies). Strictly, the truncated power L^(k-1) - R (R the dropped terms, each
+        # of magnitude <= the threshold) no longer commutes with L, so the ½{L, .} form of the product
+        # is applied to a slightly non-commuting input, and the dropped terms R change the next power
+        # by terms of size ~ c * ||L||_1 * threshold per label, c a small combinatorial coefficient.
+        # That can only matter if ||L||_1 is of order one or larger, where the Taylor series converges
+        # too slowly for low orders to be useful anyway. Measured on 4- and 8-qubit propagated
+        # generators (orders 2-4, ||L||_1 from 0.03 to 12), truncating the powers moved no reported
+        # term by more than 3% of the threshold. The dropped terms are mostly cancellation residues
+        # (over half of all terms of L^3 on 8 qubits), so truncating them substantially reduces the
+        # size of the products at the following orders and the cost of materializing them.
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
-        for current_order in range(2, order + 1):
-            order_scale = 1 / factorial(current_order)
-            current_power = _commuting_product(errorgen_dict, previous_power, identity)
-            taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
-                                                     if order_scale * abs(rate) > truncation_threshold}
-            previous_power = current_power
+        # A single (lazily started) pool is shared by the products of every order.
+        with _pool_scope(num_workers, pool, prewarm_packages=EGPROP_PREWARM_PACKAGES) as order_pool:
+            for current_order in range(2, order + 1):
+                order_scale = 1 / factorial(current_order)
+                current_power = _commuting_product(errorgen_dict, previous_power, identity,
+                                                   truncation_threshold=truncation_threshold,
+                                                   num_workers=num_workers, pool=order_pool)
+                taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
+                                                         if order_scale * abs(rate) > truncation_threshold}
+                previous_power = current_power
 
     return taylor_order_terms
 
 
+class _CommutingProductSliceWorker:
+    """
+    Worker task evaluating a bilinear slice of a commuting product (picklable under spawn).
+
+    The partial sum is returned (keyed by `_hashable_string_rep`) with entries of magnitude at most
+    `chunk_threshold` dropped, which reduces the data sent back to the main process. The partial sums
+    of the slices are later added, so an entry that is small in one slice may belong to a label whose
+    total is large (and, conversely, dropped entries may have cancelled part of a larger one). The
+    caller therefore passes `chunk_threshold = threshold / n_slices`: if a label's total exceeds the
+    threshold then at least one slice's entry exceeds `threshold / n_slices` and is kept, so the label
+    is never lost entirely, and the total of the dropped entries of any label is below `threshold`.
+    This does not make the merged value exactly equal to the serial one: it can differ by up to about
+    `(n_slices - 1) / n_slices * threshold`, which can move a value across the threshold.
+    """
+    def __init__(self, full_other, identity, chunk_threshold):
+        self.full_other = full_other
+        self.identity = identity
+        self.chunk_threshold = chunk_threshold
+
+    def __call__(self, sub_dict):
+        with _cyclic_gc_paused():
+            part = _raw_commuting_product(sub_dict, self.full_other, self.identity)
+            thr = self.chunk_threshold
+            if thr > 0:
+                return {k._hashable_string_rep: v for k, v in part.items() if abs(v) > thr}
+            return {k._hashable_string_rep: v for k, v in part.items()}
+
+
 def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
-                       identity: str) -> dict[_LSE, complex]:
+                       identity: str, truncation_threshold: float = 1e-14,
+                       num_workers: Union[int, str, None] = None,
+                       pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> dict[_LSE, complex]:
+    """
+    The composition L o M of two commuting error generators (see `_raw_commuting_product`), with
+    terms of magnitude at most `truncation_threshold` removed from the result.
+
+    The serial and parallel evaluations both truncate, but are not guaranteed to agree exactly. In
+    the parallel evaluation each worker drops the entries of its partial sum of magnitude at most
+    `truncation_threshold / n_chunks` (to limit inter-process communication) and the merged sum is
+    truncated at `truncation_threshold` before any labels are built. The merged values can differ from
+    the serial ones by up to about `truncation_threshold`, and a label whose value is close to the
+    threshold may be kept by one evaluation and dropped by the other.
+    """
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    n1 = len(errorgen_dict_1)
+    n2 = len(errorgen_dict_2)
+    n_q = len(identity)
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_commuting_product(n_q, n1, n2, num_workers=workers):
+        return _truncated(_raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity), truncation_threshold)
+
+    # Parallel bilinear slicing with term-type load balancing
+    target = errorgen_dict_1 if n1 <= n2 else errorgen_dict_2
+    full = errorgen_dict_2 if n1 <= n2 else errorgen_dict_1
+    items = list(target.items())
+    weights = [3.0 if k.type_idx in (2, 3) else 1.0 for k, _ in items]
+    chunks = [dict(b) for b in _lpt_partition(items, weights, workers)]
+
+    # each chunk drops entries below its share of the threshold (see `_CommutingProductSliceWorker`)
+    worker = _CommutingProductSliceWorker(full, identity, truncation_threshold / len(chunks))
+    if pool is not None:
+        chunk_results = pool.map(worker, chunks)
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=EGPROP_PREWARM_PACKAGES) as local_pool:
+            chunk_results = local_pool.map(worker, chunks)
+
+    merged_str = {}
+    for cr in chunk_results:
+        for k, v in cr.items():
+            merged_str[k] = merged_str.get(k, 0.0) + v
+
+    # truncate before materializing labels, which dominates the cost of the merge
+    survivors = _truncated(merged_str, truncation_threshold)
+    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
+
+
+def _raw_commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
+                           identity: str) -> dict[_LSE, complex]:
     r"""
     The composition L o M of two error generators given as label -> rate dictionaries, for
     error generators that COMMUTE, [L, M] = 0 (e.g. M a power of L, as in the Taylor
@@ -4946,7 +6256,7 @@ BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Unio
 BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
 BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
 
-#alias in cython implementations.
+# alias in cython implementations.
 try:
     from pygsti.tools import fasterrgencalc as _fc
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = _fc.fast_pauli_phase_update_all_zeros
@@ -4954,18 +6264,478 @@ try:
     amplitude_of_state: AmplitudeOfStateType = _fc.fast_amplitude_of_state
     bulk_amplitude_of_state: BulkAmplitudeOfStateType = _fc.fast_bulk_amplitude_of_state
     bulk_phi: BulkPhiType = _fc.fast_bulk_phi
-    bulk_alpha: BulkAlphaType = _fc.fast_bulk_alpha
-    bulk_alpha_pauli: BulkAlphaPauliType = _fc.fast_bulk_alpha_pauli    
+    _raw_bulk_alpha: BulkAlphaType = _fc.fast_bulk_alpha
+    _raw_bulk_alpha_pauli: BulkAlphaPauliType = _fc.fast_bulk_alpha_pauli    
 except ImportError:
     msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to '\
           +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them. '\
            'Falling back to python implementation for: pauli_phase_update_all_zeros, pauli_phase_update, amplitude_of_state, ' \
            'bulk_phi, bulk_alpha and bulk_alpha_pauli.'
-    warnings.warn(msg)
+    _warnings.warn(msg)
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
     pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
     amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
     bulk_amplitude_of_state: BulkAmplitudeOfStateType = slow_bulk_amplitude_of_state
     bulk_phi: BulkPhiType = slow_bulk_phi
-    bulk_alpha: BulkAlphaType = slow_bulk_alpha
-    bulk_alpha_pauli: BulkAlphaPauliType = slow_bulk_alpha_pauli 
+    _raw_bulk_alpha: BulkAlphaType = slow_bulk_alpha
+    _raw_bulk_alpha_pauli: BulkAlphaPauliType = slow_bulk_alpha_pauli 
+
+
+# ===================================================================================================
+# Parallelization Thresholds, Memory Estimation, and Dynamic Target-System Calibration
+# ===================================================================================================
+
+# Active dynamic calibration parameters (populated only when optimize_errorgen_propagation_parallelization is run)
+_ACTIVE_PARALLEL_THRESHOLDS: dict[str, Any] = {
+    "safety_factor": 10.0,
+}
+
+
+def estimate_bulk_alpha_peak_memory(
+    n_qubits: int,
+    n_errorgens: int,
+    n_outcomes: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> int:
+    """
+    Estimate the additional peak memory in bytes (beyond the calling process's existing footprint)
+    for bulk_alpha / bulk_alpha_pauli computation.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit / stabilizer tableau.
+    n_errorgens : int
+        Number of elementary error generators.
+    n_outcomes : int
+        Number of bitstrings or Pauli strings requested.
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    output_matrix_bytes = n_outcomes * n_errorgens * 8
+    master_base = 0  # the calling process's footprint is already excluded from available memory
+    worker_base_rss = _WORKER_PROCESS_BASELINE_BYTES if w > 1 else 0
+    tableau_bytes = (n_qubits ** 2 // 8 + 64) * 8
+    sub_matrix_bytes = (n_outcomes * n_errorgens * 8) // max(1, w)
+    total_bytes = master_base + output_matrix_bytes + (w * worker_base_rss) + (w * sub_matrix_bytes) + w * tableau_bytes
+    return int(total_bytes)
+
+
+def _should_parallelize_alpha(
+    n_qubits: int,
+    num_generators: int,
+    num_outcomes: int,
+    num_workers: Union[int, str, None] = "auto",
+    start_method: Optional[str] = None,
+) -> bool:
+    r"""
+    Internal helper: determines whether a sensitivity calculation (bulk_alpha or bulk_alpha_pauli)
+    should be executed in parallel or routed to the zero-overhead sequential execution.
+
+    Checks active manual configuration overrides, dynamic profiling calibration (if run),
+    or the default multi-scale absolute cutoff table.
+    """
+    workers = _determine_num_workers(num_workers)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
+        return False
+
+    w = num_generators * num_outcomes
+    if w <= 0:
+        return False
+
+    forced = _forced_parallelism_mode("alpha")
+    if forced is not None:
+        return forced
+
+    if "min_km_alpha" in _MANUAL_PARALLEL_OVERRIDES:
+        return w >= _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"]
+
+    # Check if dynamic optimizer calibration was run by the user
+    if _ACTIVE_PARALLEL_THRESHOLDS.get("dynamic_calibrated", False):
+        a = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_a")
+        b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b")
+        if a is not None and b is not None:
+            beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+            tau_alpha_s = _alpha_tau_us(a, b, n_qubits) * 1e-6
+            t_ipc_s = _ACTIVE_PARALLEL_THRESHOLDS.get("t_ipc_s")
+            if t_ipc_s is None:
+                t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
+            threshold_km = (beta * t_ipc_s) / max(1e-9, tau_alpha_s)
+            return w >= threshold_km
+        # If any locally-run parameter is missing, immediately fallback to the simpler table
+
+    # Default fallback: multi-scale cutoff table
+    threshold_km = DEFAULT_PARALLEL_THRESHOLDS[_qubit_scale_tier(n_qubits)]['min_km_alpha']
+    return w >= threshold_km
+
+
+# Number of qubits separating the two problem sizes at which the sensitivity throughput is
+# measured, to fit its (linear) qubit-count scaling.
+_ALPHA_CALIBRATION_QUBIT_SPAN = 16
+
+
+def _calibration_tableau_and_errorgens(n: int, num_errorgens: int = 400):
+    """
+    A stabilizer state on exactly `n` qubits (Bell pairs on adjacent qubits, plus a Hadamard on the
+    last qubit when `n` is odd) and a reproducible random set of weight-1 and weight-2 elementary error
+    generators across the H, S, C and A sectors, for profiling the sensitivity calculation.
+    """
+    lines = []
+    for i in range(0, n - 1, 2):
+        lines.append(f"H {i}\nCX {i} {i+1}")
+    if n % 2 == 1:
+        lines.append(f"H {n - 1}")
+    tableau = stim.Tableau.from_circuit(stim.Circuit("\n".join(lines)))
+    assert len(tableau) == n
+
+    rng = _np.random.default_rng(1234)
+    pauli_letters = ["X", "Y", "Z"]
+    types = ["H", "S", "C", "A"]
+    gens = []
+    for _ in range(num_errorgens):
+        eg_type = str(rng.choice(types))
+        weight = int(rng.choice([1, 2])) if n > 1 else 1
+        targets = [int(x) for x in rng.choice(n, size=weight, replace=False)]
+
+        p1 = ["_"] * n
+        for t in targets:
+            p1[t] = str(rng.choice(pauli_letters))
+        p1_stim = stim.PauliString("".join(p1))
+
+        if eg_type in ("H", "S"):
+            gens.append(_LSE(eg_type, [p1_stim]))
+        else:
+            p2 = ["_"] * n
+            for t in targets:
+                p2[t] = str(rng.choice(pauli_letters))
+            p2_stim = stim.PauliString("".join(p2))
+            if p1_stim == p2_stim:
+                alt = "Y" if p1[targets[0]] != "Y" else "Z"
+                p2[targets[0]] = alt
+                p2_stim = stim.PauliString("".join(p2))
+            gens.append(_LSE(eg_type, [p1_stim, p2_stim]))
+    return tableau, gens
+
+
+def _measure_alpha_throughput_us(n: int, repeats: int = 3) -> float:
+    """
+    Measure the single-threaded time in microseconds per (error generator, outcome) cell of the
+    sensitivity calculation `bulk_alpha` on `n` qubits. The per-call overhead is cancelled by
+    differencing the times of a full and a half-size generator set (best of `repeats` each).
+    """
+    tableau, all_gens = _calibration_tableau_and_errorgens(n)
+    num_outcomes = 4
+    bitstrings = ["0" * n] * num_outcomes
+    g1 = all_gens[: len(all_gens) // 2]
+    g2 = all_gens
+
+    _raw_bulk_alpha(g1[:10], tableau, bitstrings[:1])  # warm-up
+
+    def best_time(gens):
+        best = float("inf")
+        for _ in range(repeats):
+            t0 = _time.perf_counter()
+            _raw_bulk_alpha(gens, tableau, bitstrings)
+            best = min(best, _time.perf_counter() - t0)
+        return best
+
+    t1, t2 = best_time(g1), best_time(g2)
+    delta_w = (len(g2) - len(g1)) * num_outcomes
+    return max(_MIN_ALPHA_TAU_US, ((t2 - t1) / max(1, delta_w)) * 1e6)
+
+
+# Smallest sensitivity throughput (microseconds per cell) the model will report or use; also the floor
+# applied to measurements.
+_MIN_ALPHA_TAU_US = 0.1
+
+
+def _alpha_tau_us(a: float, b: float, n_qubits: int) -> float:
+    """The fitted sensitivity throughput a + b*n (microseconds per cell), floored at `_MIN_ALPHA_TAU_US`
+    since the line is a local fit that can extrapolate to non-positive values at other qubit counts."""
+    return max(_MIN_ALPHA_TAU_US, a + b * n_qubits)
+
+
+def _fit_alpha_scaling(n_lo: int, tau_lo_us: float, n_hi: int, tau_hi_us: float) -> tuple[float, float]:
+    """
+    Fit the linear throughput model tau(n) = a + b*n (microseconds per cell) through measurements
+    at two qubit counts. The slope is clamped to be non-negative (measurement noise could otherwise
+    make the throughput appear to improve with size), in which case the model is the constant mean.
+    """
+    b = (tau_hi_us - tau_lo_us) / (n_hi - n_lo)
+    if b < 0:
+        return 0.5 * (tau_lo_us + tau_hi_us), 0.0
+    return tau_lo_us - b * n_lo, b
+
+
+def optimize_errorgen_propagation_parallelization(
+    num_qubits: Optional[int] = None,
+    model: Optional[Any] = None,
+    circuit: Optional[Any] = None,
+    num_workers: Union[int, str, None] = "auto",
+    start_method: Optional[str] = None,
+    set_as_default: bool = True,
+) -> dict[str, Any]:
+    r"""
+    Empirically calibrate the single-threaded throughput of the sensitivity calculation and the
+    IPC dispatch latency on the target machine, updating the active parallelization threshold for
+    `bulk_alpha` and `bulk_alpha_pauli`.
+
+    The sensitivity throughput is measured at the target qubit count and at a larger one
+    (`_ALPHA_CALIBRATION_QUBIT_SPAN` qubits more), and a linear model
+    :math:`\tau_\alpha(n) = a + b n` (microseconds per generator-outcome cell, with `b` clamped to
+    be non-negative) is fit through the two measurements. Since the throughput is not exactly linear in
+    the qubit count, this is a local fit, most accurate for problems near the calibrated size. The
+    calibrated parallelization threshold
+    is then :math:`K M \geq \beta T_{IPC} / \tau_\alpha(n)` for K generators and M outcomes,
+    where :math:`\beta` is the safety factor stored in `_ACTIVE_PARALLEL_THRESHOLDS` (10 by default).
+
+    Parameters
+    ----------
+    num_qubits : int, optional
+        Qubit count to profile. Inferred from `model` or `circuit` if provided.
+        At least one of `num_qubits`, `circuit`, or `model` must be provided.
+    model : Model, optional
+        Optional model to use for profiling.
+    circuit : Circuit, optional
+        Optional circuit to use for profiling.
+    num_workers : int, str, or None, optional
+        Worker count specification (defaults to "auto"). If this resolves to a single worker the
+        IPC latency is not recorded (there is nothing to dispatch to), and is instead measured
+        when it is first needed.
+    start_method : str, optional
+        Multiprocessing start method ('fork', 'spawn', 'forkserver').
+    set_as_default : bool, optional (default True)
+        If True, caches the calibrated parameters in `_ACTIVE_PARALLEL_THRESHOLDS`
+        to supersede the built-in reference defaults for subsequent operations.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the measured parameters:
+        {'num_qubits': int, 'tau_alpha_us': float, 'alpha_a': float, 'alpha_b': float,
+         't_ipc_s': float, 'num_workers': int, 'threshold_KM': int, 'calibration_ms': float}
+        where `tau_alpha_us` is the fitted throughput at `num_qubits`, a + b * num_qubits (floored at 0.1 microseconds).
+
+    Note
+    ----
+    **Scope:** the calibration affects only the parallelize-or-not decision for `bulk_alpha` and
+    `bulk_alpha_pauli`. The decisions for the Magnus expansion, commuting products and layer
+    propagation always use the built-in threshold table (or your manual configuration).
+
+    **Empirical Nature and Disclaimer:**
+    The linear scaling model is fit to measurements at only two problem sizes, and the IPC latency
+    is measured with trivial tasks. Actual single-threaded throughput and IPC dispatch overhead
+    may vary substantially across different CPU architectures (e.g. x86 AVX-512 vs.
+    ARM NEON), operating systems, and memory bus topologies.
+
+    For deterministic, manual control over parallelization cutoffs without running
+    runtime profiling, users should use `configure_errorgen_propagation_parallelization()`,
+    which allows setting explicit integer thresholds (e.g. `min_km_alpha`, `min_magnus_pairs`)
+    or forcing parallel/serial modes directly.
+    """
+    t0_start = _time.perf_counter()
+    workers = _determine_num_workers(num_workers)
+    t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
+
+    if model is not None:
+        if not isinstance(model, _Model):
+            raise TypeError(f"Expected model to be a pygsti Model instance, got {type(model)}.")
+        n = model.state_space.num_qubits
+    elif circuit is not None:
+        if not isinstance(circuit, _Circuit):
+            raise TypeError(f"Expected circuit to be a pygsti Circuit instance, got {type(circuit)}.")
+        n = circuit.num_lines
+    elif num_qubits is not None:
+        if not isinstance(num_qubits, (int, _np.integer)):
+            raise TypeError(f"Expected num_qubits to be an integer, got {type(num_qubits)}.")
+        n = int(num_qubits)
+        if n < 1:
+            raise ValueError(f"num_qubits must be an integer >= 1, got {n}.")
+    else:
+        raise ValueError("Must provide at least one of 'num_qubits', 'circuit', or 'model'.")
+
+    n_hi = n + _ALPHA_CALIBRATION_QUBIT_SPAN
+    a, b = _fit_alpha_scaling(n, _measure_alpha_throughput_us(n), n_hi, _measure_alpha_throughput_us(n_hi))
+    tau_us = _alpha_tau_us(a, b, n)
+
+    beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+    threshold_km = int(_math.ceil((beta * t_ipc_s) / (tau_us * 1e-6)))
+
+    calibration_duration_ms = (_time.perf_counter() - t0_start) * 1000
+
+    results = {
+        "num_qubits": n,
+        "tau_alpha_us": tau_us,
+        "alpha_a": a,
+        "alpha_b": b,
+        "t_ipc_s": t_ipc_s,
+        "num_workers": workers,
+        "threshold_KM": threshold_km,
+        "calibration_ms": calibration_duration_ms,
+    }
+
+    if set_as_default:
+        _ACTIVE_PARALLEL_THRESHOLDS["alpha_a"] = a
+        _ACTIVE_PARALLEL_THRESHOLDS["alpha_b"] = b
+        if workers > 1:
+            _ACTIVE_PARALLEL_THRESHOLDS["t_ipc_s"] = t_ipc_s
+        else:
+            # a single worker has no dispatch latency to measure; let it be measured when needed.
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
+        _ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
+
+    return results
+
+
+# ===================================================================================================
+# Parallel Worker Callables and Public Dispatchers
+# ===================================================================================================
+
+class _BulkAlphaWorker:
+    """Module-level worker task for parallel bulk_alpha (picklable under spawn)."""
+    def __init__(self, tableau):
+        if isinstance(tableau, stim.TableauSimulator):
+            self.tableau = tableau.current_inverse_tableau() ** -1
+        else:
+            self.tableau = tableau
+
+    def __call__(self, sub_bitstrings, sub_errorgens):
+        with _cyclic_gc_paused():
+            return _raw_bulk_alpha(sub_errorgens, self.tableau, list(sub_bitstrings))
+
+
+class _BulkAlphaPauliWorker:
+    """Module-level worker task for parallel bulk_alpha_pauli (picklable under spawn)."""
+    def __init__(self, tableau):
+        if isinstance(tableau, stim.TableauSimulator):
+            self.tableau = tableau.current_inverse_tableau() ** -1
+        else:
+            self.tableau = tableau
+
+    def __call__(self, sub_paulis, sub_errorgens):
+        with _cyclic_gc_paused():
+            return _raw_bulk_alpha_pauli(sub_errorgens, self.tableau, list(sub_paulis))
+
+
+def bulk_alpha(
+    errorgens: Iterable[_LSE],
+    tableau: Union[stim.Tableau, stim.TableauSimulator],
+    desired_bitstrings: list[str],
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
+) -> _np.ndarray:
+    """
+    First-order error generator sensitivity function for probability.
+
+    Calculates the sensitivity of stabilizer measurement probabilities across bitstrings
+    to specified elementary error generators. Supports both serial execution
+    and parallel 2D grid partitioning across bitstrings and generators.
+
+    Parameters
+    ----------
+    errorgens : iterable of `LocalStimErrorgenLabel`
+        Error generator labels for which to calculate sensitivities.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stabilizer state tableau being measured.
+    desired_bitstrings : list of str
+        Bitstrings to calculate sensitivities for.
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential execution; pass 'auto'
+        or an integer to enable parallel execution).
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse across sequential workflow stages.
+
+    Returns
+    -------
+    numpy.ndarray
+        2D array of sensitivities with shape `(len(desired_bitstrings), len(errorgens))`.
+    """
+    gens = list(errorgens)
+    n_e = len(gens)
+    n_b = len(desired_bitstrings)
+    if n_e == 0 or n_b == 0:
+        return _np.empty((n_b, n_e), dtype=_np.double)
+
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+
+    n_qubits = len(desired_bitstrings[0])
+    _warn_if_insufficient_memory(
+        estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_b, workers),
+        task_name="bulk_alpha"
+    )
+
+    if workers == 1 or num_workers is None and pool is None:
+        return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
+
+    if not _should_parallelize_alpha(n_qubits, n_e, n_b, num_workers=workers):
+        return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
+
+    worker = _BulkAlphaWorker(tableau)
+    return _parallel_2d_grid_map(worker, desired_bitstrings, gens, num_workers=workers, pool=pool)
+
+
+def bulk_alpha_pauli(
+    errorgens: Iterable[_LSE],
+    tableau: Union[stim.Tableau, stim.TableauSimulator],
+    paulis: list[stim.PauliString],
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
+) -> _np.ndarray:
+    """
+    First-order error generator sensitivity function for Pauli expectation values.
+
+    Parameters
+    ----------
+    errorgens : iterable of `LocalStimErrorgenLabel`
+        Error generator labels for which to calculate sensitivities.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stabilizer state tableau being measured.
+    paulis : list of stim.PauliString
+        Pauli observables to compute expectation sensitivities for.
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential execution; pass 'auto'
+        or an integer to enable parallel execution).
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse across sequential workflow stages.
+
+    Returns
+    -------
+    numpy.ndarray
+        2D array of sensitivities with shape `(len(paulis), len(errorgens))`.
+    """
+    gens = list(errorgens)
+    n_e = len(gens)
+    n_p = len(paulis)
+    if n_e == 0 or n_p == 0:
+        return _np.empty((n_p, n_e), dtype=_np.double)
+
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+
+    n_qubits = len(paulis[0])
+    _warn_if_insufficient_memory(
+        estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_p, workers),
+        task_name="bulk_alpha_pauli"
+    )
+
+    if workers == 1 or num_workers is None and pool is None:
+        return _raw_bulk_alpha_pauli(gens, tableau, paulis)
+
+    if not _should_parallelize_alpha(n_qubits, n_e, n_p, num_workers=workers):
+        return _raw_bulk_alpha_pauli(gens, tableau, paulis)
+
+    worker = _BulkAlphaPauliWorker(tableau)
+    return _parallel_2d_grid_map(worker, paulis, gens, num_workers=workers, pool=pool)
