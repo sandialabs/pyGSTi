@@ -32,8 +32,9 @@ and the constructors make that static gate a unitary: for all practical purposes
 ideal post-measurement conditional gate is unitary, the ideal instrument is then the
 chart's zero-error point, and every noise process lives in the Lindblad parameters.
 A noisy or singular frozen channel would instead bound what a fit can reach.
-:func:`_parameterized_instrument` still accepts superoperator gates, for anyone who
-assembles such a chart by hand.
+`'full TP'` and `'static'` freeze no base in that sense, so they take any TP gate,
+as a superoperator.  To put a non-unitary static gate under a Lindblad error map
+anyway, assemble the members by hand as `_HAND_BUILT_NOTE` describes.
 
 This module deliberately never imports :class:`Instrument` (to avoid an import
 cycle): the builders return a `dict` mapping outcome label -> :class:`ComposedOp`,
@@ -219,9 +220,11 @@ def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLi
     return basis, superkets, gates
 
 
-_HAND_BUILT_NOTE = ("To freeze a general channel G as the static gate anyway, assemble the members "
-                    "yourself, e.g. ComposedOp([RootConjOperator(effect, basis), ComposedOp([StaticArbitraryOp(G), "
-                    "error_map])]), and pass them to Instrument(...).")
+_HAND_BUILT_NOTE = ("To freeze a general channel G as the static gate under a Lindblad error map anyway, assemble "
+                    "each member yourself as ComposedOp([RootConjOperator(StaticPOVMEffect(effect), basis), "
+                    "ComposedOp([StaticArbitraryOp(G, basis), error_map])]), where error_map is e.g. "
+                    "convert(StaticUnitaryOp(numpy.eye(d), basis), 'CPTPLND', basis).factorops[1], and pass the "
+                    "members to Instrument(...).")
 
 
 def _nonunitary_gate_message(label, reason: str) -> str:
@@ -282,14 +285,12 @@ def _check_effects_complete(effect_superkets: dict[str, _np.ndarray], basis: _Ba
 def _parameterize_gate(gate: _np.ndarray, basis: _BasisLike,
                        gate_parameterization: str) -> _op.LinearOperator:
     """
-    Wrap the post-measurement gate `G_k` -- a `d x d` unitary or a `d**2 x d**2`
-    superop -- in the requested TP parameterization, seeded so that it reproduces
-    `G_k` exactly at zero error.
+    Wrap the post-measurement gate `G_k` in the requested TP parameterization, seeded
+    so that it reproduces `G_k` exactly at zero error.
 
-    For Lindblad types we compose a fresh, zero-initialized CP/TP error generator
-    onto a static base `G_k` (a :class:`StaticUnitaryOp` for a unitary).  The error
-    generator is built from the *identity* (not from `G_k`), so this works even when
-    a superop `G_k` is singular.
+    `G_k` is a `d x d` unitary, or for `'full TP'` and `'static'` it may also be a
+    `d**2 x d**2` superop.  For Lindblad types we compose a fresh, zero-initialized
+    error map onto the static unitary `G_k`.
     """
     basis = _Basis.cast(basis)
     udim = round(basis.dim ** 0.5)
@@ -299,11 +300,10 @@ def _parameterize_gate(gate: _np.ndarray, basis: _BasisLike,
     if gate_parameterization == 'full TP':
         return _op.FullTPOp(_ot.unitary_to_superop(gate, basis) if is_unitary else gate, basis)
 
-    # Lindblad type: ComposedOp([static G_k, fresh zero error map]).
-    G_static = _op.StaticUnitaryOp(gate, basis) if is_unitary else _op.StaticArbitraryOp(gate, basis)
+    # Lindblad type: ComposedOp([static unitary G_k, fresh zero error map]).
     I_static = _op.StaticUnitaryOp(_np.eye(udim, dtype='complex'), basis)
     error_map = _op.convert(I_static, gate_parameterization, basis).factorops[1]
-    return _op.ComposedOp([G_static, error_map])
+    return _op.ComposedOp([_op.StaticUnitaryOp(gate, basis), error_map])
 
 
 def _parameterized_instrument(basis: _BasisLike,
@@ -328,8 +328,9 @@ def _parameterized_instrument(basis: _BasisLike,
         Effect superkets `E_k` in `basis`.
 
     gates : dict[label, numpy.ndarray]
-        Post-measurement gates `G_k`, each a `d x d` unitary or a `d**2 x d**2`
-        superop in `basis` (same keys as `effect_superkets`).
+        Post-measurement gates `G_k` (same keys as `effect_superkets`), each a
+        `d x d` unitary, or for `'full TP'` and `'static'` possibly a `d**2 x d**2`
+        superop in `basis`.
 
     gate_parameterization : str, optional
         TP parameterization for the gates `{G_k}`.  A CP-constrained
