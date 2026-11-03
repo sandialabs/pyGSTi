@@ -211,6 +211,17 @@ cdef class OpRepRepeated(OpRep):
 
 
 cdef class OpRepExpErrorgen(OpRep):
+    """
+    Representation of an operation that is the exponential of an error generator.
+
+    Note: in this evotype this representation cannot act on states (`acton` raises); it exists so
+    that Lindblad error-generator-based operations can be constructed with this evotype.  Such
+    operations can be simulated only via the term-based machinery of the deprecated
+    `TermForwardSimulator` (see #916), but they may still be constructed for other uses
+    (e.g. models built for error generator propagation), so this class is *not* deprecated.
+    The term-related attributes (e.g. `Lterms`, `Lterm_coeffs`) are used only by the
+    deprecated term machinery.
+    """
     cdef public object errorgen_rep
 
     def __init__(self, errorgen_rep):
@@ -237,6 +248,17 @@ cdef class OpRepExpErrorgen(OpRep):
 
 
 cdef class OpRepLindbladErrorgen(OpRep):
+    """
+    Representation of a Lindblad error generator (defined by Lindblad coefficient blocks).
+
+    Note: in this evotype this representation cannot act on states (`acton` raises); it exists so
+    that Lindblad error-generator-based operations can be constructed with this evotype.  Such
+    operations can be simulated only via the term-based machinery of the deprecated
+    `TermForwardSimulator` (see #916), but they may still be constructed for other uses
+    (e.g. models built for error generator propagation), so this class is *not* deprecated.
+    The term-related attributes (e.g. `Lterms`, `Lterm_coeffs`) are used only by the
+    deprecated term machinery.
+    """
     cdef public object Lterms
     cdef public object Lterm_coeffs
     cdef public object lindblad_coefficient_blocks

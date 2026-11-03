@@ -12,6 +12,8 @@ The DepolarizeOp class and supporting functionality.
 
 import numpy as _np
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.modelmembers.operations.stochasticop import StochasticNoiseOp as _StochasticNoiseOp
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -74,13 +76,23 @@ class DepolarizeOp(_StochasticNoiseOp):
     def _get_rate_poly_dicts(self):
         """ Return a list of dicts, one per rate, expressing the
             rate as a polynomial of the local parameters (tuple
-            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2)
+
+            .. deprecated:: 0.11
+                Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+                in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+            """
         return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Computes the derivative of the total (sum) of the magnitudes of all this
         operator's terms with respect to the operators (local) parameters.

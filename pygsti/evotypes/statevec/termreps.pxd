@@ -1,3 +1,5 @@
+# DEPRECATED (pyGSTi 0.11): exists solely to support the deprecated TermForwardSimulator
+# and will be removed in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights

@@ -1,3 +1,5 @@
+// DEPRECATED (pyGSTi 0.11): exists solely to support the deprecated TermForwardSimulator
+// and will be removed in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 #include <complex>
 #include <vector>
 #include <cmath>

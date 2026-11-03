@@ -12,14 +12,14 @@ Defines classes which represent gates, as well as supporting functions
 
 import collections as _collections
 import itertools as _itertools
+import re as _re
 import warnings as _warnings
 import numpy as _np
+import scipy.linalg as _spl
 
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.label import Label as _Lbl
-from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 from pygsti.circuits import circuitconstruction as _gsc
@@ -51,7 +51,303 @@ def _onqubit(s, i_qubit):
     return _Circuit([_Lbl(nm, i_qubit) for nm in s], line_labels=(i_qubit,))  # set line labels in case s is empty
 
 
-def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, single_q_fiducials=None,
+def _fiducial_circuit(gatename_tuples, qubit_filter):
+    """ Creates the Circuit applying `gatename_tuples[i]` (a tuple of gate names) to qubit `qubit_filter[i]` """
+    fid = _onqubit(gatename_tuples[0], qubit_filter[0])
+    for el, ql in zip(gatename_tuples[1:], qubit_filter[1:]):
+        fid = fid + _onqubit(el, ql)
+    return fid
+
+
+def _linearized_lindblad_parameterization(parameterization):
+    """
+    Get the Lindblad parameterization whose parameters enter the error generator *linearly*.
+
+    The returned parameterization has the same error-generator blocks, the same number of
+    parameters, and the same parameter ordering as `parameterization`, but each block's
+    coefficients are linear functions of its parameters (e.g. `"H+S"` -> `"H+s"`,
+    `"H+D"` -> `"H+d"`, `"CPTPLND"` -> `"GLND"`).
+
+    Parameters
+    ----------
+    parameterization : str
+        A Lindblad parameterization type, optionally wrapped as `"exp(...)"` or `"1+(...)"`.
+
+    Returns
+    -------
+    str
+    """
+    m = _re.fullmatch(r'(exp\(|1\+\()(.*)\)', parameterization)
+    prefix, abbrev, suffix = (m.group(1), m.group(2), ')') if m else ('', parameterization, '')
+
+    if abbrev in ('CPTP', 'CPTPLND', 'GLND'):
+        lin_abbrev = 'GLND'
+    elif abbrev == 'GLNDU':
+        lin_abbrev = 'GLNDU'
+    else:
+        parts = abbrev.split('+')
+        if not all(p in ('H', 'S', 's', 'D', 'd') for p in parts):
+            raise ValueError(("Cloud-noise circuit construction requires a Lindblad error-generator "
+                              "parameterization (e.g. 'H+S', 'CPTPLND'), not '%s'") % parameterization)
+        lin_abbrev = '+'.join({'S': 's', 'D': 'd'}.get(p, p) for p in parts)
+    return prefix + lin_abbrev + suffix
+
+
+class _FirstOrderProbabilityJacobian(object):
+    """
+    First-order (linear response) sensitivity of circuit outcome probabilities to model parameters.
+
+    The fiducial-pair and germ selection routines in this module need, for a circuit `c`, the
+    first-order expansion of each outcome probability `p_k(c)` in the error generator coefficients
+    `{c_j}` of a noisy model: `p_k(c) ~= p_k^(0)(c) + sum_j A_kj(c) c_j`.  Coefficients are
+    themselves functions of the model parameters `theta` (e.g. stochastic rates are `theta**2`
+    for the cholesky-parameterized `"S"` blocks of `"H+S"`), so the quantity actually used is
+    the Jacobian `J(c) = A(c) . dc/dtheta` evaluated at a random generic point `theta_0` (the
+    `dummy` point; evaluating at `theta = 0` would make `dc/dtheta` vanish for quadratic
+    parameterizations).
+
+    This class computes `A(c)` *exactly* as the derivative of the probabilities of a dense
+    (densitymx) model whose error generators are parameterized linearly (see
+    :func:`_linearized_lindblad_parameterization`), evaluated at zero error.  Because a linearly-
+    parameterized coefficient is `c = M theta_lin` for a constant `M`, the Jacobian with respect to
+    the original model's parameters is `J(c) = dp/dtheta_lin(c) . pinv(M) . dc/dtheta(theta_0)`.
+
+    (This replaces an earlier implementation based on the now-deprecated `TermForwardSimulator`
+    in first-order "taylor-order" mode, which produced the same Jacobians.)
+
+    Parameters
+    ----------
+    model : Model
+        The model with the original (possibly nonlinear) parameterization.  Only its parameter
+        structure and Lindblad coefficient blocks are used; its forward simulator is not.
+
+    linear_model : Model, optional
+        A model identical to `model` except that its error generators are linearly
+        parameterized.  It is used to compute probability derivatives at zero error, so it should
+        have a forward simulator that computes exact derivatives (e.g.
+        :class:`MatrixForwardSimulator`).  If None, `model` itself is used, which is
+        appropriate when `model` is already linearly parameterized.
+    """
+
+    def __init__(self, model, linear_model=None):
+        from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+
+        if linear_model is None:
+            linear_model = model
+        self.model = model
+        self.linear_model = linear_model
+        for mdl in (model, linear_model):
+            mdl._clean_paramvec()  # allocates/updates .gpindices of all blocks
+            assert(getattr(mdl, '_param_interposer', None) is None), "Parameter interposers are not supported!"
+        assert(model.num_params == linear_model.num_params), \
+            "`model` and `linear_model` must have the same number of parameters!"
+        if not _np.allclose(linear_model.to_vector(), 0.0):
+            linear_model.from_vector(_np.zeros(linear_model.num_params, 'd'))
+
+        povm_lbl = linear_model._default_primitive_povm_layer_lbl(sslbls=None)
+        self.povm_lbl = povm_lbl
+        self.outcomes = tuple(linear_model._effect_labels_for_povm(povm_lbl))
+        self.prep_lbl = linear_model._default_primitive_prep_layer_lbl()
+        self.line_labels = linear_model.state_space.sole_tensor_product_block_labels
+
+        def errorgens(mdl):
+            found = dict()
+
+            def walk(member):
+                if isinstance(member, _LindbladErrorgen):
+                    found[id(member)] = member
+                for sub in member.submembers():
+                    walk(sub)
+            for _, obj in mdl._iter_parameterized_objs():
+                walk(obj)
+            return list(found.values())
+
+        # Pairs of corresponding error generators, and the constant pinv(M) for each linear errorgen
+        self._errorgen_info = []
+        egs, lin_egs = errorgens(model), errorgens(linear_model)
+        assert(len(egs) == len(lin_egs)), "`model` and `linear_model` have different structures!"
+        for eg, lin_eg in zip(egs, lin_egs):
+            indices = eg.gpindices_as_array()
+            assert(_np.array_equal(indices, lin_eg.gpindices_as_array())), \
+                "`model` and `linear_model` have different parameter orderings!"
+            blks, lin_blks = eg.coefficient_blocks, lin_eg.coefficient_blocks
+            assert(len(blks) == len(lin_blks)
+                   and all(b.num_params == lb.num_params for b, lb in zip(blks, lin_blks))), \
+                "`model` and `linear_model` have different error generator blocks!"
+            M = _spl.block_diag(*[lb.elementary_errorgen_deriv_wrt_params(_np.zeros(lb.num_params, 'd'))
+                                  for lb in lin_blks])
+            self._errorgen_info.append((indices, blks, _np.linalg.pinv(M)))
+
+        self._dprobs_cache = {}
+
+    @property
+    def num_params(self):
+        """ The number of model parameters. """
+        return self.model.num_params
+
+    def param_transform(self, theta0):
+        """
+        The matrix `G` such that `dp/dtheta (theta0) = dp/dtheta_lin (0) . G` to first order.
+
+        Parameters
+        ----------
+        theta0 : numpy.ndarray
+            The (original-model) parameter values at which coefficient derivatives are evaluated.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape `(num_params, num_params)`.
+        """
+        G = _np.identity(self.num_params, 'd')
+        for indices, blks, Minv in self._errorgen_info:
+            v = theta0[indices]; off = 0; D = []
+            for blk in blks:
+                D.append(blk.elementary_errorgen_deriv_wrt_params(v[off:off + blk.num_params]))
+                off += blk.num_params
+            G[_np.ix_(indices, indices)] = Minv @ _spl.block_diag(*D)
+        return G
+
+    def _outcome_indices(self, effect_lbls):
+        """ Indices into `self.outcomes` for (simplified, e.g. "Mdefault_01", or bare) effect labels """
+        if effect_lbls is None:
+            return list(range(len(self.outcomes)))
+        prefix = str(self.povm_lbl) + "_"
+        ret = []
+        for elbl in effect_lbls:
+            s = str(elbl)
+            if s not in self.outcomes and s.startswith(prefix):
+                s = s[len(prefix):]
+            ret.append(self.outcomes.index(s))
+        return ret
+
+    def dprobs(self, circuits, param_slice=None):
+        """
+        Derivatives of outcome probabilities w.r.t. *linear-model* parameters at zero error.
+
+        Parameters
+        ----------
+        circuits : list
+            A list of :class:`Circuit` objects (without state preparation or measurement).
+
+        param_slice : slice, optional
+            The (contiguous) range of linear-model parameters to differentiate with respect to.
+            Defaults to all parameters.
+
+        Returns
+        -------
+        list
+            A list of `(len(self.outcomes), num_params_in_slice)` arrays, one per circuit.
+        """
+        if param_slice is None:
+            param_slice = slice(0, self.num_params)
+        cache = self._dprobs_cache.setdefault((param_slice.start, param_slice.stop), {})
+        circuits = [_Circuit(c.layertup, line_labels=self.line_labels) for c in circuits]
+        missing = [c for c in _lt.remove_duplicates(circuits) if c not in cache]
+        if len(missing) > 0:
+            sim = self.linear_model.sim
+            layout = sim.create_layout(missing, array_types=('ep',))
+            vdp = _np.zeros((layout.num_elements, _slct.length(param_slice)), 'd')
+            # Only differentiate w.r.t. the parameters in `param_slice` (the public `bulk_dprobs`
+            # always differentiates w.r.t. *all* parameters, which can be much slower).
+            for atom in layout.atoms:
+                sim._bulk_fill_dprobs_atom(vdp[atom.element_slice, :], None, atom, param_slice,
+                                           layout.resource_alloc('param-processing'))
+            for elInds, c, outcomes in layout.global_layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                d = {outcome: vdp[ei] for ei, outcome in zip(elInds, outcomes)}
+                cache[c] = _np.array([d[(o,)] for o in self.outcomes])
+        return [cache[c] for c in circuits]
+
+    def prefetch(self, circuits, wrt_transform=None):
+        """
+        Compute (in bulk) and cache the derivatives needed for `circuits`.
+
+        This is purely an optimization: computing many circuits at once is much faster than
+        computing them one at a time.
+
+        Parameters
+        ----------
+        circuits : list
+            A list of :class:`Circuit` objects (without state preparation or measurement).
+
+        wrt_transform : tuple, optional
+            The output of :meth:`wrt_param_transform` that will be used with these circuits.
+
+        Returns
+        -------
+        None
+        """
+        self.dprobs(circuits, None if wrt_transform is None else wrt_transform[0])
+
+    def check_prep_label(self, prep_lbl):
+        """ Raise a ValueError unless `prep_lbl` is None or the model's default (only) state preparation. """
+        if prep_lbl is not None and prep_lbl != self.prep_lbl:
+            raise ValueError("Only the model's default state preparation (%s) is supported, not %s"
+                             % (str(self.prep_lbl), str(prep_lbl)))
+
+    def wrt_param_transform(self, theta0, wrt_params):
+        """
+        The columns of :meth:`param_transform` corresponding to `wrt_params`.
+
+        Parameters
+        ----------
+        theta0 : numpy.ndarray
+            Point at which parameter-to-coefficient derivatives are evaluated (see class docstring).
+
+        wrt_params : slice or numpy.ndarray
+            The (original-model) parameter indices to differentiate with respect to.
+
+        Returns
+        -------
+        param_slice : slice
+            The (contiguous) range of linear-model parameters that the `wrt_params` columns
+            depend upon (the parameters of all the error generators containing any of `wrt_params`).
+        transform : numpy.ndarray
+            Array of shape `(length(param_slice), len(wrt_params))`.
+        """
+        wrt_indices = _slct.to_array(wrt_params)
+        needed = set(wrt_indices)
+        for indices, _, _ in self._errorgen_info:
+            if needed.intersection(indices):
+                needed.update(indices)
+        param_slice = slice(min(needed), max(needed) + 1) if len(needed) > 0 else slice(0, 0)
+        return param_slice, self.param_transform(theta0)[param_slice, :][:, wrt_indices]
+
+    def amplified_jacobians(self, circuit_pairs, wrt_transform, effect_lbls=None):
+        """
+        First-order Jacobians of `p(c1) - p(c0)` for each `(c1, c0)` pair (or of `p(c1)` if `c0` is None).
+
+        Parameters
+        ----------
+        circuit_pairs : list
+            A list of `(c1, c0)` tuples of :class:`Circuit` objects; `c0` may be None.
+
+        wrt_transform : numpy.ndarray
+            The output of :meth:`wrt_param_transform`, which fixes the evaluation point and the
+            parameters to differentiate with respect to.
+
+        effect_lbls : list, optional
+            The effect labels (rows) to include, in order.  Defaults to all outcomes of the
+            default POVM.
+
+        Returns
+        -------
+        list
+            A list of complex `(len(effect_lbls), len(wrt_params))` arrays.
+        """
+        rows = self._outcome_indices(effect_lbls)
+        param_slice, transform = wrt_transform
+        d1s = self.dprobs([c1 for c1, _ in circuit_pairs], param_slice)
+        d0s = iter(self.dprobs([c0 for _, c0 in circuit_pairs if c0 is not None], param_slice))
+        ret = []
+        for (c1, c0), d1 in zip(circuit_pairs, d1s):
+            d = d1 if c0 is None else d1 - next(d0s)
+            ret.append(_np.dot(d[rows, :], transform).astype('complex'))
+        return ret
+
+
+def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, jac_calc, single_q_fiducials=None,
                                               prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
                                               wrt_params=None, algorithm="greedy", require_all_amped=True,
                                               idt_pauli_dicts=None, comm=None, verbosity=0):
@@ -74,10 +370,9 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
 
-    model : Model
-        The model used to compute the polynomial expressions of probabilities
-        to first-order.  Thus, this model should always have (simulation)
-        type "termorder".
+    jac_calc : _FirstOrderProbabilityJacobian
+        The object used to compute the first-order (in the error rates)
+        dependence of outcome probabilities on the model parameters.
 
     single_q_fiducials : list, optional
         A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
@@ -181,23 +476,14 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     # in R^n whenever the polynomials are linearly independent - then
     # we can use the usual scipy/numpy routines for computing a matrix
     # rank, etc.
-
-    # Assert that model uses termorder, as doing L1-L0 to extract the "amplified" part
-    # relies on only expanding to *first* order.
-    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
-        '`model` must use a 1-st order Term-type forward simulator!'
+    #
+    # Note: doing L1-L0 to extract the "amplified" part relies on only expanding
+    # to *first* order in the error rates, which `jac_calc` does.
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
-    resource_alloc = _ResourceAllocation()  # don't use comm here, since it's not used for prs_as_polynomials
-
-    if prep_lbl is None:
-        prep_lbl = model._default_primitive_prep_layer_lbl()
+    jac_calc.check_prep_label(prep_lbl)
     if effect_lbls is None:
-        povmLbl = model._default_primitive_povm_layer_lbl(sslbls=None)
-        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l))
-                       for l in model._effect_labels_for_povm(povmLbl)]
+        effect_lbls = ["%s_%s" % (jac_calc.povm_lbl, l) for l in jac_calc.outcomes]
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -207,18 +493,14 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     else:  # assume a single list that works for both prep and measure
         single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
-    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
-    #dummy = 0.05*_np.random.random(model.num_params)
-    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
-    # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
+    # random point for evaluating derivatives (parameters may enter the error rates
+    # quadratically, e.g. "S" in "H+S", so we don't evaluate at zero)
+    dummy = 5.0 * _np.random.random(jac_calc.num_params) + 0.5 * _np.ones(jac_calc.num_params, 'd')
 
-    #print("DB gpindices = "); model._print_gpindices()  # DEBUG (can REMOVE)
-
-    #amped_polys = []
     selected_gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params)
+    if wrt_params is None: wrt_params = slice(0, jac_calc.num_params)
     Np = _slct.length(wrt_params)
+    wrt_transform = jac_calc.wrt_param_transform(dummy, wrt_params)
     if init_j is None:
         J = _np.empty((0, Np), 'complex'); Jrank = 0
     else:
@@ -265,6 +547,12 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                     else:
                         prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
+                # compute the needed derivatives for all measurement fiducials at once (an optimization)
+                meas_fids = [_fiducial_circuit(meas, qubit_filter)
+                             for meas in _itertools.product(*([single_q_meas_fiducials] * nQubits))]
+                jac_calc.prefetch([prepFid + idle_str + mf for mf in meas_fids] + [prepFid + mf for mf in meas_fids],
+                                  wrt_transform)
+
                 for meas in _itertools.product(*([single_q_meas_fiducials] * nQubits)):
 
                     if idt_pauli_dicts is not None:
@@ -290,17 +578,13 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
                     gstr_L0 = prepFid + measFid            # should be a Circuit
                     gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-                    ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
-                                                       polynomial_vindices_per_int, resource_alloc)
-                    qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
-                                                       polynomial_vindices_per_int, resource_alloc)
+                    # derivative of the amplified poly (L1 poly minus L0 poly), one row per effect
+                    amped_jac, = jac_calc.amplified_jacobians([(gstr_L1, gstr_L0)], wrt_transform, effect_lbls)
 
                     if algorithm == "sequential":
                         added = False
-                        for elbl, p, q in zip(effect_lbls, ps, qs):
-                            amped = p + -1 * q  # the amplified poly
-                            Jrow = _np.array([[amped.deriv(iParam).evaluate(dummy)
-                                               for iParam in _slct.to_array(wrt_params)]])
+                        for elbl, amped_row in zip(effect_lbls, amped_jac):
+                            Jrow = amped_row[None, :]
                             if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
 
                             Jtest = _np.concatenate((J, Jrow), axis=0)
@@ -317,10 +601,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
                     elif algorithm == "greedy":
                         #test adding all effect labels - get the overall increase in rank due to this fidpair
-                        for k, (elbl, p, q) in enumerate(zip(effect_lbls, ps, qs)):
-                            amped = p + -1 * q  # the amplified poly
-                            Jrows[k, :] = _np.array([[amped.deriv(iParam).evaluate(dummy)
-                                                      for iParam in _slct.to_array(wrt_params)]])
+                        Jrows[:, :] = amped_jac
                         Jtest = _np.concatenate((J, Jrows), axis=0)
                         testRank = _np.linalg.matrix_rank(Jtest, tol=RANK_TOL)
                         rankInc = testRank - Jrank
@@ -359,7 +640,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     return J, Jrank, selected_gatename_fidpair_lists
 
 
-def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lbl=None, effect_lbls=None,
+def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, jac_calc, prep_lbl=None, effect_lbls=None,
                                               wrt_params=None, verbosity=0):
     """
     Compute the number of model parameters amplified by a given (synthetic) idle sequence.
@@ -375,10 +656,9 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
         just be a single idle gate, or it could be multiple non-idle gates
         which together act as an idle.
 
-    model : Model
-        The model used to compute the polynomial expressions of probabilities
-        to first-order.  Thus, this model should always have (simulation)
-        type "termorder".
+    jac_calc : _FirstOrderProbabilityJacobian
+        The object used to compute the first-order (in the error rates)
+        dependence of outcome probabilities on the model parameters.
 
     prep_lbl : Label, optional
         The state preparation label to use.  If None, then the first (and
@@ -405,41 +685,24 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     nTotal : int
         The total number of parameters considered for amplification.
     """
-    #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
-    # relies on only expanding to *first* order.
-    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
-        '`model` must use a 1-st order Term-type forward simulator!'
-
-    # printer = _VerbosityPrinter.create_printer(verbosity)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
-    resource_alloc = _ResourceAllocation()
-
-    if prep_lbl is None:
-        prep_lbl = model._default_primitive_prep_layer_lbl()
+    # Note: doing L1-L0 to extract the "amplified" part relies on only expanding
+    # to *first* order in the error rates, which `jac_calc` does.
+    jac_calc.check_prep_label(prep_lbl)
     if effect_lbls is None:
-        povmLbl = model._default_primitive_povm_layer_lbl()
-        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
-    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
+        effect_lbls = ["%s_%s" % (jac_calc.povm_lbl, l) for l in jac_calc.outcomes]
+    dummy = 5.0 * _np.random.random(jac_calc.num_params) + 0.5 * _np.ones(jac_calc.num_params, 'd')
 
-    if wrt_params is None: wrt_params = slice(0, model.num_params)
+    if wrt_params is None: wrt_params = slice(0, jac_calc.num_params)
     Np = _slct.length(wrt_params)
     nEffectLbls = len(effect_lbls)
     nRows = len(fidpairs) * nEffectLbls  # number of jacobian rows
     J = _np.empty((nRows, Np), 'complex')
+    wrt_transform = jac_calc.wrt_param_transform(dummy, wrt_params)
 
-    for i, (prepFid, measFid) in enumerate(fidpairs):
-        gstr_L0 = prepFid + measFid            # should be a Circuit
-        gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-        ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
-                                           polynomial_vindices_per_int, resource_alloc)
-        qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
-                                           polynomial_vindices_per_int, resource_alloc)
-
-        for k, (elbl, p, q) in enumerate(zip(effect_lbls, ps, qs)):
-            amped = p + -1 * q  # the amplified poly
-            Jrow = _np.array([[amped.deriv(iParam).evaluate(dummy) for iParam in _slct.to_array(wrt_params)]])
-            J[i * nEffectLbls + k, :] = Jrow
+    circuit_pairs = [(prepFid + idle_str + measFid, prepFid + measFid)  # (L1, L0) Circuits
+                     for prepFid, measFid in fidpairs]
+    for i, amped_jac in enumerate(jac_calc.amplified_jacobians(circuit_pairs, wrt_transform, effect_lbls)):
+        J[i * nEffectLbls:(i + 1) * nEffectLbls, :] = amped_jac  # derivatives of the amplified polys
 
     rank = _np.linalg.matrix_rank(J, tol=RANK_TOL)
     #print("Rank = %d, num params = %d" % (rank, Np))
@@ -447,7 +710,7 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
 
 
 def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter, true_idle_pairs, idle_str, max_weight,
-                                                       model, single_q_fiducials=None,
+                                                       jac_calc, single_q_fiducials=None,
                                                        prep_lbl=None, effect_lbls=None, init_j=None, init_j_rank=None,
                                                        wrt_params=None, verbosity=0):
     """
@@ -504,14 +767,13 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         weight of errors.  For instance if `idle_str` contains CNOT gates
         on qubits 0 and 1 (the "core") and the noise model allows insertion of
         up to weight-2 errors at any location, then a single weight-2 error
-        (recall termorder:1 means there can be only 1 error per circuit) on
+        (recall that only first order in the error rates is considered, so there can be only 1 error per circuit) on
         qubits 1 and 2 followed by a CNOT on 0 and 1 could yield an weight-3
         error on qubits 0,1, and 2.
 
-    model : Model
-        The model used to compute the polynomial expressions of probabilities
-        to first-order.  Thus, this model should always have (simulation)
-        type "termorder".
+    jac_calc : _FirstOrderProbabilityJacobian
+        The object used to compute the first-order (in the error rates)
+        dependence of outcome probabilities on the model parameters.
 
     single_q_fiducials : list, optional
         A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
@@ -569,21 +831,13 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         See :func:`_find_amped_polynomials_for_syntheticidle` for details.
     """
 
-    #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
-    # relies on only expanding to *first* order.
-    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-    assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
-        '`model` must use a 1-st order Term-type forward simulator!'
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
-    resource_alloc = _ResourceAllocation()
-
+    # Note: doing L1-L0 to extract the "amplified" part relies on only expanding
+    # to *first* order in the error rates, which `jac_calc` does.
     printer = _VerbosityPrinter.create_printer(verbosity)
 
-    if prep_lbl is None:
-        prep_lbl = model._default_primitive_prep_layer_lbl()
+    jac_calc.check_prep_label(prep_lbl)
     if effect_lbls is None:
-        povmLbl = model._default_primitive_povm_layer_lbl()
-        effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
+        effect_lbls = ["%s_%s" % (jac_calc.povm_lbl, l) for l in jac_calc.outcomes]
 
     #OLD (see below)
     #if single_q_fiducials is None:
@@ -595,16 +849,14 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     #else:  # assume a single list that works for both prep and measure
     #    single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
-    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
-    #dummy = 0.05*_np.random.random(model.num_params)
-    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
-    # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
+    # random point for evaluating derivatives (parameters may enter the error rates
+    # quadratically, e.g. "S" in "H+S", so we don't evaluate at zero)
+    dummy = 5.0 * _np.random.random(jac_calc.num_params) + 0.5 * _np.ones(jac_calc.num_params, 'd')
 
-    #amped_polys = []
     selected_gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params)
+    if wrt_params is None: wrt_params = slice(0, jac_calc.num_params)
     Np = _slct.length(wrt_params)
+    wrt_transform = jac_calc.wrt_param_transform(dummy, wrt_params)
     if init_j is None:
         J = _np.empty((0, Np), 'complex'); Jrank = 0
     else:
@@ -655,6 +907,13 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     printer.log("Testing %d fidpairs for %d-wt idle -> %d fidpairs after tiling onto %d qubits"
                 % (len(idle_gatename_fidpair_lists), max_weight, len(gatename_fidpair_lists), nQubits))
 
+    # compute the needed derivatives for all the fiducial pairs at once (an optimization)
+    fidpairs_to_test = [(_fiducial_circuit([gfp[0] for gfp in gfp_list], qubit_filter),
+                         _fiducial_circuit([gfp[1] for gfp in gfp_list], qubit_filter))
+                        for gfp_list in gatename_fidpair_lists]
+    jac_calc.prefetch([pf + idle_str + mf for pf, mf in fidpairs_to_test] + [pf + mf for pf, mf in fidpairs_to_test],
+                      wrt_transform)
+
     for gfp_list in gatename_fidpair_lists:
         # # replace 0..(k-1) in each template string with the corresponding
         # # gatename_fidpair (acts on the single qubit identified by the
@@ -701,14 +960,11 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
         gstr_L0 = prepFid + measFid            # should be a Circuit
         gstr_L1 = prepFid + idle_str + measFid  # should be a Circuit
-        ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L1,
-                                           polynomial_vindices_per_int, resource_alloc)
-        qs = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, gstr_L0,
-                                           polynomial_vindices_per_int, resource_alloc)
+        # derivative of the amplified poly (L1 poly minus L0 poly), one row per effect
+        amped_jac, = jac_calc.amplified_jacobians([(gstr_L1, gstr_L0)], wrt_transform, effect_lbls)
         added = False
-        for elbl, p, q in zip(effect_lbls, ps, qs):
-            amped = p + -1 * q  # the amplified poly
-            Jrow = _np.array([[amped.deriv(iParam).evaluate(dummy) for iParam in _slct.to_array(wrt_params)]])
+        for elbl, amped_row in zip(effect_lbls, amped_jac):
+            Jrow = amped_row[None, :]
             if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
 
             Jtest = _np.concatenate((J, Jrow), axis=0)
@@ -732,7 +988,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
 
 def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, germ_power_str, amped_poly_j,
-                                                     idle_gatename_fidpair_lists, model,
+                                                     idle_gatename_fidpair_lists, jac_calc,
                                                      single_q_fiducials=None, prep_lbl=None, effect_lbls=None,
                                                      wrt_params=None, verbosity=0):
     """
@@ -786,10 +1042,9 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         the non-idle `germ_power_str` does to the amplified portion of the
         state space).
 
-    model : Model
-        The model used to compute the polynomial expressions of probabilities
-        to first-order.  Thus, this model should always have (simulation)
-        type "termorder:1".
+    jac_calc : _FirstOrderProbabilityJacobian
+        The object used to compute the first-order (in the error rates)
+        dependence of outcome probabilities on the model parameters.
 
     single_q_fiducials : list, optional
         A list of gate-name tuples (e.g. `('Gx',)`) which specify a set of single-
@@ -825,14 +1080,10 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         See :func:`_find_amped_polynomials_for_syntheticidle` for details.
     """
     printer = _VerbosityPrinter.create_printer(verbosity)
-    polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
-    resource_alloc = _ResourceAllocation()
 
-    if prep_lbl is None:
-        prep_lbl = model._default_primitive_prep_layer_lbl()
+    jac_calc.check_prep_label(prep_lbl)
     if effect_lbls is None:
-        povmLbl = model._default_primitive_povm_layer_lbl(sslbls=None)
-        effect_lbls = model._effect_labels_for_povm(povmLbl)
+        effect_lbls = list(jac_calc.outcomes)
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
         single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
@@ -842,15 +1093,14 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
     else:  # assume a single list that works for both prep and measure
         single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
-    #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
-    #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
-    dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
-    # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
+    # random point for evaluating derivatives (parameters may enter the error rates
+    # quadratically, e.g. "S" in "H+S", so we don't evaluate at zero)
+    dummy = 5.0 * _np.random.random(jac_calc.num_params) + 0.5 * _np.ones(jac_calc.num_params, 'd')
 
-    #OLD: selected_fidpairs = []
     gatename_fidpair_lists = []
-    if wrt_params is None: wrt_params = slice(0, model.num_params)
+    if wrt_params is None: wrt_params = slice(0, jac_calc.num_params)
     Np = _slct.length(wrt_params)
+    wrt_transform = jac_calc.wrt_param_transform(dummy, wrt_params)
     Namped = amped_poly_j.shape[0]; assert(amped_poly_j.shape[1] == Np)
     J = _np.empty((0, Namped), 'complex'); Jrank = 0
 
@@ -882,6 +1132,22 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
             _warnings.warn(("Idle's prep fiducials only amplify %d of %d"
                             " directions!  Falling back to vary prep on core")
                            % (Jrank, Namped))
+
+        # compute the needed derivatives for all the circuits of this prep_core at once (an optimization)
+        to_prefetch = []
+        for gfp_list in idle_gatename_fidpair_lists:
+            prep = [gfp[0] for gfp in gfp_list]
+            if prep_core is not None:
+                for i, core_ql in enumerate(core_filter):
+                    prep[qubit_filter.index(core_ql)] = prep_core[i]
+            for meas_core in meas_cores:
+                meas = [gfp[1] for gfp in gfp_list]
+                if meas_core is not None:
+                    for i, core_ql in enumerate(core_filter):
+                        meas[qubit_filter.index(core_ql)] = meas_core[i]
+                to_prefetch.append(_fiducial_circuit(prep, qubit_filter) + germ_power_str
+                                   + _fiducial_circuit(meas, qubit_filter))
+        jac_calc.prefetch(to_prefetch, wrt_transform)
 
         for gfp_list in idle_gatename_fidpair_lists:
             #print("GFP list = ",gfp_list)
@@ -927,17 +1193,12 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                 if opstr in already_tried: continue
                 else: already_tried.add(opstr)
 
-                ps = model.sim._prs_as_polynomials(prep_lbl, effect_lbls, opstr,
-                                                   polynomial_vindices_per_int, resource_alloc)
-                #OLD: Jtest = J
+                prob_jac, = jac_calc.amplified_jacobians([(opstr, None)], wrt_transform, effect_lbls)
                 added = False
-                for elbl, p in zip(effect_lbls, ps):
-                    #print(" POLY = ",p)
+                for elbl, prow in zip(effect_lbls, prob_jac):
                     #For each fiducial pair (included pre/effect), determine how the
-                    # (polynomial) probability relates to the *amplified* directions
-                    # (also polynomials - now encoded by a "Jac" row/vec)
-                    prow = _np.array([p.deriv(iParam).evaluate(dummy)
-                                      for iParam in _slct.to_array(wrt_params)])  # complex
+                    # (first-order) probability relates to the *amplified* directions
+                    # (now encoded by a "Jac" row/vec).  `prow` is complex.
                     Jrow = _np.array([[_np.vdot(prow, amped_row) for amped_row in amped_poly_j]])  # complex
                     if _np.linalg.norm(Jrow) < 1e-8: continue  # row of zeros can fool matrix_rank
 
@@ -1388,7 +1649,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         errors and 2-qubit gates can have up to weight-3 errors.
 
     paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
-        The "root" (no trailing " terms", etc.) parameterization used for the
+        The "root" parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
     verbosity : int, optional
@@ -1429,16 +1690,6 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     """
     from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
-    #from pygsti.modelpacks import smq1Q_XYI  # the base model for 1Q gates
-    #from pygsti.modelpacks import smq2Q_XYICNOT  # the base model for 2Q (CNOT) gate
-    #evotype = "statevec"  # needed to match internals of create_cloudnoise_circuits
-    #tgt1Q = smq1Q_XYI.target_model("static unitary", evotype=evotype)
-    #tgt2Q = smq2Q_XYICNOT.target_model("static unitary", evotype=evotype)
-    #Gx = tgt1Q.operations[('Gxpi2', 0)]
-    #Gy = tgt1Q.operations[('Gypi2', 0)]
-    #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
-    #Gii = tgt2Q.operations[()]
-    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
     gatenames = ['Gx', 'Gy', '{idle}']
     if num_qubits > 1:
@@ -1593,7 +1844,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     from pygsti.models.modelconstruction import create_cloud_crosstalk_model_from_hops_and_weights \
         as _create_cloud_crosstalk_model_from_hops_and_weights
     from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
     if cache is None: cache = {}
@@ -1608,21 +1859,30 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     all_qubit_labels = processor_spec.qubit_labels  # generalize to 1st TPB labels (TODO)
     global_idle_lbl = processor_spec.global_idle_layer_label
 
-    try:
-        from pygsti.evotypes import statevec
-        evotype = 'statevec'  # could make this an arg, but only term-sim compatible evotypes allowed
-    except ImportError:
-        evotype = 'statevec_slow'
+    # First-order dependence of probabilities on the model parameters is computed by
+    # `_FirstOrderProbabilityJacobian` objects, which use a dense (density-matrix) model whose error
+    # generators are linearly parameterized (`linear_parameterization`) alongside one with the
+    # requested `parameterization` (see its docstring).
+    evotype = 'default'
+    linear_parameterization = _linearized_lindblad_parameterization(parameterization)
 
-    model = _create_cloud_crosstalk_model_from_hops_and_weights(
-        processor_spec, None,
-        max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
-        verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor-order", max_order=1),
-        gate_type=parameterization,
-        spam_type=parameterization,
-        evotype=evotype,
-        errcomp_type="gates")
+    def create_jacobian_calculator(pspec, *args, **kwargs):
+        """ Create a _FirstOrderProbabilityJacobian for the cloud-crosstalk model given by the arguments """
+        mdl = _create_cloud_crosstalk_model_from_hops_and_weights(
+            pspec, None, *args, simulator=_MatrixFSim(), gate_type=parameterization,
+            spam_type=parameterization, evotype=evotype, errcomp_type="gates", **kwargs)
+        if linear_parameterization == parameterization:
+            lin_mdl = None
+        else:
+            lin_mdl = _create_cloud_crosstalk_model_from_hops_and_weights(
+                pspec, None, *args, simulator=_MatrixFSim(), gate_type=linear_parameterization,
+                spam_type=linear_parameterization, evotype=evotype, errcomp_type="gates", **kwargs)
+        return _FirstOrderProbabilityJacobian(mdl, lin_mdl)
+
+    jac_calc = create_jacobian_calculator(
+        processor_spec, max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
+        verbosity=printer - 5)
+    model = jac_calc.model
     clouds = model.clouds
 
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
@@ -1644,7 +1904,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         spam_type=parameterization,
         errcomp_type="gates",
         evotype=evotype)
-    # for testing for synthetic idles - so no " terms"
+    # for testing for synthetic idles
 
     Np = model.num_params
     num_qubits = len(all_qubit_labels)
@@ -1665,14 +1925,10 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names,
                                          processor_spec.nonstd_gate_unitaries,
                                          {}, 'line')  # qubitGraph
-        idle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
-            idle_pspec, None,
-            max_idle_weight, 0, maxhops, extra_weight_1_hops,
-            extra_gate_weight, verbosity=printer - 5,
-            simulator=_TermFSim(mode="taylor-order", max_order=1),
-            gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-            implicit_idle_mode="add_global", errcomp_type="gates")
-        idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
+        idle_jac_calc = create_jacobian_calculator(
+            idle_pspec, max_idle_weight, 0, maxhops, extra_weight_1_hops,
+            extra_gate_weight, verbosity=printer - 5, implicit_idle_mode="add_global")
+        idle_model = idle_jac_calc.model  # (gpindices already allocated)
         # these are the params we want to amplify at first...
         idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
 
@@ -1685,7 +1941,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
             printer.log("Getting sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
             ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = \
                 _find_amped_polynomials_for_syntheticidle(list(range(max_idle_weight)),
-                                                          idle_op_str, idle_model, single_q_fiducials,
+                                                          idle_op_str, idle_jac_calc, single_q_fiducials,
                                                           prepLbl, None, wrt_params=idle_params,
                                                           algorithm=algorithm, idt_pauli_dicts=idt_pauli_dicts,
                                                           comm=comm, verbosity=printer - 1)
@@ -1760,20 +2016,16 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                 # though we may be able to do better than this (?).
                 sidle_pspec = _QubitProcessorSpec(syntheticIdleWt, gate_names_including_idle,
                                                   processor_spec.nonstd_gate_unitaries, {}, 'line')
-                sidle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
-                    sidle_pspec, None, syntheticIdleWt,
-                    0, maxhops, extra_weight_1_hops,
-                    extra_gate_weight, verbosity=printer - 5,
-                    simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-                    implicit_idle_mode="add_global", errcomp_type="gates")
-                sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
+                sidle_jac_calc = create_jacobian_calculator(
+                    sidle_pspec, syntheticIdleWt, 0, maxhops, extra_weight_1_hops,
+                    extra_gate_weight, verbosity=printer - 5, implicit_idle_mode="add_global")
+                sidle_model = sidle_jac_calc.model  # (gpindices already allocated)
                 # these are the params we want to amplify...
                 idle_params = sidle_model.circuit_layer_operator(sidle_pspec.global_idle_layer_label,
                                                                  typ='op').gpindices
 
                 _, _, idle_gatename_fidpair_lists = _find_amped_polynomials_for_syntheticidle(
-                    list(range(syntheticIdleWt)), idle_op_str, sidle_model,
+                    list(range(syntheticIdleWt)), idle_op_str, sidle_jac_calc,
                     single_q_fiducials, prepLbl, None, wrt_params=idle_params,
                     algorithm=algorithm, comm=comm, verbosity=printer - 1)
                 #idle_gatename_fidpair_lists = [] # DEBUG GRAPH ISO
@@ -2013,7 +2265,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                 old_Jrank = Jrank
                 printer.log("Finding amped-polys for clifford synIdle w/max-weight = %d" % maxWt, 3)
                 J, Jrank, sidle_gatename_fidpair_lists = _find_amped_polynomials_for_clifford_syntheticidle(
-                    cloud_qubits, core_qubits, cache['Idle gatename fidpair lists'], syntheticIdle, maxWt, model,
+                    cloud_qubits, core_qubits, cache['Idle gatename fidpair lists'], syntheticIdle, maxWt, jac_calc,
                     single_q_fiducials, prepLbl, effectLbls, J, Jrank, wrtParams, printer - 2)
                 #J, Jrank, sidle_gatename_fidpair_lists = None, 0, None # DEBUG GRAPH ISO
 
@@ -2049,7 +2301,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                                         (candidate_germ.str, reps, L, effective_reps), 4)
                             gatename_fidpair_lists = _get_fidpairs_needed_to_access_amped_polynomials(
                                 cloud_qubits, core_qubits, germPower, amped_polyJ, sidle_gatename_fidpair_lists,
-                                model, single_q_fiducials, prepLbl, effectLbls, wrtParams, printer - 3)
+                                jac_calc, single_q_fiducials, prepLbl, effectLbls, wrtParams, printer - 3)
                             #gatename_fidpair_lists = None # DEBUG GRAPH ISO
                             printer.log("Found %d fiducial pairs" % len(gatename_fidpair_lists), 4)
 

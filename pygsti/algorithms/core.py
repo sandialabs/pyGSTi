@@ -687,6 +687,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     # Solve least squares minimization problem
     from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+    # (TermForwardSimulator is deprecated; remove this branch and _do_term_runopt when it is removed, see #916)
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
@@ -1089,6 +1090,11 @@ def _do_term_runopt(objective, optimizer, printer):
     is more complex because an appropriate "path set" must be found,
     requiring a loop of model optimizations with fixed path sets until
     a sufficient "good" path set is obtained.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (path-set
+        management); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     Parameters
     ----------

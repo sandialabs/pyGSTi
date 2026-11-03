@@ -21,6 +21,8 @@ import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.modelmembers.torchable import Torchable as _Torchable
@@ -434,9 +436,14 @@ class EmbeddedOp(_LinearOperator, _Torchable):
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
         return derivMx  # Note: wrt_filter has already been applied above
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -482,9 +489,14 @@ class EmbeddedOp(_LinearOperator, _Torchable):
             return [t.embed(sslbls, self.target_labels)
                     for t in self.embedded_op.taylor_order_terms(order, max_polynomial_vars, False)]
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -517,9 +529,14 @@ class EmbeddedOp(_LinearOperator, _Torchable):
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         The magnitude of a term is the absolute value of its coefficient, so
         this function returns the number you'd get from summing up the
@@ -547,9 +564,14 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         return self.embedded_op.total_term_magnitude
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Computes the derivative of the total (sum) of the magnitudes of all this
         operator's terms with respect to the operators (local) parameters.
