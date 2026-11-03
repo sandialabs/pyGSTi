@@ -240,12 +240,13 @@ class FromCptrSuperopsTester(BaseCase):
             Instrument.from_cptr_superops(_noisy_z_op_arrays(), self.basis)
 
     def test_noisy_instrument_conversion_raises_and_suggested_recipe_works(self):
-        # The recipe in convert's error message: replace each instrument by its unitary
-        # approximation, then convert the model.
+        # A model's conversion surfaces the instrument's own error, which names the recipe:
+        # replace each instrument by its unitary approximation, then convert the model.
         model = std.target_model()
         model.instruments['Iz'] = TPInstrument(list(_noisy_z_op_arrays().items()))
-        with self.assertRaises(ValueError):
-            convert(model.instruments['Iz'], 'CPTPLND', model.basis)
+        with self.assertRaises(ValueError) as caught:
+            model.copy().set_all_parameterizations('CPTPLND')
+        self.assertIn('infer_unitary_factors', str(caught.exception))
         for lbl, instrument in list(model.instruments.items()):
             pairs, _ = inst.infer_unitary_factors(instrument, model.basis)
             model.instruments[lbl] = Instrument.from_effects(pairs, model.basis)
