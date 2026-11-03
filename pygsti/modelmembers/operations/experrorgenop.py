@@ -15,12 +15,9 @@ import math
 from typing import Union, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
@@ -231,6 +228,7 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
     @staticmethod
     def torch_base(sd, t_param):
         """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        _torch = _import_torch()
         etype, esd = sd
         L = etype.torch_base(esd, t_param)
         return _torch.linalg.matrix_exp(L)

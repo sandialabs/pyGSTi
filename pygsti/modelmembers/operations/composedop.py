@@ -13,10 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import collections as _collections
 import itertools as _itertools

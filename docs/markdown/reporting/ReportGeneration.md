@@ -220,7 +220,7 @@ The line below demonstrates how to create a report notebook using `write_noteboo
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results, title="GST Example Report Notebook", confidence_level=None, verbosity=3
-).write_notebook("../../tutorial_files/exampleReport.ipynb", auto_open=False, connected=False, verbosity=3)
+).write_notebook("../../tutorial_files/exampleReport.ipynb", auto_open=False, enable_offline_mode=True, verbosity=3)
 ```
 
 ## Multi-qubit reports

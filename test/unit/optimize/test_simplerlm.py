@@ -136,3 +136,69 @@ class LMTester(BaseCase):
         # tol=1e-6 would have produced, so that `run()`'s direct indexing never KeyErrors.
         opt = lm.SimplerLMOptimizer(tol={'relf': 1e-5})
         self.assertEqual(opt.tol, {'relx': 1e-8, 'relf': 1e-5, 'f': 1.0, 'jac': 1e-6, 'maxdx': 1.0})
+
+
+class DegenerateStartTester(BaseCase):
+    # r(x) = [x0^2 - 0.04, x1 - 1]: at x = 0 the x0 column of the Jacobian is zero (as for a
+    # Lindblad rate parameterized by its square root), and x2 never enters r at all.
+
+    def setUp(self):
+        self.jac_points = []
+
+    def obj(self, x, oob_check=False):
+        return np.array([x[0] ** 2 - 0.04, x[1] - 1.0])
+
+    def jac(self, x):
+        self.jac_points.append(np.array(x, copy=True))
+        return np.array([[2 * x[0], 0.0, 0.0], [0.0, 1.0, 0.0]])
+
+    def test_zero_columns_escape_without_finite_differences(self):
+        ari = _ari.UndistributedArraysInterface(2, 3)
+        xf, converged, msg, *_ = lm.simplish_leastsq(self.obj, self.jac, np.zeros(3), max_iter=100,
+                                                     arrays_interface=ari)
+        self.assertTrue(converged)
+        np.testing.assert_allclose(xf, [0.2, 1.0, 0.0], atol=1e-3)
+        self.assertEqual(xf[2], 0.0)  # an untouched parameter is never moved by the shift
+        np.testing.assert_array_equal(self.jac_points[0], np.zeros(3))
+        np.testing.assert_array_equal(self.jac_points[1], [lm.JAC_SHIFT, 0.0, lm.JAC_SHIFT])
+
+    def test_no_shift_without_zero_columns(self):
+        # Add r_2 = x2 so that no column is zero at x0; x2 is already optimal, so it stays at
+        # exactly 0 unless something shifts it.
+        def obj(x, oob_check=False):
+            return np.array([x[0] ** 2 - 0.04, x[1] - 1.0, x[2]])
+
+        def jac(x):
+            self.jac_points.append(np.array(x, copy=True))
+            return np.array([[2 * x[0], 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+
+        ari = _ari.UndistributedArraysInterface(3, 3)
+        xf, converged, msg, *_ = lm.simplish_leastsq(obj, jac, np.array([0.5, 0.0, 0.0]), max_iter=100,
+                                                     arrays_interface=ari, linesearch={'mode': 'none'})
+        self.assertTrue(converged)
+        np.testing.assert_allclose(xf, [0.2, 1.0, 0.0], atol=1e-3)
+        self.assertTrue(all(p[2] == 0.0 for p in self.jac_points))
+
+
+class FiniteDifferenceDeprecationTester(BaseCase):
+
+    def test_fditer_arguments_warn_and_are_ignored(self):
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        for kwargs in ({'fditer': 1}, {'first_fditer': 1}):
+            with self.assertWarns(pyGSTiDeprecationWarning):
+                opt = lm.SimplerLMOptimizer(**kwargs)
+            self.assertFalse(hasattr(opt, 'fditer') or hasattr(opt, 'first_fditer'))
+
+    def test_old_state_with_fditer_keys_loads(self):
+        state = lm.SimplerLMOptimizer(maxiter=7)._to_nice_serialization()
+        self.assertNotIn('number_of_finite_difference_iterations', state)
+        self.assertNotIn('number_of_first_stage_finite_difference_iterations', state)
+        state['number_of_finite_difference_iterations'] = 2  # as saved by older versions
+        state['number_of_first_stage_finite_difference_iterations'] = 1
+        opt = lm.SimplerLMOptimizer._from_nice_serialization(state)
+        self.assertEqual(opt.maxiter, 7)
+
+    def test_cast_does_not_fall_back_to_customlm(self):
+        with self.assertRaises(TypeError):
+            lm.SimplerLMOptimizer.cast({'damping_mode': 'identity'})
+        self.assertIsInstance(lm.SimplerLMOptimizer.cast({'maxiter': 7}), lm.SimplerLMOptimizer)

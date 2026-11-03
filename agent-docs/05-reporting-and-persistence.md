@@ -22,18 +22,15 @@ report = pygsti.report.construct_standard_report(results, title="my fit")
 report.write_html("path/to/output_dir")
 ```
 
-[`construct_standard_report`](../pygsti/report/factory.py#L1149) is the canonical entry; it's what the notebooks teach. It returns a [`Report`](../pygsti/report/report.py) object holding templates, results, and a [`Workspace`](../pygsti/report/workspace.py#L177). Call `report.write_html(path)` (or `.write_pdf`, `.write_notebook`) to materialize.
+[`construct_standard_report`](../pygsti/report/factory.py#L764) is the canonical entry; it's what the notebooks teach. It returns a [`Report`](../pygsti/report/report.py) object holding templates, results, and a [`Workspace`](../pygsti/report/workspace.py#L177). Call `report.write_html(path)` (or `.write_pdf`, `.write_notebook`) to materialize.
 
-The other public factories are:
+The public factories are:
 
 | Function | File:line | When |
 |---|---|---|
-| [`construct_standard_report`](../pygsti/report/factory.py#L1149) | factory.py:1149 | **Canonical entry.** 1–2 qubit Models with dense matrices. |
-| [`create_standard_report`](../pygsti/report/factory.py#L602) | factory.py:602 | Lower-level disk-writing variant of standard report. |
-| [`create_report_notebook`](../pygsti/report/factory.py#L976) | factory.py:976 | Generate a Jupyter notebook of the report cells. |
-| [`create_drift_report`](../pygsti/report/factory.py#L1644) | factory.py:1644 | Specialized for drift-characterization output. |
-
-Two other factories — [`construct_nqnoise_report`](../pygsti/report/factory.py#L1429) and [`create_general_report`](../pygsti/report/factory.py#L579) — exist in the file but are rarely seen in user workflows. Don't elevate them to canonical status.
+| [`construct_standard_report`](../pygsti/report/factory.py#L764) | factory.py:764 | **Canonical entry.** 1–2 qubit Models with dense matrices. |
+| [`construct_nqnoise_report`](../pygsti/report/factory.py#L1068) | factory.py:1068 | N-qubit noisy model estimates (e.g. `CloudNoiseModel`). |
+| [`create_drift_report`](../pygsti/report/factory.py#L1283) | factory.py:1283 | Specialized for drift-characterization output. |
 
 ### 2. `Workspace` is a factory plus a smart cache
 
@@ -64,7 +61,7 @@ The reportables file is **predominantly hand-written**, not generated. Adding a 
 
 ## Public entry-point inventory
 
-(See the table in the "User-facing path" section above.) The reduced inventory — `construct_standard_report`, `create_standard_report`, `create_report_notebook`, `create_drift_report` — is what you should see in real user code.
+(See the table in the "User-facing path" section above.) The reduced inventory — `construct_standard_report`, `construct_nqnoise_report`, `create_drift_report` — is what you should see in real user code.
 
 ## Key abstractions
 
@@ -101,7 +98,7 @@ If you're new to `report/` and have a change to make:
 
 1. Read [docs/markdown/reporting/Workspace.md](../docs/markdown/reporting/Workspace.md), then [WorkspaceSwitchboards.md](../docs/markdown/reporting/WorkspaceSwitchboards.md). These are the canonical conceptual intros.
 2. In code, read the `Workspace` class skeleton ([workspace.py:177–270](../pygsti/report/workspace.py#L177)) — focus on `__init__`, `_makefactory`, and the digest interaction.
-3. Then read one simple factory function — [`create_general_report` at factory.py:579](../pygsti/report/factory.py#L579) is a reasonable choice because it's shorter than `construct_standard_report`.
+3. Then read one simple factory function — [`create_drift_report` at factory.py:1283](../pygsti/report/factory.py#L1283) is a reasonable choice because it's shorter than `construct_standard_report`.
 4. **Do not start in [reportables.py](../pygsti/report/reportables.py).** 2868 lines of metric formulas with no scaffolding to orient on. Only go there to add or fix a specific metric.
 
 ## Debugging roadmap

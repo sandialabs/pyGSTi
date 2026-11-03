@@ -38,6 +38,19 @@ class ImplicitOpModelMixin:
             qubit_labels=qubit_labels
         )
 
+    def test_completed_circuit_with_permuted_povm_label(self):
+        # Completing a circuit whose line labels are out of order appends a POVM label like
+        # `Mdefault:qb1:qb0`, which names the full-device POVM rather than a marginal.
+        # MapLayout computes parameter dependence on completed circuits.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        circuit = Circuit([('Gx', 'qb0')], line_labels=('qb1', 'qb0'))
+        completed = m.complete_circuit(circuit)
+        povm_label = completed.layertup[-1]
+        self.assertEqual(povm_label, Label(('Mdefault', 'qb1', 'qb0')))
+        self.assertIs(m.circuit_layer_operator(povm_label, 'povm'), m.povm_blks['layers']['Mdefault'])
+        self.assertEqual(m.circuit_parameter_dependence([completed])[completed],
+                         m.circuit_parameter_dependence([circuit])[circuit])
+
     @staticmethod
     def _test_getitem(base: BaseCase, m: ImplicitOpModel):
         base.assertIs( m['rho0'],        m.prep_blks['layers']['rho0']             )

@@ -22,7 +22,8 @@ Reference:
 import numpy as np
 from typing import List, Dict, Tuple, Set, Optional, Union
 
-from ._common import Vertex, Color, Edge, NeighborMap, Coloring, order
+from .._common import Vertex, Edge, NeighborMap, order
+from ._definitions import Color, Coloring
 
 
 def _eulerian_partition(

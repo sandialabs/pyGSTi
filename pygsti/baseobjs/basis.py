@@ -1186,8 +1186,10 @@ class BuiltinBasis(LazyBasis):
 
     Parameters
     ----------
-    name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
-        Name of the basis to be created.
+    name : {"pp", "PP", "gm", "GM", "gm_unnormalized", "std", "qt", "id", "cl", "sv"}
+        Name of the basis to be created. ``pp`` and ``gm`` have unit Frobenius
+        norm; ``PP`` and ``GM`` have squared Frobenius norm equal to the
+        Hilbert-space dimension, with the identity as their first element.
 
     dim_or_statespace : int or StateSpace
         The dimension of the basis to be created or the state space for which a
@@ -1692,6 +1694,14 @@ class TensorProdBasis(LazyBasis):
     longname : str, optional
         A longer description of this basis.  If `None`, then a long name is
         automatically generated.
+
+    Notes
+    -----
+    Transform matrices to and from a TensorProdBasis (:meth:`create_transform_matrix`,
+    :meth:`to_std_transform_matrix` and friends) do not exploit the tensor-product structure,
+    under which the transform from another TensorProdBasis with the same component dimensions
+    is a Kronecker product of the component transforms, and the transform to the standard basis
+    is a Kronecker product up to a fixed permutation.
     """
 
     def __init__(self, component_bases, name: Optional[str] = None, longname: Optional[str] = None):

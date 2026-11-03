@@ -29,7 +29,8 @@ References:
 import numpy as np
 from typing import List, Dict, Set, Optional, Union
 
-from ._common import Vertex, Color, Edge, NeighborMap, Coloring, order
+from .._common import Vertex, Edge, NeighborMap, order
+from ._definitions import Color, Coloring
 
 
 class _VizingChainState:

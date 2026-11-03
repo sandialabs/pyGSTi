@@ -114,7 +114,7 @@ def simulate_taking_data(data_template_filename):
 ```{code-cell} ipython3
 design = pygsti.protocols.DirectRBDesign(pspec, compilations, depths, k, qubit_labels=qubits, sampler=sampler, 
                                            samplerargs=samplerargs, randomizeout=randomizeout,
-                                           citerations=citerations)
+                                           citerations=citerations, seed=1234)
 
 pygsti.io.write_empty_protocol_data('../../tutorial_files/test_drb_dir', design, clobber_ok=True)
 

@@ -424,7 +424,7 @@ class Workspace(object):
         self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)
         self.GermFiducialPowerSpectraPlot = makefactory(_driftrpt.GermFiducialPowerSpectraPlot)
 
-    def init_notebook_mode(self, connected=False, autodisplay=False):
+    def init_notebook_mode(self, enable_offline_mode=False, autodisplay=False):
         """
         Initialize this Workspace for use in an iPython notebook environment.
 
@@ -433,11 +433,11 @@ class Workspace(object):
 
         Parameters
         ----------
-        connected : bool , optional
-            Whether to assume you are connected to the internet.  If you are,
-            then setting this to `True` allows initialization to rely on web-
-            hosted resources which will reduce the overall size of your
-            notebook.
+        enable_offline_mode : bool , optional
+            Whether to assume you are connected to the internet.  If not,
+            then setting this to `True` allows initialization to rely on
+            embedded and locally stored web resources for viewing content without an
+            active connection.
 
         autodisplay : bool , optional
             Whether to automatically display workspace objects after they are
@@ -454,28 +454,28 @@ class Workspace(object):
 
         script = ""
 
-        if not connected:
+        if enable_offline_mode:
             _merge.rsync_offline_dir(_os.getcwd())
 
         #If offline, add JS to head that will load local requireJS and/or
         # jQuery if needed (jupyter-exported html files always use CDN
         # for these).
-        if not connected:
+        if enable_offline_mode:
             script += "<script src='offline/jupyterlibload.js'></script>\n"
 
         #Load our custom plotly extension functions
-        script += _merge.insert_resource(connected, None, "pygsti_plotly_ex.js")
+        script += _merge.insert_resource(enable_offline_mode, None, "pygsti_plotly_ex.js")
         script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
         #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
         jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-        script += _merge.insert_resource(connected, jQueryUI_CSS, "smoothness-jquery-ui.css")
+        script += _merge.insert_resource(enable_offline_mode, jQueryUI_CSS, "smoothness-jquery-ui.css")
 
         # Load style sheets for displaying tables
-        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
+        script += _merge.insert_resource(enable_offline_mode, None, "pygsti_dataviz.css")
 
         #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
-        if connected:
+        if not enable_offline_mode:
             imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
         else:
             imgURL = "offline/images/ui-icons_222222_256x240.png"
@@ -496,7 +496,7 @@ class Workspace(object):
         # current page, so just using "offline/myfile" works fine then.
 
         #Tell require.js where jQueryUI and Katex are
-        if connected:
+        if not enable_offline_mode:
             reqscript = (
                 "<script>"
                 "console.log('ONLINE - using CDN paths');"
@@ -550,7 +550,7 @@ class Workspace(object):
         # so math shows up properly in plots (maybe we could just use a require
         # statement for this instead of polling?)
         script += _merge.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
+            enable_offline_mode, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
             "katex.css")
 
         script += (
@@ -581,7 +581,7 @@ class Workspace(object):
             '</script>\n')
 
         # Initialize Plotly libraries
-        script += _plotly_ex.init_notebook_mode_ex(connected)
+        script += _plotly_ex.init_notebook_mode_ex(enable_offline_mode)
 
         # Perform check to see what has been loaded
         script += (

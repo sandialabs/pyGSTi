@@ -29,7 +29,8 @@ import pygsti
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.qubitgraph import QubitGraph
 from pygsti.circuits import Circuit
-from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns, graphtools
+from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns
+from pygsti.tools import graphs as graphtools
 
 
 class MLSubpackageTester(unittest.TestCase):
@@ -143,6 +144,138 @@ class MLSubpackageTester(unittest.TestCase):
             for p1, p2 in pairs_hop2
         ))
 
+    def test_errgentools_enumeration_order_is_stable(self):
+        # The *order* of these lists is load-bearing, not incidental: it fixes the order of the
+        # error-generator list, which in turn indexes QPANN parameters (`stochastic_mask` in
+        # qpanns.py), the last axis of encoding.py's index tensors, and the `prior_indices`
+        # incremental contract -- so reordering it silently invalidates any trained or saved
+        # network. The other tests in this file compare sets or lengths, which would not catch
+        # a reordering; these assertions pin the order itself.
+        import itertools
+
+        n = 3
+        line_adjacency = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])  # 0-1-2 line graph
+
+        # Exact expected list, weight-major then support-lexicographic then XYZ-product order.
+        # {0,2} is absent at hops=1 (0 and 2 are not adjacent), which is why there are 9 + 18
+        # entries rather than 9 + 27.
+        self.assertEqual(
+            errgentools.up_to_weight_k_paulis_from_qubit_graph(2, n, line_adjacency, 1),
+            ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ',
+             'XXI', 'XYI', 'XZI', 'YXI', 'YYI', 'YZI', 'ZXI', 'ZYI', 'ZZI',
+             'IXX', 'IXY', 'IXZ', 'IYX', 'IYY', 'IYZ', 'IZX', 'IZY', 'IZZ'])
+
+        pairs = errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, line_adjacency, 1)
+        self.assertEqual(len(pairs), 207)
+        self.assertEqual(pairs[:9],
+                         [('XII', 'YII'), ('XII', 'ZII'), ('YII', 'ZII'),
+                          ('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI'),
+                          ('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(pairs[-3:],
+                         [('IZX', 'IZY'), ('IZX', 'IZZ'), ('IZY', 'IZZ')])
+
+        self.assertEqual(
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+                1, n, line_adjacency, 1, egtypes=['H', 'S']),
+            [('H', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']]
+            + [('S', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']])
+
+        # The graph-restricted enumeration must agree *as an ordered list* with a brute-force
+        # "enumerate every support, keep the connected ones" scan. This is the contract that
+        # lets the supports be enumerated by growth (`graphtools.connected_supports`) rather
+        # than by filtering, and it is the thing most at risk from a future optimization.
+        def brute_force_supports(adjacency, k, hops):
+            close = graphtools.within_hops_matrix(adjacency, hops)
+            size = close.shape[0]
+
+            def connected(support):
+                seen, stack = {support[0]}, [support[0]]
+                while stack:
+                    u = stack.pop()
+                    for v in support:
+                        if v not in seen and close[u, v]:
+                            seen.add(v)
+                            stack.append(v)
+                return len(seen) == len(support)
+
+            return [s for w in range(1, k + 1)
+                    for s in itertools.combinations(range(size), w) if connected(s)]
+
+        for adjacency, size in ((line_adjacency, 3),
+                                (np.array([[0, 1, 1, 1], [1, 0, 0, 0],
+                                           [1, 0, 0, 0], [1, 0, 0, 0]]), 4)):  # star, center 0
+            for hops in (1, 2):
+                for k in (1, 2, 3):
+                    supports = brute_force_supports(adjacency, k, hops)
+                    expected_paulis = []
+                    expected_pairs = []
+                    for support in supports:
+                        base = ['I'] * size
+                        for letters in itertools.product('XYZ', repeat=len(support)):
+                            s = base[:]
+                            for q, letter in zip(support, letters):
+                                s[q] = letter
+                            expected_paulis.append(''.join(s))
+                        expected_pairs.extend(
+                            errgentools._pauli_pairs_for_support(support, size, False))
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, adjacency, hops),
+                        expected_paulis, f"paulis differ for hops={hops}, k={k}")
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(
+                            k, size, adjacency, hops),
+                        expected_pairs, f"pairs differ for hops={hops}, k={k}")
+
+        # On a complete graph every support is connected, so the graph-restricted enumeration
+        # must reduce exactly (order included) to the unrestricted one.
+        for size in (2, 3):
+            complete = np.ones((size, size), int) - np.eye(size, dtype=int)
+            for k in range(1, size + 1):
+                self.assertEqual(
+                    errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_paulis(k, size))
+                self.assertEqual(
+                    errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_pauli_pairs(k, size))
+
+    def test_errgentools_pauli_pairs_for_support(self):
+        # Pins the properties of `_pauli_pairs_for_support` independently of the callers above.
+        for w in range(1, 5):
+            size = max(w, 5)
+            support = tuple(range(w))
+            pairs = errgentools._pauli_pairs_for_support(support, size, False)
+            # Count follows the inclusion-exclusion in the function's own docstring.
+            self.assertEqual(len(pairs), (15**w - 3**(w + 1)) // 2, f"w={w}")
+            self.assertEqual(len(set(pairs)), len(pairs), f"duplicates at w={w}")
+            for P, Q in pairs:
+                self.assertEqual(len(P), size)
+                self.assertEqual(len(Q), size)
+                self.assertLess(P, Q)  # canonically ordered, and hence distinct
+                # The union support must be the requested support EXACTLY, not a subset.
+                union = {i for i, c in enumerate(P) if c != 'I'} | {i for i, c in enumerate(Q) if c != 'I'}
+                self.assertEqual(union, set(support))
+
+        # reverse_index flips qubit q to string position n-1-q, and nothing else.
+        for w in (1, 2, 3):
+            size = 5
+            support = tuple(range(w))
+            forward = errgentools._pauli_pairs_for_support(support, size, False)
+            reversed_ = errgentools._pauli_pairs_for_support(support, size, True)
+            self.assertEqual(len(forward), len(reversed_))
+            self.assertEqual({tuple(sorted((P[::-1], Q[::-1]))) for P, Q in reversed_},
+                             {(P, Q) for P, Q in forward})
+
+        # Non-contiguous and offset supports place letters at the right string positions.
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, False),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, True),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((0,), 3, True),
+                         [('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(len(errgentools._pauli_pairs_for_support((0, 3), 5, False)), 99)
+        self.assertTrue(all(P[1:3] == 'II' and Q[1:3] == 'II'
+                            for P, Q in errgentools._pauli_pairs_for_support((0, 3), 5, False)))
+
     def test_errgentools_error_generator_index_ca(self):
         # 'H'/'S' backward compatibility: exact same index values as before 'C'/'A' were added.
         self.assertEqual(errgentools.error_generator_index('H', ('IX',)), 1)
@@ -228,7 +361,7 @@ class MLSubpackageTester(unittest.TestCase):
 
         circ = Circuit(cast(Any, [('Gx', 0)]))
         encoded = encoder(circ)
-        self.assertEqual(encoded.shape, (circ.depth + encoder.initialization_encoding_depth() + encoder.measurement_encoding_depth(), encoder.length))
+        self.assertEqual(encoded.shape, (encoder.depth(circ.depth), encoder.length))
 
         circs = [Circuit(cast(Any, [('Gx', 0)])), Circuit(cast(Any, [('Gy', 1)]))]
         tensor = encoding.circuits_to_tensor(circs, encoder)
@@ -401,6 +534,61 @@ class MLSubpackageTester(unittest.TestCase):
         config = model.get_config()
         self.assertEqual(config['encoding_length'], 10)
 
+    def test_customdense_kernel_init_is_per_errorgen(self):
+        # Keras' fan-based initializers (e.g. the default 'glorot_uniform') fold the leading
+        # `num_errorgens` axis of CustomDense's (num_errorgens, input_dim, units) kernel into
+        # fan_in and fan_out, which made the initial weights ~sqrt(num_errorgens) too small.
+        # Each error generator's kernel must instead get the distribution of a standalone
+        # (input_dim, units) kernel.
+        input_dim, units = 21, 30
+        glorot_std = np.sqrt(2 / (input_dim + units))  # std of glorot_uniform for (input_dim, units)
+        for num_errorgens in (1, 96):
+            layer = customlayers.CustomDense(units, num_errorgens)
+            layer.build((None, num_errorgens, input_dim))
+            kernel = layer.kernel.numpy()
+            self.assertEqual(kernel.shape, (num_errorgens, input_dim, units))
+            self.assertAlmostEqual(kernel.std() / glorot_std, 1.0, delta=0.1)
+
+        # Non-fan-based initializers (e.g. the tiny RandomUniform QPANNs use for output layers)
+        # are left unchanged.
+        layer = customlayers.CustomDense(1, 96, kernel_initializer=keras.initializers.RandomUniform(-1e-4, 1e-4))
+        layer.build((None, 96, input_dim))
+        self.assertLessEqual(np.abs(layer.kernel.numpy()).max(), 1e-4)
+        self.assertGreater(np.abs(layer.kernel.numpy()).max(), 5e-5)
+
+        # A user-specified seed is carried through the correction.
+        kernels = []
+        for _ in range(2):
+            layer = customlayers.CustomDense(units, 96, kernel_initializer=keras.initializers.GlorotUniform(seed=3))
+            layer.build((None, 96, input_dim))
+            kernels.append(layer.kernel.numpy())
+        np.testing.assert_array_equal(kernels[0], kernels[1])
+
+    def test_qpann_initial_rates_depend_on_inputs(self):
+        # Regression test: with the too-small default kernel initialization (see
+        # test_customdense_kernel_init_is_per_errorgen), the input signal vanished through the
+        # default 5 hidden layers, so a freshly initialized QPANN predicted (almost) the same
+        # rates for every circuit layer, and the hidden layers barely trained.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        modelled_error_generators = errgentools.up_to_weight_k_error_gens(2, 2, ['H'])
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+        L = pygsti.baseobjs.Label
+        layers = tf.constant(np.array([encoder.layer_encoding(layer) for layer in
+                                       [[L('Gxpi2', 0)], [L('Gypi2', 0), L('Gxpi2', 1)],
+                                        [L('Gcphase', (0, 1))], [L('Gypi2', 1)]]], np.float32))
+        tf.keras.utils.set_random_seed(1)
+        model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper)
+        model.build()
+        rates = model.dense_layer(layers).numpy().reshape(len(layers), -1)
+        # Relative spread of each generator's rate across the four layers (~3e-2 with the
+        # correct initialization; ~3e-5 with the old one).
+        relative_spread = (rates.std(0) / np.abs(rates).mean(0)).mean()
+        self.assertGreater(relative_spread, 3e-3)
+
     def test_customdense_forward(self):
         # Regression test for a Keras-3 incompatibility: `CustomDense` used to subclass
         # `keras.layers.Dense`, whose `kernel` attribute is a read-only `@property` under
@@ -468,6 +656,45 @@ class MLSubpackageTester(unittest.TestCase):
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
 
+    def test_qpann_activation(self):
+        # The hidden layers of the rate-prediction network must use the requested activation
+        # (default 'gelu'), and the output layer must stay linear. Regression test for the
+        # hidden-layer activation having been left hard-coded to 'linear', which silently makes
+        # the whole rate network affine in its inputs.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        modelled_error_generators = [('H', ('XI',)), ('H', ('IZ',)), ('H', ('XZ',))]  # no 'S': no squaring
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+
+        # Three single-layer encodings: two different single gates, and both together.
+        x1 = np.array(encoder.layer_encoding([pygsti.baseobjs.Label('Gxpi2', 0)]), np.float32)
+        x2 = np.array(encoder.layer_encoding([pygsti.baseobjs.Label('Gypi2', 1)]), np.float32)
+        x0 = np.zeros_like(x1)
+        layers = tf.constant(np.stack([x0, x1, x2, x1 + x2]))
+
+        def additivity_defect(model):
+            # For an affine rate network f: f(x1 + x2) - f(x1) - f(x2) + f(0) = 0.
+            model.build()  # creates model.dense_layer
+            _ = model.dense_layer(layers)  # builds its weights
+            for w in model.dense_layer.trainable_variables:  # O(1) weights, so nonlinearity is visible
+                w.assign(tf.random.stateless_normal(w.shape, seed=[1, 2]))
+            f0, f1, f2, f12 = model.dense_layer(layers).numpy().reshape(4, -1)
+            return np.max(np.abs(f12 - f1 - f2 + f0)) / np.max(np.abs(np.stack([f0, f1, f2, f12])))
+
+        default_model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper)
+        self.assertEqual(default_model.activation, 'gelu')
+        self.assertEqual(default_model.get_config()['activation'], 'gelu')
+        self.assertGreater(additivity_defect(default_model), 1e-3)
+        dense_layers = default_model.dense_layer.dense.sequential.layers
+        self.assertTrue(all(layer.activation is keras.activations.gelu for layer in dense_layers[:-1]))
+        self.assertIs(dense_layers[-1].activation, keras.activations.linear)
+
+        linear_model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper, activation='linear')
+        self.assertLess(additivity_defect(linear_model), 1e-5)
+
     def test_qpann_forward_and_fit_with_ca_generators(self):
         # Full end-to-end test that the entire pipeline (encoding -> tensors -> QPANN -> forward
         # pass + training) works correctly with 'C' (Pauli-correlation) and 'A' (active) type
@@ -515,6 +742,200 @@ class MLSubpackageTester(unittest.TestCase):
         changed = any(not np.allclose(w0, w1.numpy())
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
+
+    @staticmethod
+    def _dense_spam_model_probabilities(circuit, num_qubits, rows):
+        """Exact outcome probabilities of `circuit` with error generator layers exp(L_r) applied
+        after state preparation (r = 0), after each circuit layer (r = 1..depth) and before
+        measurement (r = depth + 1); `rows` maps r -> list of (rate, (type, paulis))."""
+        from scipy.linalg import expm
+        from pygsti.baseobjs.basis import BuiltinBasis
+        from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
+        basis_1q = BuiltinBasis('PP', 4)
+        d = 2 ** num_qubits
+
+        def gen(r):
+            L = np.zeros((d * d, d * d), complex)
+            for rate, (typ, paulis) in rows.get(r, []):
+                L += rate * create_elementary_errorgen_nqudit(typ, paulis, basis_1q, normalize=False, sparse=False,
+                                                               tensorprod_basis=False)
+            return expm(L)
+
+        rho = gen(0) @ state_to_dmvec(np.eye(d)[:, 0].astype(complex))
+        for l, tab in enumerate(circuit.convert_to_stim_tableau_layers()):
+            U = tab.to_unitary_matrix(endian='big')
+            rho = gen(l + 1) @ (np.kron(U, U.conj()) @ rho)
+        rho = gen(circuit.depth + 1) @ rho
+        effects = [state_to_dmvec(np.eye(d)[:, i].astype(complex)).conj() for i in range(d)]
+        return np.real(np.array([e @ rho for e in effects]))
+
+    def test_spam_error_generator_tensors_match_dense_simulation(self):
+        # The SPAM rows of the QPANN tensors (state-preparation errors, row 0; measurement errors,
+        # last row), and the circuit-layer rows in between, must give the exact first-order
+        # sensitivity of every outcome probability to each error generator's rate -- including
+        # 'C'/'A' generators (e.g. the A term of asymmetric, amplitude-damping-like readout error)
+        # and weight-2 'C'/'A' pairs. Checked against central finite differences of a dense
+        # density-matrix simulation.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+                    Circuit('[Gypi2:0][Gcphase:0:1]@(0,1)'),
+                    Circuit('[Gxpi2:0Gxpi2:1]@(0,1)')]
+        gens = [('H', ('XI',)), ('H', ('IY',)), ('S', ('XI',)), ('S', ('ZZ',)),
+                ('C', ('XI', 'YI')), ('A', ('XI', 'YI')), ('A', ('IX', 'IY')),  # amplitude-damping-like terms
+                ('C', ('XI', 'YZ')), ('A', ('XI', 'YZ'))]
+        tensors = encoding.error_generator_tensors(circuits, gens, pspec, include_spam=True, process_num=1)
+        alphas, probabilities = tensors['alphas'], tensors['probabilities']
+        max_depth = max(c.depth for c in circuits)
+        self.assertEqual(alphas.shape, (len(circuits), 4, max_depth + 2, len(gens)))
+
+        eps = 1e-6
+        for ci, circuit in enumerate(circuits):
+            p0 = self._dense_spam_model_probabilities(circuit, 2, {})
+            self.assertTrue(np.allclose(p0, probabilities[ci], atol=1e-10))
+            # rows of the dense model: 0 = prep, 1..depth = layers, depth + 1 = measurement
+            # rows of the tensors:     0 = prep, 1..depth = layers, max_depth + 1 = measurement
+            for dense_row, tensor_row in [(0, 0), (1, 1), (circuit.depth, circuit.depth),
+                                          (circuit.depth + 1, max_depth + 1)]:
+                for j, g in enumerate(gens):
+                    plus = self._dense_spam_model_probabilities(circuit, 2, {dense_row: [(eps, g)]})
+                    minus = self._dense_spam_model_probabilities(circuit, 2, {dense_row: [(-eps, g)]})
+                    derivative = (plus - minus) / (2 * eps)
+                    self.assertTrue(np.allclose(alphas[ci, :, tensor_row, j], derivative, atol=1e-6),
+                                    f"circuit {ci}, row {tensor_row}, generator {g}: "
+                                    f"{alphas[ci, :, tensor_row, j]} vs {derivative}")
+            # padding rows (between the last layer and the measurement row) contribute nothing
+            for r in range(circuit.depth + 1, max_depth + 1):
+                self.assertTrue(np.all(alphas[ci, :, r, :] == 0))
+
+    def test_spam_rows_without_spam_unchanged(self):
+        # include_spam=True must leave the circuit-layer rows identical to include_spam=False.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1@(0,1)'), Circuit('[Gypi2:0]@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YZ'))]
+        idx0, sg0 = encoding.error_propagation_tensors(circuits, gens, pspec)
+        idx1, sg1 = encoding.error_propagation_tensors(circuits, gens, pspec, include_spam=True)
+        self.assertEqual(idx1.shape, (2, idx0.shape[1] + 2, len(gens)))
+        self.assertTrue(np.array_equal(idx1[:, 1:-1], idx0) and np.array_equal(sg1[:, 1:-1], sg0))
+        # measurement errors are not propagated: index of the generator itself
+        expected = [errgentools.error_generator_index(t, p) for t, p in gens]
+        self.assertTrue(np.array_equal(idx1[:, -1], np.array([expected, expected])))
+
+    def test_encoder_with_spam(self):
+        pspec = _ProcessorSpec(3, ['Gxpi2', 'Gcphase'], {}, {'Gcphase': [(0, 1), (1, 2)]},
+                                geometry="line", qubit_labels=[0, 1, 2])
+        plain = encoding.StandardCircuitEncoder(pspec)
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        ng = len(encoder.gate_indexing)
+        self.assertEqual(encoder.length, ng + 6)
+        self.assertEqual(encoder.depth(4), 6)
+        circ = Circuit('[Gxpi2:0Gcphase:1:2]Gxpi2:1@(0,1,2)')
+        enc = encoder(circ, padded_depth=3)
+        self.assertEqual(enc.shape, (5, ng + 6))
+        self.assertTrue(np.array_equal(enc[0], [0] * ng + [1, 1, 1, 0, 0, 0]))       # preparation row
+        self.assertTrue(np.array_equal(enc[-1], [0] * ng + [0, 0, 0, 1, 1, 1]))      # measurement row
+        self.assertTrue(np.array_equal(enc[1:3, :ng], plain(circ)))                  # circuit layers
+        self.assertTrue(np.all(enc[1:4, ng:] == 0) and np.all(enc[3] == 0))          # padding row
+        # snipper windows include the preparation/measurement indicators of their qubits
+        self.assertEqual(encoder.indices_for_qubits([2]), plain.indices_for_qubits([2]) + [ng + 2, ng + 5])
+        # Regression test: circuits_to_tensor used to pass the total encoding depth (including the
+        # initialization/measurement rows) as the encoder's layer-padding depth, which broke any
+        # encoder with non-empty initialization/measurement encodings.
+        circs = [circ, Circuit('Gxpi2:2@(0,1,2)')]
+        tensor = encoding.circuits_to_tensor(circs, encoder)
+        self.assertEqual(tensor.shape, (2, 2 + 2, ng + 6))
+        self.assertTrue(np.array_equal(tensor[0], encoder(circ)))
+        self.assertTrue(np.array_equal(tensor[1, -1], enc[-1]) and np.all(tensor[1, 2] == 0))
+
+    def test_qpann_forward_and_fit_with_spam(self):
+        # End-to-end: SPAM-aware encoder + tensors -> QPANN forward pass and training, with an
+        # A-type (non-unital) generator for asymmetric readout error.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1@(0,1)'), Circuit('[Gypi2:0][Gxpi2:1]@(0,1)'),
+                    Circuit('Gcphase:0:1@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YI'))]
+        tensors = encoding.error_generator_tensors(circuits, gens, pspec, include_spam=True, process_num=1)
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        self.assertEqual(circuits_tensor.shape[1], tensors['alphas'].shape[2])   # rows line up
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(gens, encoder, adjacency_matrix, hops=0)
+        model = qpanns.QPANN(encoder.length, gens, snipper)
+        x = [circuits_tensor, tensors['alphas'], tensors['probabilities']]
+        output = model(x)
+        self.assertEqual(tuple(output.shape), (len(circuits), 4))
+        initial_weights = [w.numpy().copy() for w in model.trainable_variables]
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-1), loss='mse')
+        model.fit(x, tensors['probabilities'] + 0.01, epochs=2, verbose=0)
+        self.assertTrue(any(not np.allclose(w0, w1.numpy()) for w0, w1 in zip(initial_weights, model.trainable_variables)))
+
+    def test_spam_empty_circuit_and_unexpanded_subcircuits(self):
+        # Regression test: (1) a depth-0 (empty) circuit (prepare |00>, apply no gates, measure)
+        # used to return None from convert_to_stim_tableau() and crash error_generator_tensors,
+        # and returned a 1D (0,)-shaped array from circuit_error_propagation_matrices when
+        # include_spam=False; (2) a circuit with unexpanded subcircuits (depth != num_layers)
+        # was expanded in CircuitEncoder.__call__ but not in circuit_error_propagation_matrices
+        # or _get_tableau.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        c_empty = Circuit([], line_labels=[0, 1])
+        c_sub = Circuit('([Gxpi2:0][Gypi2:1])^2@(0,1)', expand_subcircuits=False)
+        c_exp = c_sub.expand_subcircuits()
+        gens = [('H', ('XI',)), ('S', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YI'))]
+
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        # Depth-0 circuit with include_spam=True has 2 rows (prep and meas) and matches dense simulation
+        t_empty = encoding.error_generator_tensors([c_empty], gens, pspec, include_spam=True, process_num=1)
+        x_empty = encoding.circuits_to_tensor([c_empty], encoder)
+        self.assertEqual(x_empty.shape, (1, 2, encoder.length))
+        self.assertEqual(t_empty['alphas'].shape, (1, 4, 2, len(gens)))
+        np.testing.assert_allclose(t_empty['probabilities'][0], [1., 0., 0., 0.])
+        eps = 1e-6
+        for row in (0, 1):
+            for j, g in enumerate(gens):
+                plus = self._dense_spam_model_probabilities(c_empty, 2, {row: [(eps, g)]})
+                minus = self._dense_spam_model_probabilities(c_empty, 2, {row: [(-eps, g)]})
+                np.testing.assert_allclose(t_empty['alphas'][0, :, row, j], (plus - minus) / (2 * eps), atol=1e-6)
+
+        # Depth-0 circuit with include_spam=False and in a mixed-depth batch (both concise and matrix)
+        t_no_spam = encoding.error_generator_tensors([c_empty, c_exp], gens[:3], pspec,
+                                                      include_spam=False, alpha_representation='matrix')
+        self.assertEqual(t_no_spam['indices'].shape, (2, c_exp.depth, 3))
+        self.assertTrue(np.all(t_no_spam['signs'][0] == 0))
+
+        # Unexpanded subcircuit produces identical encodings and propagation/alpha tensors to expanded
+        for inc_spam in (False, True):
+            enc_i = encoding.StandardCircuitEncoder(pspec, include_spam=inc_spam)
+            np.testing.assert_array_equal(encoding.circuits_to_tensor([c_sub], enc_i),
+                                          encoding.circuits_to_tensor([c_exp], enc_i))
+            t_sub = encoding.error_generator_tensors([c_sub], gens, pspec, include_spam=inc_spam, process_num=1)
+            t_ref = encoding.error_generator_tensors([c_exp], gens, pspec, include_spam=inc_spam, process_num=1)
+            for k in ('indices', 'signs', 'probabilities', 'alphas'):
+                np.testing.assert_array_equal(t_sub[k], t_ref[k])
+
+    def test_snipper_nonstandard_qubit_labels_with_spam(self):
+        # Regression test: layer_snipper_from_qubit_graph passed positional indices (0..n-1)
+        # from qubits_within_hops directly to encoder.indices_for_qubits, which expects actual
+        # qubit labels from pspec.qubit_labels. That returned empty snippers for string labels
+        # (e.g. ['Q0', 'Q1']) and swapped qubits for reordered integer labels (e.g. [1, 0]).
+        pspec_str = _ProcessorSpec(2, ['Gxpi2', 'Gcphase'], {}, {'Gcphase': [('Q0', 'Q1')]},
+                                    qubit_labels=['Q0', 'Q1'])
+        enc_str = encoding.StandardCircuitEncoder(pspec_str, include_spam=True)
+        snip_str = snippers.layer_snipper_from_qubit_graph([('H', ('XI',)), ('S', ('IX',))],
+                                                            enc_str, pspec_str, hops=0)
+        self.assertEqual(snip_str[0], enc_str.indices_for_qubits(['Q0']))
+        self.assertEqual(snip_str[1], enc_str.indices_for_qubits(['Q1']))
+
+        pspec_rev = _ProcessorSpec(2, ['Gxpi2', 'Gcphase'], {}, {'Gcphase': [(1, 0)]},
+                                    qubit_labels=[1, 0])
+        enc_rev = encoding.StandardCircuitEncoder(pspec_rev, include_spam=True)
+        snip_rev = snippers.layer_snipper_from_qubit_graph([('H', ('XI',)), ('S', ('IX',))],
+                                                            enc_rev, pspec_rev, hops=0)
+        # Position 0 in Pauli string 'XI' corresponds to pspec_rev.qubit_labels[0] == 1
+        self.assertEqual(snip_rev[0], enc_rev.indices_for_qubits([1]))
+        self.assertEqual(snip_rev[1], enc_rev.indices_for_qubits([0]))
 
     def test_definite_outcome_hamiltonian_alpha_is_zero(self):
         # Regression test for a dead-code bug in `encoding._circuit_loop_probs`: it used to
@@ -623,130 +1044,10 @@ class MLSubpackageTester(unittest.TestCase):
             encoder(circuit, padded_depth=1)
 
 
-class GraphToolsTester(unittest.TestCase):
+class GraphMLIntegrationTester(unittest.TestCase):
     # Reference data for a 4-qubit line graph 0-1-2-3, used by several tests below.
     LINE4_EDGES = [(0, 1), (1, 2), (2, 3)]
     LINE4_ADJACENCY = np.array([[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]])
-
-    def test_bare_matrix_must_be_adjacency(self):
-        # A bare qubit_graph matrix must be a plain adjacency matrix (entries >= 0); the
-        # all-zero (edgeless) matrix is trivially valid.
-        Z = np.zeros((3, 3))
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(Z), np.zeros((3, 3), int))
-
-        A_star = np.array([[0, 1, 1, 1], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]])  # star, center 0
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(A_star), A_star)
-
-        # A graph Laplacian (L = D - A) has negative off-diagonal entries and must be rejected
-        # with a clear error, rather than silently guessed at or misinterpreted as an adjacency
-        # matrix.
-        L = np.array([[1, -1, 0], [-1, 2, -1], [0, -1, 1]])  # 0-1-2 line graph Laplacian
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_to_networkx(L)
-        L_star = np.array([[3, -1, -1, -1], [-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]])
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_adjacency_matrix(L_star)
-
-    def test_networkx_inputs(self):
-        A_expected = self.LINE4_ADJACENCY[:3, :3]  # 3-qubit line sub-case (0-1-2)
-
-        G_int = nx.Graph()
-        G_int.add_nodes_from([0, 1, 2])
-        G_int.add_edges_from([(0, 1), (1, 2)])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_int), A_expected)
-
-        # A DiGraph with only "forward" edges must still be symmetrized.
-        G_di = nx.DiGraph()
-        G_di.add_nodes_from([0, 1, 2])
-        G_di.add_edges_from([(0, 1), (1, 2)])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_di), A_expected)
-
-        # Non-integer (string) qubit labels: native node order defines position.
-        G_str = nx.Graph()
-        G_str.add_nodes_from(['q0', 'q1', 'q2'])
-        G_str.add_edges_from([('q0', 'q1'), ('q1', 'q2')])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_str), A_expected)
-
-    def test_node_ordering_regression(self):
-        # An nx graph whose insertion order differs from the desired qubit_labels order must
-        # still be reordered correctly (the old bare-matrix API had no such ordering check at
-        # all -- a mismatched matrix would silently produce wrong results).
-        G = nx.Graph()
-        G.add_nodes_from(['Q2', 'Q0', 'Q1'])  # scrambled insertion order
-        G.add_edge('Q0', 'Q1')
-        out = graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1', 'Q2'])
-        self.assertEqual(list(out.nodes()), ['Q0', 'Q1', 'Q2'])
-        A = graphtools.qubit_graph_adjacency_matrix(G, qubit_labels=['Q0', 'Q1', 'Q2'])
-        np.testing.assert_array_equal(A, np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]))
-
-        # Positional fallback: a plain-int-labeled graph mapped onto non-integer qubit_labels.
-        G_pos = nx.Graph()
-        G_pos.add_nodes_from([0, 1, 2])
-        G_pos.add_edge(0, 1)
-        out_pos = graphtools.qubit_graph_to_networkx(G_pos, qubit_labels=['Qa', 'Qb', 'Qc'])
-        self.assertEqual(list(out_pos.nodes()), ['Qa', 'Qb', 'Qc'])
-        self.assertEqual(sorted(out_pos.edges()), [('Qa', 'Qb')])
-
-        # An unreconcilable mismatch raises a clear ValueError naming the offending node.
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1'])  # 'Q2' unexplained
-
-    @unittest.skipUnless(IGRAPH_IMPORTED, "igraph not installed")
-    def test_igraph_input(self):
-        g = igraph.Graph(n=4, edges=self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
-
-        g_named = igraph.Graph(n=3)
-        g_named.vs['name'] = ['q0', 'q1', 'q2']
-        g_named.add_edges([(0, 1)])
-        out = graphtools.qubit_graph_to_networkx(g_named)
-        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
-        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
-
-        # Directed igraph graph with only one direction present must still be symmetrized.
-        g_dir = igraph.Graph(n=4, edges=self.LINE4_EDGES, directed=True)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
-
-    @unittest.skipUnless(GRAPH_TOOL_IMPORTED, "graph_tool not installed")
-    def test_graph_tool_input(self):
-        g = graph_tool.Graph(directed=False)
-        g.add_vertex(4)
-        g.add_edge_list(self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
-
-        g_named = graph_tool.Graph(directed=False)
-        g_named.add_vertex(3)
-        vprop = g_named.new_vertex_property("string")
-        for i, name in enumerate(['q0', 'q1', 'q2']):
-            vprop[g_named.vertex(i)] = name
-        g_named.vertex_properties['name'] = vprop
-        g_named.add_edge(g_named.vertex(0), g_named.vertex(1))
-        out = graphtools.qubit_graph_to_networkx(g_named)
-        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
-        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
-
-        # Directed graph_tool graph with only one direction present must still be symmetrized.
-        g_dir = graph_tool.Graph(directed=True)
-        g_dir.add_vertex(4)
-        g_dir.add_edge_list(self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
-
-    def test_qubitgraph_and_processorspec_inputs(self):
-        qg = QubitGraph.common_graph(4, "line", directed=True, qubit_labels=[0, 1, 2, 3])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(qg), self.LINE4_ADJACENCY)
-
-        pspec = _ProcessorSpec(4, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': self.LINE4_EDGES},
-                                qubit_labels=[0, 1, 2, 3])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(pspec), self.LINE4_ADJACENCY)
-        # pspec.qubit_graph itself is edgeless (no explicit `geometry` given to the constructor);
-        # this checks we used compute_2Q_connectivity() and not the (wrong) edgeless qubit_graph.
-        self.assertEqual(pspec.qubit_graph.edges(), [])
-
-    def test_scipy_sparse_input(self):
-        import scipy.sparse as sp
-        A_sparse = sp.csr_matrix(self.LINE4_ADJACENCY)
-        np.testing.assert_array_equal(
-            graphtools.qubit_graph_adjacency_matrix(A_sparse), self.LINE4_ADJACENCY)
 
     def test_missing_required_graph_args_raise(self):
         # qubit_graph/num_hops (errgentools) and qubit_graph/hops (snippers) are required
@@ -816,13 +1117,6 @@ class GraphToolsTester(unittest.TestCase):
         snip_reference = snip_results['adjacency']
         for name, result in snip_results.items():
             self.assertEqual(result, snip_reference, f"snipper mismatch for backend {name!r}")
-
-    def test_qubit_graph_from_edges(self):
-        G = graphtools.qubit_graph_from_edges([(0, 1), (1, 2)], [0, 1, 2, 3])
-        self.assertEqual(list(G.nodes()), [0, 1, 2, 3])  # qubit 3 has no edges but is present
-        self.assertEqual(sorted(G.edges()), [(0, 1), (1, 2)])
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_from_edges([(0, 5)], [0, 1, 2, 3])  # 5 isn't a qubit label
 
 
 if __name__ == '__main__':

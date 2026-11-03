@@ -10,6 +10,8 @@ The ComposedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import itertools as _itertools
 import collections as _collections
 
@@ -24,6 +26,13 @@ from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
+
+from typing import TYPE_CHECKING, Union, Literal
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs import Basis as _Basis
+    from pygsti.evotypes import Evotype as _Evotype
+    from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 
 class ComposedErrorgen(_LinearOperator):
     """
@@ -49,7 +58,7 @@ class ComposedErrorgen(_LinearOperator):
         error generator being composed.
     """
 
-    def __init__(self, errgens_to_compose, evotype="auto", state_space="auto"):
+    def __init__(self, errgens_to_compose: list[_LindbladErrorgen], evotype: Union[_Evotype.Castable, Literal["auto"]]="auto", state_space: SpaceT="auto"):
         assert(len(errgens_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one error generator when state_space='auto'!"
         self.factors = errgens_to_compose
@@ -88,7 +97,7 @@ class ComposedErrorgen(_LinearOperator):
         self.init_gpindices()  # initialize our gpindices based on sub-members
 
     @property
-    def matrix_basis(self):
+    def matrix_basis(self) -> _Basis:
         """
         The matrix basis shared by all factor error generators (None if there are no factors).
 
@@ -112,7 +121,7 @@ class ComposedErrorgen(_LinearOperator):
         errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
         return cls(errgens_to_compose, mm_dict['evotype'], state_space)
 
-    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
+    def coefficients(self, return_basis: bool=False, logscale_nonham: bool=False, label_type: Literal['global', 'local']='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 
