@@ -10,7 +10,6 @@ import datetime
 import json
 import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import time
@@ -23,6 +22,7 @@ from test.helpers.simultaneous_gst_validation import (
     build_training_design_and_held_out_circuits,
     spectator_term_text,
 )
+from test.helpers.mpi_launch import openmpi_extra_args
 from test.helpers.simultaneous_gst_statistics import score_validation_fit
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -43,20 +43,6 @@ class ValidationArtifacts:
     @property
     def manifest_path(self):
         return self.root / 'profile.json'
-
-
-def openmpi_extra_args() -> list[str]:
-    """Return launcher arguments supported specifically by Open MPI."""
-    launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-    if launcher is None:
-        return []
-    try:
-        completed = subprocess.run(
-            [launcher, '--version'], capture_output=True, text=True, timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return []
-    output = completed.stdout + completed.stderr
-    return ['--oversubscribe'] if 'Open MPI' in output or 'OpenRTE' in output else []
 
 
 def _mpi_worker_environment(existing_environment=None) -> dict[str, str]:
