@@ -361,7 +361,7 @@ class MLSubpackageTester(unittest.TestCase):
 
         circ = Circuit(cast(Any, [('Gx', 0)]))
         encoded = encoder(circ)
-        self.assertEqual(encoded.shape, (circ.depth + encoder.initialization_encoding_depth() + encoder.measurement_encoding_depth(), encoder.length))
+        self.assertEqual(encoded.shape, (encoder.depth(circ.depth), encoder.length))
 
         circs = [Circuit(cast(Any, [('Gx', 0)])), Circuit(cast(Any, [('Gy', 1)]))]
         tensor = encoding.circuits_to_tensor(circs, encoder)

@@ -69,6 +69,7 @@ class CircuitEncoder(object):
         assert isinstance(pspec, QubitProcessorSpec)
         self.pspec = pspec
         self.length: int = 0 # This should be specified in a derived class
+        self.include_spam: bool = False
 
     def __call__(self, circuit: _Circuit, padded_depth: int | None = None) -> _np.ndarray:
         """
@@ -137,18 +138,6 @@ class CircuitEncoder(object):
         """
         return []
 
-    def initialization_encoding_depth(self) -> int:
-        """
-        Returns the length of the initalization encoding list, i.e., the length of lists returned by
-        `initialization_encoding`.
-
-        Returns
-        -------
-        int
-            The length of the list returned by `initialization_encoding`.
-        """
-        return 0
-
     def measurement_encoding(self, circuit: _Circuit) -> list[list[float]] | list[list[int]]:
         """
         This method defines the encoding of the implicit measurement layer at the end of a circuit.
@@ -168,18 +157,6 @@ class CircuitEncoder(object):
             A list of per-layer feature vectors. Empty if measurement is not represented.
         """
         return []
-
-    def measurement_encoding_depth(self) -> int:
-        """
-        Returns the length of the measurement encoding list, i.e., the length of lists returned by
-        `measurement_encoding`.
-
-        Returns
-        -------
-        int
-            The length of the list returned by `measurement_encoding`.
-        """
-        return 0
 
     def layer_encoding(self, layer: tuple | list | None) -> list:
         """
@@ -219,9 +196,10 @@ class CircuitEncoder(object):
         -------
         int
             The encoding depth, which is `max_circuit_depth` + the depths for initialization
-            and measurment encoding. (i.e. `max_circuit_depth + initialization_encoding_depth() + measurement_encoding_depth()`)
+            and measurement encoding.
         """
-        return max_circuit_depth + self.initialization_encoding_depth() + self.measurement_encoding_depth()
+        # +2 when `include_spam` is True: 1 initialization row + 1 measurement row.
+        return max_circuit_depth + (2 if self.include_spam else 0)
 
     def indices_for_qubits(self, qubits: list | set | tuple) -> list[int]:
         """
@@ -314,17 +292,9 @@ class StandardCircuitEncoder(CircuitEncoder):
         """One row with every qubit's "prepared" indicator set, if `include_spam`; otherwise empty."""
         return [self._spam_row('prep')] if self.include_spam else []
 
-    def initialization_encoding_depth(self) -> int:
-        """1 if `include_spam`, otherwise 0."""
-        return 1 if self.include_spam else 0
-
     def measurement_encoding(self, circuit: _Circuit) -> list[list[float]]:
         """One row with every qubit's "measured" indicator set, if `include_spam`; otherwise empty."""
         return [self._spam_row('meas')] if self.include_spam else []
-
-    def measurement_encoding_depth(self) -> int:
-        """1 if `include_spam`, otherwise 0."""
-        return 1 if self.include_spam else 0
 
     def layer_encoding(self, layer: tuple | list | None) -> list[float]:
         """
@@ -402,8 +372,9 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
         encoding_depth = encoder.depth(max_depth)
 
     # `encoding_depth` is the depth of the whole encoding, while the encoder's `padded_depth` is the
-    # depth its circuit-layer portion is padded to (excluding any initialization/measurement rows).
-    padded_depth = encoding_depth - encoder.initialization_encoding_depth() - encoder.measurement_encoding_depth()
+    # depth its circuit-layer portion is padded to (excluding the 1 initialization + 1 measurement
+    # rows added when `include_spam` is True).
+    padded_depth = encoding_depth - (2 if encoder.include_spam else 0)
     circuits_tensor = _np.zeros((len(circuits), encoding_depth, encoder.length), float)
     for i, circuit in enumerate(circuits):
         circuits_tensor[i,:,:] = encoder(circuit, padded_depth=padded_depth)
