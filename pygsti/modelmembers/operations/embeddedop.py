@@ -82,27 +82,21 @@ class EmbeddedOp(_LinearOperator, _Torchable):
     def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'embedded') if evotype.prefer_dense_reps else ('embedded', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'embedded': 'embedded'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'embedded':
-                    rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'embedded':
+            rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+        self._rep_type = rep_type
         return rep
 
     def _update_denserep(self):

@@ -10,8 +10,6 @@ Operation representation classes for the `densitymx_slow` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools as _itertools
-
 import numpy as _np
 import scipy.sparse as _sps
 from scipy.sparse.linalg import LinearOperator
@@ -57,7 +55,7 @@ class OpRep:
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense(on_space="HilbertSchmidt")
-        return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
+        return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv, dtype='d')  # transpose, adjoint, dot?
 
 
 class OpRepDenseSuperop(OpRep):
@@ -317,96 +315,49 @@ class OpRepEmbedded(OpRep):
         # count possible *density-matrix-space* indices of each component of the tensor product block
         numBasisEls = _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
 
-        # Separate the components of the tensor product that are not operated on, i.e. that our
-        # final map just acts as identity w.r.t.
         labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
-        actionInds = _np.array(labelIndices, _np.int64)
-        assert(_np.prod([numBasisEls[i] for i in actionInds]) == embedded_rep.dim), \
+        assert(_np.prod([numBasisEls[i] for i in labelIndices]) == embedded_rep.dim), \
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
-        nBlocks = state_space.num_tensor_prod_blocks
-        iActiveBlock = iTensorProdBlk
-        nComponents = len(state_space.tensor_product_block_labels(iActiveBlock))
-        #embeddedDim = embedded_rep.dim
-        blocksizes = _np.array([_np.prod(state_space.tensor_product_block_dimensions(k))
-                                for k in range(nBlocks)], _np.int64)
-
-        self.embedded_rep = embedded_rep
-        self.num_basis_els = numBasisEls
-        self.action_inds = actionInds
-        self.blocksizes = blocksizes
-
-        num_basis_els_noop_blankaction = self.num_basis_els.copy()
-        for i in self.action_inds: num_basis_els_noop_blankaction[i] = 1
-        self.basisInds_noop_blankaction = [list(range(n)) for n in num_basis_els_noop_blankaction]
+        nBlocks = state_space.num_tensor_product_blocks
+        blocksizes = [int(_np.prod(state_space.tensor_product_block_dimensions(k))) for k in range(nBlocks)]
+        offset = sum(blocksizes[0:iTensorProdBlk])
 
         # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(self.num_basis_els[1:]))))), _np.int64)
-        self.basisInds_action = [list(range(self.num_basis_els[i])) for i in self.action_inds]
+        # e.g. if numBasisEls == [1,4,4] then multipliers == [ 16 4 1 ]
+        multipliers = _np.append(_np.cumprod(numBasisEls[:0:-1])[::-1], 1).astype(_np.int64)
 
-        #self.embeddedDim = embeddedDim
-        self.ncomponents = nComponents  # number of components in "active" block
-        self.active_block_index = iActiveBlock
-        self.nblocks = nBlocks
-        self.offset = sum(blocksizes[0:self.active_block_index])
+        def _flat_offsets(label_inds):
+            # state-vector offsets of every index combination of the given labels (first is most significant)
+            offs = _np.zeros(1, _np.int64)
+            for i in label_inds:
+                offs = (offs[:, None] + multipliers[i] * _np.arange(numBasisEls[i], dtype=_np.int64)[None, :]).ravel()
+            return offs
+
+        untouched = [i for i in range(len(numBasisEls)) if i not in labelIndices]
+        self.embedded_rep = embedded_rep
+        self._block_base_inds = offset + _flat_offsets(untouched)  # base element of each untouched-index block
+        self._embedded_rel_inds = _flat_offsets(labelIndices)  # offset of each embedded basis element
         super(OpRepEmbedded, self).__init__(state_space)
 
-    def _acton_other_blocks_trivially(self, output_state, state):
-        offset = 0
-        for iBlk, blockSize in enumerate(self.blocksizes):
-            if iBlk != self.active_block_index:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
-            offset += blockSize
+    def _apply(self, state, adjoint):
+        # Row b of `inds` holds untouched-index block b's state indices, so one gather, one matmul by the embedded
+        # op's dense matrix (or its adjoint) and one scatter act on every block; entries outside `inds` are copied.
+        linop = self.embedded_rep.aslinearoperator()
+        d = self.embedded_rep.dim
+        mx = linop.rmatmat(_np.identity(d, 'd')) if adjoint else linop.matmat(_np.identity(d, 'd'))
+        inds = self._block_base_inds[:, None] + self._embedded_rel_inds[None, :]
+        out = state.data.copy()
+        out[inds] = state.data[inds] @ mx.T
+        return _StateRepDense(out, state.state_space, None)
 
     def acton(self, state):
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
-
-        #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
-        #print("DB REPLIB ACTON: ",self.basisInds_action)
-        #print("DB REPLIB ACTON: ",self.multipliers)
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDense(state.data[inds], state.state_space, None)
-            embedded_outstate = self.embedded.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
+        return self._apply(state, False)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
-        #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
-
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDense(state.data[inds], state.state_space, None)
-            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
+        return self._apply(state, True)
 
 
 class OpRepExpErrorgen(OpRep):

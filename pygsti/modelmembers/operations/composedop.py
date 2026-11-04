@@ -92,28 +92,22 @@ class ComposedOp(_LinearOperator, _Torchable):
     def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'composed': 'composed'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'composed':
-                    factor_op_reps = [op._rep for op in self.factorops]
-                    rep = evotype.create_composed_rep(factor_op_reps, state_space)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'composed':
+            factor_op_reps = [op._rep for op in self.factorops]
+            rep = evotype.create_composed_rep(factor_op_reps, state_space)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+        self._rep_type = rep_type
         return rep
 
     def _update_denserep(self):
