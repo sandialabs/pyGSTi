@@ -2750,8 +2750,13 @@ def _validate_and_extend_optimizers(optimizers: Union[_opt.Optimizer, dict, list
         dictionaries cast to :class:`SimplerLMOptimizer`.
     """
     optimizers = _alg.validate_and_extend_optimizer(optimizers, size)
-    return [_copy.deepcopy(opt) if isinstance(opt, _opt.Optimizer)
-            else _opt.SimplerLMOptimizer.cast(_copy.deepcopy(opt)) for opt in optimizers]
+    validated = []
+    for opt in optimizers:
+        opt = _copy.deepcopy(opt)  # don't modify the caller's optimizer
+        if not isinstance(opt, _opt.Optimizer):
+            opt = _opt.SimplerLMOptimizer.cast(opt)
+        validated.append(opt)
+    return validated
 
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
