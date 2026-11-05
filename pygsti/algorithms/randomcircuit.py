@@ -199,7 +199,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 
 
 def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None,
-                                     gate_args_lists=None, rand_state=None):
+                                     one_q_gate_distribution=None, gate_args_lists=None, rand_state=None):
     """
     TODO: docstring
     <TODO summary>
@@ -214,6 +214,12 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
 
     mean_two_q_gates : <TODO typ>, optional
         <TODO description>
+
+    one_q_gate_distribution : list or array, optional
+        The probability with which each of `one_q_gate_names` is sampled, for the qubits
+        that are not acted on by a two-qubit gate. Must be the same length as
+        `one_q_gate_names`, and can only be specified if `one_q_gate_names` is. If None,
+        a uniformly random gate is chosen from those available on each qubit.
 
     modelname : <TODO typ>, optional
         <TODO description>
@@ -277,13 +283,27 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
             for q in edge:
                 del unusedqubits[unusedqubits.index(q)]
 
+    if one_q_gate_distribution is not None:
+        assert(one_q_gate_names is not None), \
+            "one_q_gate_distribution can only be specified along with one_q_gate_names!"
+        assert(len(one_q_gate_distribution) == len(one_q_gate_names)), \
+            "one_q_gate_distribution must be the same length as one_q_gate_names!"
     if one_q_gate_names is None or len(one_q_gate_names) > 0:
         for q in unusedqubits:
             if one_q_gate_names is None:
                 possibleops = ops_on_qubits[(q,)]
             else:
                 possibleops = [gate_lbl for gate_lbl in ops_on_qubits[(q,)] if gate_lbl.name in one_q_gate_names]
-            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            if one_q_gate_distribution is None:
+                gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            else:
+                # Sample a gate name from the specified distribution, rather than sampling
+                # uniformly from the gates available on this qubit.
+                random_index = rand_state.choice(len(one_q_gate_names), p=one_q_gate_distribution)
+                gate_name = one_q_gate_names[random_index]
+                gate_label = _lbl.Label(gate_name, q)
+                assert(gate_label in possibleops), \
+                    "The gate %s sampled from one_q_gate_distribution is not available on qubit %s!" % (gate_name, q)
             sampled_layer.append(gate_label)
 
     return sampled_layer
@@ -774,6 +794,121 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
             else:
                 layer = sampler(pspec, qubit_labels, *samplerargs, rand_state=rand_state)
             circuit.insert_layer_inplace(layer, 0)
+
+    circuit.done_editing()
+    return circuit
+
+
+def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qubit_labels=None, rand_state=None):
+    """
+    Samples a random circuit with a specified width, depth and two-qubit gate density.
+
+    The two-qubit gate density xi is the number of two-qubit gates in the circuit
+    divided by the number that would fit into a width-`width`, depth-`depth` circuit if
+    every qubit were acted on by a two-qubit gate in every layer, i.e., `xi` is the number
+    of two-qubit gates divided by `width * depth / 2`. Because that product need not be an
+    integer, the number of two-qubit gates is rounded up or down at random, with the
+    probabilities chosen so that its expectation is exactly `xi * width * depth / 2`.
+
+    The locations of the two-qubit gates are sampled by first choosing, independently in
+    each layer, a maximal set of disjoint edges of the connectivity graph (by repeatedly
+    picking a uniformly random remaining edge and deleting every edge that shares a qubit
+    with it), and then selecting a uniformly random subset of the resulting
+    (layer, edge) pairs of the required size. Every qubit not acted on by a two-qubit gate
+    in a layer is given a uniformly random available one-qubit gate.
+
+    Parameters
+    ----------
+    pspec : QubitProcessorSpec
+        The processor specification that the circuit is sampled for. Both the
+        connectivity and the available gates are taken from `pspec`.
+
+    width : int
+        The number of qubits the circuit acts on.
+
+    depth : int
+        The number of layers in the circuit.
+
+    xi : float
+        The two-qubit gate density, between 0 and 1.
+
+    qubit_labels : list or tuple, optional
+        The qubits to sample the circuit on. Must contain `width` qubits. If None,
+        the first `width` qubits of `pspec` are used.
+
+    rand_state : numpy.random.RandomState, optional
+        A random number generator, for reproducible sampling.
+
+    Returns
+    -------
+    Circuit
+        A random circuit of the specified width and depth, containing a number of
+        two-qubit gates whose expectation is `xi * width * depth / 2`.
+    """
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+    if qubit_labels is not None:
+        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+        qubits = list(qubit_labels[:])  # copy this list
+        assert(len(qubits) == width)
+    else:
+        qubits = list(pspec.qubit_labels[:width])  # copy this list
+
+    # Initialize an empty circuit, to populate with sampled layers.
+    circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
+
+    all_edges = [e for e in pspec.compute_2Q_connectivity().edges() if all([q in qubits for q in e])]
+    ops_on_qubits = pspec.compute_ops_on_qubits()
+
+    # In each layer, greedily pick a maximal set of disjoint edges. The union over layers
+    # is the set of locations at which a two-qubit gate could be placed.
+    possible_twoQgate_locations = []
+    for i in range(depth):
+        edgelist = list(all_edges)
+        selectededges = []
+        while len(edgelist) > 0:
+            edge = edgelist[rand_state.randint(0, len(edgelist))]
+            selectededges.append(edge)
+            # Delete all edges containing these qubits.
+            edgelist = [e for e in edgelist if not any([q in e for q in edge])]
+
+        possible_twoQgate_locations += [(i, e) for e in selectededges]
+
+    target_num_2q_gates = xi * width * depth / 2
+
+    # We can only have an integer number of two-qubit gates, so we round the target up or down to the nearest integer.
+    # We do so randomly so that the expected number of two-qubit gates in the circuit is the target value.
+    ceiling_target_num_2q_gates = int(_np.ceil(target_num_2q_gates))
+    floor_target_num_2q_gates = int(_np.floor(target_num_2q_gates))
+    prob_ceiling = target_num_2q_gates - floor_target_num_2q_gates
+    num_2q_gates = rand_state.choice([ceiling_target_num_2q_gates, floor_target_num_2q_gates],
+                                     p=[prob_ceiling, 1 - prob_ceiling])
+
+    selected_2q_gate_locations_indices = rand_state.choice([i for i in range(len(possible_twoQgate_locations))],
+                                                           size=num_2q_gates, replace=False)
+    selected_2q_gate_locations = [possible_twoQgate_locations[i] for i in selected_2q_gate_locations_indices]
+
+    selected_2q_gates_by_layer = [[] for i in range(depth)]
+    for (d, edge) in selected_2q_gate_locations:
+        selected_2q_gates_by_layer[d].append(edge)
+
+    for i in range(depth):
+        sampled_layer = []
+        selected_edges_for_layer = selected_2q_gates_by_layer[i]
+        used_qubits = [q for edge in selected_edges_for_layer for q in edge]
+        unusedqubits = [q for q in qubits if q not in used_qubits]
+
+        for edge in selected_edges_for_layer:
+            possibleops = ops_on_qubits[edge]
+            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            sampled_layer.append(gate_label)
+
+        for q in unusedqubits:
+            possibleops = ops_on_qubits[(q,)]
+            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            sampled_layer.append(gate_label)
+
+        circuit.insert_layer_inplace(sampled_layer, i)
 
     circuit.done_editing()
     return circuit
@@ -2072,11 +2207,7 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     #     - absolute_compilation: compilation rules 
     #     - qubit_labels:
     #     - circuit: Boolean that determines if a list of single-qubit Paulis or a compiled circuit is returned.
-    
-    if circuit is True:
-        if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
-        else: qubits = pspec.qubit_labels[:]
-    
+
     rng = _np.random.default_rng(seed)
 
     pauli_list = ['I','X','Y','Z']
@@ -2096,18 +2227,63 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     if circuit is False:
         return pauli, sign
     else:
-        pauli_layer_std_lbls = [_lbl.Label(pauli_list[rand_ints[q]], (qubits[q],)) for q in range(n)]
-        # Converts the layer to a circuit, and changes to the native model.
-        pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize()
-        pauli_circuit = pauli_circuit.copy(editable=True)
-        pauli_circuit.change_gate_library(absolute_compilation)
-        if pauli_circuit.depth == 0:
-            pauli_circuit.insert_layer_inplace([_lbl.Label(())], 0)
-        pauli_circuit.done_editing()
+        pauli_circuit = _circuit_from_pauli_and_sign(pauli, sign, pspec=pspec, absolute_compilation=absolute_compilation, qubit_labels=qubit_labels)
+        return pauli, sign, pauli_circuit
 
-    return pauli, sign, pauli_circuit
 
-      
+def _sample_random_pauli_with_identities_fixed(n, is_identity, pspec=None, absolute_compilation=None,
+                                               qubit_labels=None, circuit=False, seed=None):
+    # As _sample_random_pauli, but with the location of the identities fixed: the qubits for which
+    # is_identity is True are assigned 'I', and the rest a uniformly random non-identity Pauli.
+    #     - n: Number of qubits
+    #     - is_identity: Length-n list of bools, True where the Pauli is fixed to the identity
+    #     - pspec: Processor spec
+    #     - absolute_compilation: compilation rules
+    #     - qubit_labels:
+    #     - circuit: Boolean that determines if a list of single-qubit Paulis or a compiled circuit is returned.
+
+    rng = _np.random.default_rng(seed)
+
+    non_identity_pauli_list = ['X', 'Y', 'Z']
+    rand_ints = rng.integers(0, 3, n)
+    pauli = []
+    for i in range(n):
+        if is_identity[i]:
+            pauli.append('I')
+        else:
+            pauli.append(non_identity_pauli_list[rand_ints[i]])
+
+    if set(pauli) != set('I'): sign = rng.choice([-1, 1])
+    else: sign = 1
+
+    if circuit is False:
+        return pauli, sign
+    else:
+        pauli_circuit = _circuit_from_pauli_and_sign(pauli, sign, pspec=pspec,
+                                                     absolute_compilation=absolute_compilation,
+                                                     qubit_labels=qubit_labels)
+        return pauli, sign, pauli_circuit
+
+
+def _circuit_from_pauli_and_sign(pauli, sign, pspec=None, absolute_compilation=None, qubit_labels=None):
+    # Compiles a Pauli, given as a list of 'I'/'X'/'Y'/'Z', into a circuit of native gates.
+
+    if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
+    else: qubits = pspec.qubit_labels[:]
+    n = len(pauli)
+
+    pauli_layer_std_lbls = [_lbl.Label(pauli[q], (qubits[q],)) for q in range(n)]
+    # Converts the layer to a circuit, and changes to the native model.
+    pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize()
+    pauli_circuit = pauli_circuit.copy(editable=True)
+    pauli_circuit.change_gate_library(absolute_compilation)
+    if pauli_circuit.depth == 0:
+        pauli_circuit.insert_layer_inplace([_lbl.Label(())], 0)
+    pauli_circuit.done_editing()
+
+    return pauli_circuit
+
+
 def _select_neg_evecs(pauli, sign, seed=None):
     # Selects the entries in an n-qubit that will be turned be given a -1 1Q eigenstates
     #     - pauli: The n-qubit Pauli
@@ -2164,7 +2340,8 @@ def _compose_initial_cliffords(prep_circuit):
         composed_layer.append(new_gate)
     return composed_layer
 
-def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None):
+
+def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None, randomize_for_identity=True):
     # Samples a random stabilizer of a Pauli, s = s_1 \otimes ... \otimes s_n. For each s_i,
     # we perform the following gates:
     #     - s_i = X: H
@@ -2203,7 +2380,15 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
                  'Z': 'C0'}
     
     x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))]
-    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(rng.integers(24)) for i in pauli]
+    # For an identity Pauli the stabilizer preparation is unconstrained. By default a random
+    # single-qubit Clifford is used. Passing randomize_for_identity=False leaves those qubits
+    # idle instead, which is what direct fidelity estimation on a fixed circuit shape needs:
+    # the width and two-qubit gate density of the circuit must not depend on which Paulis were
+    # drawn.
+    if randomize_for_identity:
+        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C' + str(rng.integers(24)) for i in pauli]
+    else:
+        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C0' for i in pauli]
 
     init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     
