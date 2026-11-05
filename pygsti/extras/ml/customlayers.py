@@ -26,6 +26,32 @@ from tensorflow.keras import initializers, regularizers, constraints
 from typing import Any
 
 
+def _per_errorgen_initializer(initializer: Any, num_errorgens: int) -> Any:
+    """
+    Correct a fan-based kernel initializer for `CustomDense`'s per-error-generator kernels.
+
+    `CustomDense` stores one independent `(input_dim, units)` kernel per error generator, as a
+    single kernel of shape `(num_errorgens, input_dim, units)`. Keras' fan-based initializers
+    (`VarianceScaling` and its subclasses, e.g. the default `glorot_uniform`) treat every axis
+    except the last two as a convolutional receptive field, and so multiply both fan_in and
+    fan_out by `num_errorgens`. That makes the initial weights ~sqrt(num_errorgens) too small.
+    In a deep rate network the input signal then vanishes, and the hidden-layer gradients can
+    fall below Adam's epsilon, so the network barely trains.
+
+    The variance of a `VarianceScaling` initializer is proportional to scale / fan, so
+    multiplying `scale` by `num_errorgens` gives each error generator's kernel exactly the
+    distribution it would get as a standalone `(input_dim, units)` kernel. Other initializers
+    (e.g. `RandomUniform`, `zeros`), and initializers whose fan axes were set explicitly, are
+    returned unchanged.
+    """
+    if (not isinstance(initializer, initializers.VarianceScaling) or num_errorgens == 1
+            or getattr(initializer, 'input_axes', None) is not None
+            or getattr(initializer, 'output_axes', None) is not None):
+        return initializer
+    return initializers.VarianceScaling(scale=initializer.scale * num_errorgens, mode=initializer.mode,
+                                        distribution=initializer.distribution, seed=initializer.seed)
+
+
 class SelectiveDense(Layer):
     def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True,
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
@@ -241,7 +267,7 @@ class CustomDense(Layer):
         self.kernel = self.add_weight(
             name="kernel",
             shape=(self.num_errorgens, input_dim, self.units),
-            initializer=self.kernel_initializer,
+            initializer=_per_errorgen_initializer(self.kernel_initializer, self.num_errorgens),
             regularizer=self.kernel_regularizer,
             constraint=self.kernel_constraint,
         )

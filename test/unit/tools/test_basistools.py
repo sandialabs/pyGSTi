@@ -174,6 +174,29 @@ class BasisToolsTester(BaseCase):
         with self.assertRaises(AssertionError):
             bt.vec_to_stdmx(vec, 'akdfj;ladskf')
 
+    def test_vec_to_stdmx_column_vector(self):
+        vec = np.array([1, 0, 0, 1]) / np.sqrt(2)
+        expected = bt.vec_to_stdmx(vec, 'pp')
+        self.assertArraysAlmostEqual(bt.vec_to_stdmx(vec[:, None], 'pp'), expected)
+        self.assertArraysAlmostEqual(bt.vec_to_stdmx(vec[:, None], Basis.cast('pp', 4)), expected)
+
+    def test_vec_to_stdmx_rejects_non_ndarray(self):
+        from pygsti.modelpacks import smq1Q_XYI
+        model = smq1Q_XYI.target_model()
+        rho = model.preps['rho0']
+        with self.assertRaisesRegex(TypeError, r'to_dense\(\)'):
+            bt.vec_to_stdmx(rho, model.basis)
+        with self.assertRaisesRegex(TypeError, r'to_dense\(\)'):
+            bt.vec_to_stdmx(rho, 'pp')
+        with self.assertRaises(TypeError):
+            bt.vec_to_stdmx([1, 0, 0, 0], 'pp')
+
+    def test_vec_to_stdmx_rejects_size_mismatch(self):
+        with self.assertRaises(ValueError):
+            bt.vec_to_stdmx(np.zeros(16), Basis.cast('pp', 4))
+        with self.assertRaises(ValueError):
+            bt.vec_to_stdmx(np.zeros(3), Basis.cast('pp', 4))
+
     def test_auto_expand(self):
         comp = Basis.cast([('std', 4,), ('std', 1)])
         std = Basis.cast('std', 9)

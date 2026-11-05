@@ -201,6 +201,36 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         )
         # TODO assert correctness
 
+    def test_iterative_gst_honors_customlm_first_fditer(self):
+        # CustomLMOptimizer is deprecated but keeps first_fditer: the first fit, and only the
+        # first, runs its first iteration with finite differences.
+        from unittest import mock
+        from pygsti.optimize import customlm
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = customlm.CustomLMOptimizer(maxiter=2, first_fditer=1)
+        with mock.patch.object(customlm, 'custom_leastsq', wraps=customlm.custom_leastsq) as spy:
+            core.run_iterative_gst(self.ds, self.mdl_clgst, self.lsgstStrings[0:2], optimizer=optimizer,
+                                   iteration_objfn_builders=['chi2'], final_objfn_builders=[],
+                                   resource_alloc=None)
+        self.assertEqual([c.kwargs['num_fd_iters'] for c in spy.call_args_list], [1, 0])
+
+    def test_iterative_gst_fills_customlm_first_fditer_none(self):
+        # first_fditer=None means "fill with default": 1 on the matrix simulator, 0 otherwise.
+        from unittest import mock
+        from pygsti.optimize import customlm
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = customlm.CustomLMOptimizer(maxiter=2, first_fditer=None)
+        for sim, expected in (('matrix', [1, 0]), ('map', [0, 0])):
+            mdl = self.mdl_clgst.copy()
+            mdl.sim = sim
+            with mock.patch.object(customlm, 'custom_leastsq', wraps=customlm.custom_leastsq) as spy:
+                core.run_iterative_gst(self.ds, mdl, self.lsgstStrings[0:2], optimizer=optimizer,
+                                       iteration_objfn_builders=['chi2'], final_objfn_builders=[],
+                                       resource_alloc=None)
+            self.assertEqual([c.kwargs['num_fd_iters'] for c in spy.call_args_list], expected, sim)
+
     def test_do_iterative_mc2gst_regularize_factor(self):
         obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',

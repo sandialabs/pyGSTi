@@ -14,14 +14,11 @@ from __future__ import annotations
 from typing import Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import itertools as _itertools
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
@@ -85,27 +82,21 @@ class EmbeddedOp(_LinearOperator, _Torchable):
     def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'embedded') if evotype.prefer_dense_reps else ('embedded', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'embedded': 'embedded'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'embedded':
-                    rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'embedded':
+            rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+        self._rep_type = rep_type
         return rep
 
     def _update_denserep(self):
@@ -383,6 +374,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # The scatter targets (i, j) and sources (gi, gj) are cached, parameter-independent quadruplets
         # that mirror `to_dense`'s overwrite of `np.identity(dim)`.  `t_bg` is that identity with every
         # covered (i, j) zeroed out. Parameters are pure pass-through to the embedded op.
+        _torch = _import_torch()
         quads = list(self._iter_matrix_elements('HilbertSchmidt'))
         i, j, gi, gj = (_torch.tensor(c, dtype=_torch.long, device=device) for c in zip(*quads))
         bg = _np.identity(self.state_space.dim)
@@ -392,6 +384,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        _torch = _import_torch()
         etype, esd, t_bg, i, j, gi, gj = sd
         A = etype.torch_base(esd, t_param)  # whole t_param: params are pass-through
         # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.

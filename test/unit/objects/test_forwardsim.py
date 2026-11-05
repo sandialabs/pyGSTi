@@ -516,12 +516,11 @@ class TPInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
 class CPTRInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
     """End-to-end check of the full RootConjOperator / ComposedPOVMEffect chain: an Instrument
     built via Instrument.from_effects on a CPTPLND-parameterized model (GitHub issue 607). The
-    reference simulators fall back to finite-differencing for RootConjOperator's derivative
-    (it has no analytic deriv_wrt_params), so this Tester uses a looser Jacobian tolerance than
-    the other forward-sim consistency Testers."""
+    effects are interior, where RootConjOperator's derivative is exact, so the Jacobian tolerance
+    matches the other Lindblad Testers (whose floor is the Map simulators' finite differences)."""
 
     PROBS_TOL = 1e-12
-    JACS_TOL = 1e-6
+    JACS_TOL = 1e-9
 
     def build_helper(self):
         model = smq1Q_XYI.target_model()
@@ -529,8 +528,8 @@ class CPTRInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
         rng = np.random.default_rng(44)
         model.from_vector(model.to_vector() + 0.02 * rng.standard_normal(model.num_params))
 
-        # Effects spectrally interior to (0, 1) and non-degenerate, so RootConjOperator's
-        # eigh-backward Jacobian is well-conditioned and no NumericalDomainWarning fires.
+        # Effects spectrally interior to (0, 1), so RootConjOperator's NumPy and Torch derivatives
+        # are exact and no NumericalDomainWarning fires.
         E0 = np.diag([0.7, 0.3]).astype(complex)
         E1 = np.diag([0.3, 0.7]).astype(complex)
         instr = Instrument.from_effects({'p0': E0, 'p1': E1}, model.basis)
