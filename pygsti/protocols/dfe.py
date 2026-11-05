@@ -36,7 +36,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
     `qubit_labels` for every target.
 
     Whether any circuit was sampled with a mask is recorded in the boolean attribute
-    `has_fixed_identity_locations`.
+    `has_fixed_identity_locations`. The reference circuits, if any, are stored in the
+    attribute `reference_circuits` (None otherwise).
 
     Parameters
     ----------
@@ -78,7 +79,9 @@ class DFEDesign(_vb.BenchmarkingDesign):
         refuses designs with any mask.
 
     create_same_measurement_reference : bool, optional
-        Not implemented. Passing True raises NotImplementedError.
+        If True, adds for each dressed circuit a reference circuit, stored in `reference_circuits`
+        (one list per target, paired with `circuit_lists`). This doubles the number of circuits.
+        With references, :class:`DFE` also reports a reference-corrected fidelity.
     """
     def __init__(self, pspec, circuits, clifford_compilations, num_samples,
                  descriptor='A DFE experiment', add_default_protocol=False, seed=None,
@@ -95,6 +98,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
         circuit_lists = []
         measurements = []
         signs = []
+        reference_circuits = [] if create_same_measurement_reference else None
 
         if seed is None:
             self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
@@ -108,11 +112,17 @@ class DFEDesign(_vb.BenchmarkingDesign):
             dfe_circuits_for_c = []
             measurements_for_c = []
             signs_for_c = []
+            references_for_c = []
             for sample_num in range(num_samples):
-                dfe_circ, meas, sign = _dfe.sample_dfe_circuit(
+                sampled = _dfe.sample_dfe_circuit(
                     pspec, c, clifford_compilations,
                     create_same_measurement_reference=create_same_measurement_reference,
                     seed=rand_state.randint(0, 2**31), fixed_identity_locations=mask)
+                if create_same_measurement_reference:
+                    dfe_circ, meas, sign, ref_circ = sampled
+                    references_for_c.append(ref_circ)
+                else:
+                    dfe_circ, meas, sign = sampled
                 dfe_circuits_for_c.append(dfe_circ)
                 measurements_for_c.append(meas)
                 signs_for_c.append(int(sign))
@@ -120,9 +130,11 @@ class DFEDesign(_vb.BenchmarkingDesign):
             circuit_lists.append(dfe_circuits_for_c)
             measurements.append(measurements_for_c)
             signs.append(signs_for_c)
+            if create_same_measurement_reference:
+                reference_circuits.append(references_for_c)
 
         self._init_foundation(circuit_lists, measurements, signs, num_samples, descriptor,
-                              add_default_protocol, pinned)
+                              add_default_protocol, pinned, reference_circuits=reference_circuits)
 
     @staticmethod
     def _resolve_identity_masks(circuits, fixed_identity_locations):
@@ -151,9 +163,12 @@ class DFEDesign(_vb.BenchmarkingDesign):
         return list(fixed_identity_locations)
 
     def _init_foundation(self, circuit_lists, measurements, signs, num_samples, descriptor,
-                         add_default_protocol, has_fixed_identity_locations, depths=None, qubit_labels=None):
+                         add_default_protocol, has_fixed_identity_locations, depths=None, qubit_labels=None,
+                         reference_circuits=None):
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
+        if reference_circuits is not None:
+            self.paired_with_circuit_attrs.append("reference_circuits")
 
         # By default the "depths" are the target indices 0..len-1, and the qubit labels are the
         # first circuit's line labels; map_qubit_labels passes both explicitly.
@@ -167,6 +182,13 @@ class DFEDesign(_vb.BenchmarkingDesign):
         self.circuits_per_depth = num_samples
         self.descriptor = descriptor
         self.has_fixed_identity_locations = bool(has_fixed_identity_locations)
+        self.reference_circuits = reference_circuits
+        if reference_circuits is not None:
+            # BenchmarkingDesign's 'json' type can't serialize circuits.
+            self.auxfile_types['reference_circuits'] = 'list:text-circuit-list'
+            # Like the dressed circuits, the references aren't deduplicated.
+            self.all_circuits_needing_data = list(self.all_circuits_needing_data) \
+                + [c for ref_list in reference_circuits for c in ref_list]
 
         if add_default_protocol:
             self.add_default_protocol(DFE(name='DFE'))
@@ -176,8 +198,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
         The new design keeps the depths (target indices), measurements, signs,
-        `has_fixed_identity_locations` and `seed` of this one. Like the RB designs, it has no
-        default protocols: use `add_default_protocol(DFE(name='DFE'))` to get one.
+        `has_fixed_identity_locations`, `seed` and reference circuits (mapped) of this one.
+        Like the RB designs, it has no default protocols: use `add_default_protocol(DFE(name='DFE'))` to get one.
 
         Parameters
         ----------
@@ -192,6 +214,9 @@ class DFEDesign(_vb.BenchmarkingDesign):
         """
         mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
                                 for circuit_list in self.circuit_lists]
+        references = getattr(self, 'reference_circuits', None)
+        if references is not None:
+            references = [[c.map_state_space_labels(mapper) for c in ref_list] for ref_list in references]
         # Measurements are indexed by position in each circuit's line labels, so they stay valid.
         # The getattrs let designs saved before these attributes existed be mapped too.
         ret = self.__class__.__new__(self.__class__)
@@ -202,7 +227,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
                              add_default_protocol=False,
                              has_fixed_identity_locations=getattr(self, 'has_fixed_identity_locations', False),
                              depths=list(self.depths),
-                             qubit_labels=self._mapped_qubit_labels(mapper))
+                             qubit_labels=self._mapped_qubit_labels(mapper),
+                             reference_circuits=references)
         ret.seed = getattr(self, 'seed', None)
         return ret
 
@@ -265,13 +291,30 @@ class DFE(_vb.SummaryStatistics):
     measurement-basis layers that dressing adds, and in state preparation and readout, are
     included.
 
+    For a design with reference circuits (`create_same_measurement_reference=True`), the results
+    also hold `reference_corrected_fidelities` and `reference_corrected_standard_errors`. With
+    `E` the dressed energies and `R` the energies of their paired references, the estimate is
+    the process fidelity of `p = mean(E) / mean(R)`, with no square root. The vanilla fields
+    ignore the references. Errors in the shared final layer and in readout divide out of each
+    pair. This is exact for symmetric (bit-flip) readout error; asymmetric readout
+    (`P(1|0) != P(0|1)`) leaves a residual of the order of their difference, of either sign.
+    State-preparation errors, and errors in the preparation layer, divide out only partly,
+    because the reference prepares a stabilizer state of the image of the sampled Pauli rather
+    than that Pauli's own state. The ratio of means weights each pair by its reference energy,
+    which overstates the fidelity slightly under large readout error. Values above 1 or below 0
+    aren't clamped, and a non-positive mean reference energy gives NaN with a warning. The
+    standard error is the delta method's for the ratio of paired means,
+    `(1 - 4^-n) std(E - p R) / (sqrt(K) mean(R))`, and has the same caveats as the vanilla one,
+    including the undercount when dressed or reference circuits repeat.
+
     Designs that aren't :class:`DFEDesign` objects are refused with TypeError, since other
     benchmarking designs (e.g. `BinaryRBDesign`) carry similar attributes but would give
     meaningless numbers. Designs built with `fixed_identity_locations` are refused with
     ValueError, because their sampled Paulis have fixed support and the process-fidelity
     estimate would be biased. ValueError is also raised for data with no dataset, for a dataset
-    that lacks counts for some dressed circuit (missing or zero-count rows), and for a design
-    whose `measurements` or `signs` don't line up with its circuit lists.
+    that lacks counts for some dressed or reference circuit (missing or zero-count rows), and for
+    a design whose `measurements`, `signs` or reference circuits don't line up with its circuit
+    lists.
 
     Parameters
     ----------
@@ -315,14 +358,21 @@ class DFE(_vb.SummaryStatistics):
 
         summary = self._compute_summary_statistics(data, energy=True)
 
+        references = getattr(design, 'reference_circuits', None)
         fidelities = []
         standard_errors = []
+        ref_fidelities = [] if references is not None else None
+        ref_standard_errors = [] if references is not None else None
+        nonpositive = []
         for i, d in enumerate(design.depths):
             e = _np.asarray(summary['energies'][d], dtype=float)
             K = len(e)
             if K == 0:
                 fidelities.append(float('nan'))
                 standard_errors.append(float('nan'))
+                if references is not None:
+                    ref_fidelities.append(float('nan'))
+                    ref_standard_errors.append(float('nan'))
                 continue
             # Each target's Paulis are drawn over its own line_labels, which can be narrower than
             # design.qubit_labels; a measurement has one entry per qubit of its target.
@@ -333,19 +383,44 @@ class DFE(_vb.SummaryStatistics):
             else:
                 standard_errors.append(float('nan'))
 
-        return DFEResults(data, self, fidelities, standard_errors)
+            if references is not None:
+                r = _np.array([_vb._avg_energy(data.dataset[c], m, s)
+                               for c, m, s in zip(references[i], design.measurements[i], design.signs[i])],
+                              dtype=float)
+                if not r.mean() > 0:
+                    ref_fidelities.append(float('nan'))
+                    ref_standard_errors.append(float('nan'))
+                    nonpositive.append(d)
+                    continue
+                p = e.mean() / r.mean()
+                ref_fidelities.append(float(_mcfe.polarization_to_fidelity(p, n)))
+                if K >= 2:
+                    ref_standard_errors.append(float(
+                        (1 - 4.0**-n) * _np.std(e - p * r, ddof=1) / (_np.sqrt(K) * r.mean())))
+                else:
+                    ref_standard_errors.append(float('nan'))
+
+        if nonpositive:
+            _warnings.warn(f"Targets {nonpositive} have a non-positive mean reference energy, so their "
+                           "reference-corrected fidelities and standard errors are NaN.", UserWarning)
+
+        return DFEResults(data, self, fidelities, standard_errors, ref_fidelities, ref_standard_errors)
 
     @staticmethod
     def _check_alignment(design):
         # The paired measurements and signs must match the circuit lists entry for entry, or the
         # energies would be computed against the wrong measurements.
         n_lists = len(design.circuit_lists)
-        aligned = (len(design.depths) == n_lists and len(design.measurements) == n_lists
+        references = getattr(design, 'reference_circuits', None)
+        refs_aligned = references is None or (
+            len(references) == n_lists and all(len(r) == len(cl) for cl, r in zip(design.circuit_lists, references)))
+        aligned = (refs_aligned and len(design.depths) == n_lists and len(design.measurements) == n_lists
                    and len(design.signs) == n_lists
                    and all(len(m) == len(cl) and len(s) == len(cl)
                            for cl, m, s in zip(design.circuit_lists, design.measurements, design.signs)))
         if not aligned:
-            raise ValueError("This design's depths, measurements or signs don't line up with its circuit lists. "
+            raise ValueError("This design's depths, measurements, signs or reference circuits don't line up "
+                             "with its circuit lists. "
                              "A truncation that removes every dressed circuit of some target causes this (a known "
                              "bug in BenchmarkingDesign's truncation). Whole targets can be dropped safely with "
                              "truncate_to_lists.")
@@ -355,6 +430,9 @@ class DFE(_vb.SummaryStatistics):
         if ds is None:
             raise ValueError("The data has no dataset; DFE needs counts for every dressed circuit of the design.")
         distinct = set(c for circuit_list in design.circuit_lists for c in circuit_list)
+        references = getattr(design, 'reference_circuits', None)
+        if references is not None:
+            distinct.update(c for ref_list in references for c in ref_list)
         n_missing = 0
         n_zero = 0
         for c in distinct:
@@ -363,11 +441,16 @@ class DFE(_vb.SummaryStatistics):
             elif ds[c].total == 0:
                 n_zero += 1
         if n_missing + n_zero > 0:
-            raise ValueError(f"The dataset lacks counts for {n_missing + n_zero} of the design's {len(distinct)} "
-                             f"distinct dressed circuits ({n_missing} missing, {n_zero} with zero counts). To "
-                             "analyze the available data, remove any zero-count rows from the dataset, then "
-                             "truncate the design with design.truncate_to_available_data(dataset). Truncation "
-                             "alone doesn't drop zero-count rows, because the dataset's keys include them.")
+            msg = (f"The dataset lacks counts for {n_missing + n_zero} of the design's {len(distinct)} "
+                   f"distinct circuits ({n_missing} missing, {n_zero} with zero counts). To "
+                   "analyze the available data, remove any zero-count rows from the dataset, then "
+                   "truncate the design with design.truncate_to_available_data(dataset). Truncation "
+                   "alone doesn't drop zero-count rows, because the dataset's keys include them.")
+            if references is not None:
+                msg += (" Truncation filters on the dressed circuits, so it keeps a dressed circuit whose "
+                        "reference lacks counts: remove that dressed circuit's row from the dataset "
+                        "before truncating.")
+            raise ValueError(msg)
 
 
 class DFEResults(_proto.ProtocolResults):
@@ -395,9 +478,24 @@ class DFEResults(_proto.ProtocolResults):
 
     standard_errors : list of float
         The standard error of each estimate (NaN when it can't be computed).
+
+    reference_corrected_fidelities : list of float, optional
+        The reference-corrected process fidelity of each target circuit, entry `i` belonging
+        to target `depths[i]` like `fidelities`. None when the design has no reference circuits.
+
+    reference_corrected_standard_errors : list of float, optional
+        The delta-method standard error of each reference-corrected fidelity (NaN when it
+        can't be computed). None when the design has no reference circuits.
     """
 
-    def __init__(self, data, protocol_instance, fidelities, standard_errors):
+    def __init__(self, data, protocol_instance, fidelities, standard_errors,
+                 reference_corrected_fidelities=None, reference_corrected_standard_errors=None):
         super().__init__(data, protocol_instance)
         self.fidelities = [float(f) for f in fidelities]
         self.standard_errors = [float(s) for s in standard_errors]
+        self.reference_corrected_fidelities = (
+            None if reference_corrected_fidelities is None
+            else [float(f) for f in reference_corrected_fidelities])
+        self.reference_corrected_standard_errors = (
+            None if reference_corrected_standard_errors is None
+            else [float(s) for s in reference_corrected_standard_errors])

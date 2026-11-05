@@ -91,3 +91,46 @@ class DFEDressingTest(BaseCase):
             with self.assertRaises(ValueError):
                 _dfe.sample_dfe_circuit(self.pspec, self.target, self.compilations, seed=0,
                                         fixed_identity_locations=locs)
+
+    def test_matches_head_output_and_reference_keeps_draws(self):
+        golden = {
+            0: ('[Gypi2:Q0Gympi2:Q1]Gxmpi2:Q0Gxmpi2:Q0[Gxpi2:Q0Gypi2:Q1]Gcphase:Q0:Q1Gympi2:Q0[]@(Q0,Q1,Q2)',
+                ['Z', 'I', 'I'], 1),
+            1: ('[Gympi2:Q0Gxpi2:Q1Gxpi2:Q2][Gympi2:Q1Gympi2:Q2][Gxpi2:Q0Gypi2:Q1]Gcphase:Q0:Q1Gympi2:Q0'
+                '[Gypi2:Q0Gypi2:Q1Gypi2:Q2][Gxpi2:Q0Gxmpi2:Q1Gxpi2:Q2]Gxmpi2:Q1@(Q0,Q1,Q2)',
+                ['Z', 'Z', 'Z'], 1),
+            2: ('[Gxpi2:Q1Gxmpi2:Q2][Gympi2:Q1Gxmpi2:Q2][Gxpi2:Q0Gypi2:Q1]Gcphase:Q0:Q1Gympi2:Q0'
+                '[Gypi2:Q0Gypi2:Q1][Gxmpi2:Q0Gxpi2:Q1]Gxmpi2:Q0@(Q0,Q1,Q2)',
+                ['Z', 'Z', 'Z'], -1),
+        }
+        for seed, (circ_str, meas, sign) in golden.items():
+            plain = _dfe.sample_dfe_circuit(self.pspec, self.target, self.compilations, seed=seed)
+            self.assertEqual((plain[0].str, plain[1], plain[2]), (circ_str, meas, sign))
+            with_ref = _dfe.sample_dfe_circuit(self.pspec, self.target, self.compilations, seed=seed,
+                                               create_same_measurement_reference=True)
+            self.assertEqual(len(with_ref), 4)
+            self.assertEqual((with_ref[0].str, with_ref[1], with_ref[2]), (circ_str, meas, sign))
+
+    def test_reference_circuit_form(self):
+        model = pygsti.models.create_crosstalk_free_model(self.pspec)
+        target_layers = self.target.layertup
+        for locs in (None, [False, False, True]):
+            for seed in range(10):
+                dressed, meas, sign, ref = _dfe.sample_dfe_circuit(
+                    self.pspec, self.target, self.compilations, seed=seed, fixed_identity_locations=locs,
+                    create_same_measurement_reference=True)
+                self.assertEqual(ref.line_labels, dressed.line_labels)
+                self.assertEqual(ref.two_q_gate_count(), 0)
+
+                expval = 0.0
+                for outcome, prob in model.probabilities(ref).items():
+                    parity = sum(int(outcome[0][i]) for i, m in enumerate(meas) if m == 'Z') % 2
+                    expval += prob * (-1) ** parity
+                self.assertAlmostEqual(expval, sign, delta=1e-6)
+
+                # The final layer is whatever follows the target inside the dressed circuit.
+                tup = dressed.layertup
+                start = next(i for i in range(len(tup) - len(target_layers) + 1)
+                             if tup[i:i + len(target_layers)] == target_layers)
+                final = tup[start + len(target_layers):]
+                self.assertEqual(ref.layertup[len(ref.layertup) - len(final):], final)

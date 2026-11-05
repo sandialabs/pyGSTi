@@ -82,9 +82,53 @@ class DFEDesignTest(BaseCase):
             self.make_design(circuits=[self.c_a, self.c_b, self.c_a], seed=0,
                              fixed_identity_locations=[False, False, True])
 
-    def test_create_same_measurement_reference_not_implemented(self):
-        with self.assertRaises(NotImplementedError):
-            self.make_design(seed=0, create_same_measurement_reference=True)
+    def test_reference_design_pairs_and_keeps_dressed_circuits(self):
+        plain = self.make_design(seed=3)
+        design = self.make_design(seed=3, create_same_measurement_reference=True)
+        self.assertEqual(design.circuit_lists, plain.circuit_lists)
+        self.assertEqual(design.measurements, plain.measurements)
+        self.assertEqual(design.signs, plain.signs)
+
+        self.assertEqual(len(design.reference_circuits), 2)
+        for cl, refs in zip(design.circuit_lists, design.reference_circuits):
+            self.assertEqual(len(refs), len(cl))
+        dressed = [c for cl in design.circuit_lists for c in cl]
+        references = [c for refs in design.reference_circuits for c in refs]
+        self.assertEqual(list(design.all_circuits_needing_data), dressed + references)
+        self.assertIn('reference_circuits', design.paired_with_circuit_attrs)
+
+        self.assertIsNone(plain.reference_circuits)
+        self.assertNotIn('reference_circuits', plain.paired_with_circuit_attrs)
+        self.assertEqual(list(plain.all_circuits_needing_data), dressed)
+
+    @with_temp_path
+    def test_references_survive_round_trip_map_and_truncation(self, root):
+        design = self.make_design(seed=3, create_same_measurement_reference=True)
+        design.write(root)
+        loaded = pygsti.io.read_edesign_from_dir(root)
+        self.assertEqual([list(r) for r in loaded.reference_circuits],
+                         [list(r) for r in design.reference_circuits])
+
+        mapper = {'Q0': 'Q5', 'Q1': 'Q6', 'Q2': 'Q7'}
+        mapped = design.map_qubit_labels(mapper)
+        self.assertEqual([list(r) for r in mapped.reference_circuits],
+                         [[c.map_state_space_labels(mapper) for c in refs] for refs in design.reference_circuits])
+        back = mapped.map_qubit_labels({v: k for k, v in mapper.items()})
+        self.assertEqual([list(r) for r in back.reference_circuits],
+                         [list(r) for r in design.reference_circuits])
+
+        pairs = {(d, r) for cl, refs in zip(design.circuit_lists, design.reference_circuits)
+                 for d, r in zip(cl, refs)}
+        keep = [cl[0] for cl in design.circuit_lists] + [c for refs in design.reference_circuits for c in refs]
+        truncated = design.truncate_to_circuits(keep)
+        for cl, refs in zip(truncated.circuit_lists, truncated.reference_circuits):
+            self.assertGreaterEqual(len(cl), 1)
+            self.assertEqual(len(cl), len(refs))
+            for d, r in zip(cl, refs):
+                self.assertIn((d, r), pairs)
+
+        only_1 = design.truncate_to_lists([1])
+        self.assertEqual([list(r) for r in only_1.reference_circuits], [list(design.reference_circuits[1])])
 
     @with_temp_path
     def test_seed_recorded(self, root):
@@ -125,6 +169,11 @@ class DFEProtocolTest(BaseCase):
         # Dressing compiles only to single-qubit gates, so this error touches only the targets' CZs.
         cls.noisy = pygsti.models.create_crosstalk_free_model(
             cls.pspec, stochastic_error_probs={'Gcphase': [0.1 / 15] * 15})
+        # A symmetric 2% bit flip on each qubit before measurement.
+        cls.readout = pygsti.models.create_crosstalk_free_model(
+            cls.pspec, stochastic_error_probs={'povm': [0.02, 0, 0]})
+        cls.noisy_readout = pygsti.models.create_crosstalk_free_model(
+            cls.pspec, stochastic_error_probs={'Gcphase': [0.1 / 15] * 15, 'povm': [0.02, 0, 0]})
 
     def make_design(self, num_samples, circuits=None, **kwargs):
         circuits = [self.c_a, self.c_c] if circuits is None else circuits
@@ -184,7 +233,7 @@ class DFEProtocolTest(BaseCase):
             results = _dfe.DFE().run(self.make_data(design, self.ideal, 10, seed=1))
             with self.assertWarnsRegex(UserWarning, "differ from the design's qubit_labels"):
                 df = results.to_dataframe()
-            self.assertEqual(len(df), 2)
+            self.assertEqual(len(df), 4)
 
         design = self.make_design(2, seed=0)
         results = _dfe.DFE().run(self.make_data(design, self.ideal, 10, seed=1))
@@ -272,9 +321,11 @@ class DFEProtocolTest(BaseCase):
         old = copy.deepcopy(design)
         del old.seed
         del old.has_fixed_identity_locations
+        del old.reference_circuits
         mapped_old = old.map_qubit_labels(mapper)
         self.assertIsNone(mapped_old.seed)
         self.assertFalse(mapped_old.has_fixed_identity_locations)
+        self.assertIsNone(mapped_old.reference_circuits)
 
     @with_temp_path
     def test_design_saved_without_new_attributes_loads_and_runs(self, root):
@@ -282,12 +333,15 @@ class DFEProtocolTest(BaseCase):
         design = self.make_design(3, seed=0)
         del design.has_fixed_identity_locations
         del design.seed
+        del design.reference_circuits
         self.make_data(design, self.ideal, 10, seed=1).write(root)
 
         loaded = pygsti.io.read_data_from_dir(root)
         self.assertFalse(hasattr(loaded.edesign, 'has_fixed_identity_locations'))
-        for f in _dfe.DFE().run(loaded).fidelities:
+        results = _dfe.DFE().run(loaded)
+        for f in results.fidelities:
             self.assertAlmostEqual(f, 1.0, delta=1e-9)
+        self.assertIsNone(results.reference_corrected_fidelities)
 
     def test_rejects_partial_data(self):
         design = self.make_design(5, seed=0)
@@ -322,6 +376,143 @@ class DFEProtocolTest(BaseCase):
         short_signs.signs[0] = short_signs.signs[0][:-1]
         with self.assertRaisesRegex(ValueError, "don't line up with its circuit lists"):
             _dfe.DFE().run(pygsti.protocols.ProtocolData(short_signs, ds))
+
+    def test_reference_checks_cover_references(self):
+        design = self.make_design(5, seed=0, create_same_measurement_reference=True)
+        ds = self.make_data(design, self.noisy, 100, seed=1).dataset
+        circuits = list(dict.fromkeys(design.all_circuits_needing_data))
+        ref = design.reference_circuits[0][0]
+        self.assertNotIn(ref, design.circuit_lists[0])
+
+        without = [c for c in circuits if c != ref]
+        with self.assertRaisesRegex(ValueError, r'\(1 missing, 0 with zero counts\)'):
+            _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds.truncate(without)))
+
+        ds_zero = pygsti.data.DataSet(outcome_labels=ds.outcome_labels)
+        for c in circuits:
+            ds_zero.add_count_dict(c, {} if c == ref else ds[c].counts)
+        ds_zero.done_adding_data()
+        with self.assertRaisesRegex(ValueError, r'\(0 missing, 1 with zero counts\)'):
+            _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds_zero))
+
+        short = copy.deepcopy(design)
+        short.reference_circuits[0] = short.reference_circuits[0][:-1]
+        with self.assertRaisesRegex(ValueError, "don't line up with its circuit lists"):
+            _dfe.DFE().run(pygsti.protocols.ProtocolData(short, ds))
+
+    def test_reference_corrected_noiseless_and_readout_only(self):
+        design = self.make_design(20, seed=0, create_same_measurement_reference=True)
+        results = _dfe.DFE().run(self.make_data(design, self.ideal, 100, seed=1))
+        for f, se in zip(results.reference_corrected_fidelities, results.reference_corrected_standard_errors):
+            self.assertAlmostEqual(f, 1.0, delta=1e-9)
+            self.assertAlmostEqual(se, 0.0, delta=1e-9)
+
+        design = self.make_design(100, seed=0, create_same_measurement_reference=True)
+        data = self.make_data(design, self.readout, 1000, seed=1)
+        results = _dfe.DFE().run(data)
+        for t in range(2):
+            fc, sec = results.reference_corrected_fidelities[t], results.reference_corrected_standard_errors[t]
+            self.assertLessEqual(abs(fc - 1), 4 * sec)
+            self.assertGreater(sec, 0)
+            self.assertLess(results.fidelities[t], 1 - 4 * results.standard_errors[t])
+
+        plain = self.make_design(100, seed=0)
+        expected = _dfe.DFE().run(pygsti.protocols.ProtocolData(plain, data.dataset))
+        self.assertEqual(results.fidelities, expected.fidelities)
+        self.assertEqual(results.standard_errors, expected.standard_errors)
+
+    def test_reference_corrected_matches_true_fidelity(self):
+        design = self.make_design(200, seed=0, create_same_measurement_reference=True)
+        results = _dfe.DFE().run(self.make_data(design, self.noisy_readout, 500, seed=100))
+        expected = [pygsti.tools.entanglement_fidelity(self.noisy.sim.product(c), self.ideal.sim.product(c), 'pp')
+                    for c in (self.c_a, self.c_c)]
+        for fc, sec, f_true in zip(results.reference_corrected_fidelities,
+                                   results.reference_corrected_standard_errors, expected):
+            self.assertGreater(sec, 0)
+            self.assertLess(sec, 0.005)
+            self.assertLessEqual(abs(fc - f_true), 4 * sec)
+
+    def test_nonpositive_reference_mean_gives_nan_and_warns(self):
+        design = self.make_design(5, seed=0, create_same_measurement_reference=True)
+        self.assertFalse(set(design.reference_circuits[0]) & set(design.reference_circuits[1]))
+        ds = self.make_data(design, self.ideal, 100, seed=1).dataset
+        bad = {}
+        for ref, meas, sign in zip(design.reference_circuits[0], design.measurements[0], design.signs[0]):
+            n = len(meas)
+            if sign == 1:
+                out = ''.join('1' if k == meas.index('Z') else '0' for k in range(n))
+            else:
+                out = '0' * n
+            bad[ref] = out
+        ds_bad = pygsti.data.DataSet(outcome_labels=ds.outcome_labels)
+        for c in dict.fromkeys(design.all_circuits_needing_data):
+            ds_bad.add_count_dict(c, {(bad[c],): 100} if c in bad else ds[c].counts)
+        ds_bad.done_adding_data()
+
+        with self.assertWarnsRegex(UserWarning, 'non-positive mean reference energy'):
+            results = _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds_bad))
+        self.assertTrue(math.isnan(results.reference_corrected_fidelities[0]))
+        self.assertTrue(math.isnan(results.reference_corrected_standard_errors[0]))
+        self.assertAlmostEqual(results.reference_corrected_fidelities[1], 1.0, delta=1e-9)
+        expected = _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds))
+        self.assertEqual(results.fidelities, expected.fidelities)
+        self.assertEqual(results.standard_errors, expected.standard_errors)
+
+    def test_reference_standard_error_matches_replica_spread(self):
+        fidelities, standard_errors = [], []
+        for r in range(30):
+            design = self.make_design(50, seed=r, create_same_measurement_reference=True)
+            data = self.make_data(design, self.noisy_readout, 200, seed=1000 + r)
+            results = _dfe.DFE().run(data)
+            fidelities.append(results.reference_corrected_fidelities)
+            standard_errors.append(results.reference_corrected_standard_errors)
+        fidelities = np.array(fidelities)
+        standard_errors = np.array(standard_errors)
+        for t in range(2):
+            ratio = standard_errors[:, t].mean() / fidelities[:, t].std(ddof=1)
+            self.assertGreaterEqual(ratio, 0.7, msg='target %d' % t)
+            self.assertLessEqual(ratio, 1.4, msg='target %d' % t)
+
+    def test_reference_standard_error_uses_the_pairs(self):
+        # Each reference reads exactly like its dressed circuit, so every pair's energies agree.
+        design = self.make_design(10, seed=0, create_same_measurement_reference=True)
+        dressed = [c for cl in design.circuit_lists for c in cl]
+        references = [c for refs in design.reference_circuits for c in refs]
+        self.assertEqual(len(set(references)), len(references))
+        self.assertFalse(set(references) & set(dressed))
+        ds = self.make_data(design, self.noisy, 100, seed=1).dataset
+        ds_same = pygsti.data.DataSet(outcome_labels=ds.outcome_labels)
+        for c in dict.fromkeys(dressed):
+            ds_same.add_count_dict(c, ds[c].counts)
+        for cl, refs in zip(design.circuit_lists, design.reference_circuits):
+            for d, r in zip(cl, refs):
+                ds_same.add_count_dict(r, ds[d].counts)
+        ds_same.done_adding_data()
+
+        results = _dfe.DFE().run(pygsti.protocols.ProtocolData(design, ds_same))
+        for t in range(2):
+            self.assertGreater(results.standard_errors[t], 0)
+            self.assertAlmostEqual(results.reference_corrected_fidelities[t], 1.0, delta=1e-9)
+            self.assertAlmostEqual(results.reference_corrected_standard_errors[t], 0.0, delta=1e-9)
+
+    @with_temp_path
+    def test_reference_results_round_trip_and_map(self, root):
+        design = self.make_design(5, seed=0, create_same_measurement_reference=True, add_default_protocol=True)
+        data = self.make_data(design, self.noisy_readout, 100, seed=1)
+        results_dir = pygsti.protocols.run_default_protocols(data)
+        results = results_dir.for_protocol['DFE']
+        results_dir.write(root)
+        loaded = pygsti.io.read_results_from_dir(root, name='DFE')
+        self.assertEqual(loaded.reference_corrected_fidelities, results.reference_corrected_fidelities)
+        self.assertEqual(loaded.reference_corrected_standard_errors, results.reference_corrected_standard_errors)
+        self.assertFalse(any(math.isnan(x) for x in loaded.reference_corrected_fidelities
+                             + loaded.reference_corrected_standard_errors))
+
+        mapper = {'Q0': 'Q5', 'Q1': 'Q6', 'Q2': 'Q7'}
+        back = design.map_qubit_labels(mapper).map_qubit_labels({v: k for k, v in mapper.items()})
+        again = _dfe.DFE().run(pygsti.protocols.ProtocolData(back, data.dataset))
+        self.assertEqual(again.reference_corrected_fidelities, results.reference_corrected_fidelities)
+        self.assertEqual(again.reference_corrected_standard_errors, results.reference_corrected_standard_errors)
 
     def test_truncation_emptying_a_target_is_never_misaligned(self):
         design = self.make_design(5, circuits=[self.c_a, self.c_c, self.c_a], seed=0)

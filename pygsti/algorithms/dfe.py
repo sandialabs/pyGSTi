@@ -44,7 +44,10 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
         into the native gates of `pspec`.
 
     create_same_measurement_reference : bool, optional
-        Not implemented. Passing True raises NotImplementedError.
+        If True, also returns a reference circuit: a random stabilizer state of the image of
+        the sampled Pauli under `circuit`, followed by the same final layer as the dressed
+        circuit. It has the dressed circuit's measurement and ideal sign, and no target
+        circuit in between. The dressed circuit is the same with or without this option.
 
     seed : int, optional
         A seed for the random number generator, for reproducible sampling.
@@ -72,10 +75,10 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
 
     int
         The sign, +1 or -1, of the expected value of the measurement for an ideal circuit.
-    """
-    if create_same_measurement_reference:
-        raise NotImplementedError("create_same_measurement_reference is not implemented!")
 
+    Circuit
+        The reference circuit, only returned when `create_same_measurement_reference` is True.
+    """
     qubit_labels = circuit.line_labels
     n = len(qubit_labels)
 
@@ -145,4 +148,26 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
     full_circuit.done_editing()
     sign = _rc._determine_sign(s_outputstate, p_outputstate, measurement)
 
-    return full_circuit, measurement, sign
+    if not create_same_measurement_reference:
+        return full_circuit, measurement, sign
+
+    # A stabilizer state of Q = C P C^-1, then the dressed circuit's final layer. Drawn after every
+    # other random number, so the dressed circuit is the same with or without the reference.
+    ref_seed = rand_state.randint(0, 2**31)
+    ref_sign = 1
+    for _ in range(2):
+        s_ref, p_ref, _, _, ref_prep = _rc._sample_stabilizer(
+            pauli, ref_sign, clifford_compilations, qubit_labels, seed=ref_seed,
+            randomize_for_identity=False)
+        s_ref, p_ref = _symp.apply_clifford_to_stabilizer_state(s_stab, p_stab, s_ref, p_ref)
+        if _rc._determine_sign(s_ref, p_ref, measurement) == sign:
+            break
+        # The final layer maps Q to the measured Z string with a fixed phase, so the opposite
+        # prepared sign gives the opposite final sign.
+        ref_sign = -1
+
+    reference_circuit = ref_prep.copy(editable=True)
+    reference_circuit.append_circuit_inplace(stab_circuit)
+    reference_circuit.done_editing()
+
+    return full_circuit, measurement, sign, reference_circuit
