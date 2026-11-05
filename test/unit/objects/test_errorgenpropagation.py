@@ -1,5 +1,5 @@
 from ..util import BaseCase
-from ..tools.errgenprop_test_utils import parallel_path_exercised
+from ..tools.errorgenpropagation.errgenprop_test_utils import parallel_path_exercised
 from pygsti.circuits import Circuit
 from pygsti.algorithms.randomcircuit import create_random_circuit, find_all_sets_of_compatible_two_q_gates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
@@ -7,8 +7,8 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.models.modelconstruction import create_crosstalk_free_model, create_cloud_crosstalk_model
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
-from pygsti.tools import errgenproptools as _eprop
-from pygsti.tools import errgenpolytools as _epoly
+from pygsti.tools import errorgenpropagation as _eprop
+from pygsti.tools.errorgenpropagation import polynomials as _epoly
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product

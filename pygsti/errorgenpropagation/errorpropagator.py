@@ -28,7 +28,7 @@ from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitE
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
-import pygsti.tools.errgenproptools as _eprop
+import pygsti.tools.errorgenpropagation as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot

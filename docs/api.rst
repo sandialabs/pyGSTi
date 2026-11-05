@@ -370,10 +370,9 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.compilationtools
    pygsti.tools.dataframetools
    pygsti.tools.edesigntools
-   pygsti.tools.errgenproptools
+   pygsti.tools.errorgenpropagation
    pygsti.tools.exceptions
    pygsti.tools.fastcalc
-   pygsti.tools.fasterrgencalc
    pygsti.tools.fogitools
    pygsti.tools.gatetools
    pygsti.tools.graphs

@@ -75,7 +75,7 @@ def _slow_bel_product_str(bel_str_1: str, bel_str_2: str) -> str:
 # on the strings' ASCII buffers, ~0.04-0.09 us per product at 2-100 qubits versus 0.3-0.5 us for
 # the pure-python version); fall back to the latter otherwise.
 try:
-    from pygsti.tools.fasterrgencalc import fast_bel_product_str as bel_product_str
+    from pygsti.tools.errorgenpropagation.fasterrgencalc import fast_bel_product_str as bel_product_str
 except ImportError:
     bel_product_str = _slow_bel_product_str
 
@@ -99,7 +99,7 @@ def _canonical_bel_strings(errorgen_type: str, bel_strs: Sequence[str]) -> tuple
     The canonical form of the basis element label strings of an error generator label, and the
     sign the label's rate picks up in going to it. This is the single definition of the order
     used by `LocalStimErrorgenLabel`, `bel_less_than` and the emitters of
-    `pygsti.tools.errgenproptools`: the two strings of a 'C' or 'A' label sorted as python
+    `pygsti.tools.errorgenpropagation`: the two strings of a 'C' or 'A' label sorted as python
     strings ('I' < 'X' < 'Y' < 'Z'). 'H' and 'S' labels, and 'C'/'A' labels already in order,
     are returned unchanged with sign +1. A swap is free for C and negates the rate for A:
 
@@ -190,7 +190,7 @@ def canonicalize_errorgen_layer(errorgen_layer: dict, sslbls: Optional[Sequence]
 
 
 # Fixed numbering of the error generator sectors. `LocalStimErrorgenLabel.type_idx` is the
-# index of a label's `errorgen_type` in this table; `pygsti.tools.errgenproptools` uses
+# index of a label's `errorgen_type` in this table; `pygsti.tools.errorgenpropagation` uses
 # `4*type_idx_1 + type_idx_2` to index its per-type-pair dispatch tables for the error
 # generator commutator and composition, so the order here and there must agree.
 _ERRORGEN_TYPE_INDICES: dict[str, int] = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
@@ -217,7 +217,7 @@ def _slow_support_mask(bel_strings: tuple[str, ...]) -> int:
 # Use the cython implementation of the mask construction when the extensions are built
 # (2-8x faster than the pure-python version); fall back to the latter otherwise.
 try:
-    from pygsti.tools.fasterrgencalc import fast_support_mask as support_mask_from_strings
+    from pygsti.tools.errorgenpropagation.fasterrgencalc import fast_support_mask as support_mask_from_strings
 except ImportError:
     support_mask_from_strings = _slow_support_mask
 
@@ -247,7 +247,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     Besides the `errorgen_type` string, each label carries the integer `type_idx`
     (`_ERRORGEN_TYPE_INDICES[errorgen_type]`, i.e. H=0, S=1, C=2, A=3) that the error generator
-    commutator and composition routines in `pygsti.tools.errgenproptools` use to index their
+    commutator and composition routines in `pygsti.tools.errorgenpropagation` use to index their
     per-type-pair dispatch tables.
 
     The two basis element labels of a 'C' or 'A' label must always be given in canonical order
@@ -372,7 +372,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             `errorgen_type` and `basis_element_labels` of this label is used; it is constructed lazily,
             on the first access of the `initial_label` property, since the vast majority of labels
             (e.g. the intermediate terms produced by the commutator and composition routines in
-            `pygsti.tools.errgenproptools`) never have it read.
+            `pygsti.tools.errorgenpropagation`) never have it read.
 
         label : str, optional (default None)
             An optional label string which is included when printing the string representation of this
@@ -420,7 +420,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         the basis element labels acts non-trivially on qubit q. Two error generators whose
         masks have no common bit (`m1 & m2 == 0`) act on disjoint sets of qubits and hence
         commute exactly; the layerwise commutator accumulation in
-        `pygsti.tools.errgenproptools` uses this to skip such pairs, which are the vast
+        `pygsti.tools.errorgenpropagation` uses this to skip such pairs, which are the vast
         majority at large qubit counts. Built on first access and cached, since the same
         label is typically tested against many others.
 
