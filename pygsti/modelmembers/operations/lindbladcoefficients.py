@@ -2,6 +2,7 @@ import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
+from scipy.sparse import csgraph as _csgraph
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
@@ -965,6 +966,188 @@ class _CompletedCholesky(_BlockParameterization):
                                   "rather than polynomial term simulation.")
 
 
+class _Contraction(_BlockParameterization):
+    """Sparse CPTP chart K = C (I + H) C that includes zero noise and the PSD boundary.
+
+    C is a real diagonal matrix with C_ii^2 the S coefficients, and H is zero-diagonal
+    Hermitian with entries only on the selected C/A components. K is positive semidefinite
+    exactly when lambda_min(H) >= -1, on each connected component of the C/A graph. The
+    parameters are C_ii and a free H0 with the same support, scaled per component by
+    ``H = g(t) H0``, where ``t = -lambda_min(H0)`` and ``g(t) = 2 / (1 + t^2)``. Since H0
+    has zero trace, t >= 0 with equality only at H0 = 0, and ``-lambda_min(H) = 2t / (1 + t^2)``
+    covers [0, 1]. A scalar scaling preserves every support, so no completion is needed.
+    The boundary ``t = 1`` is a fold. Derivatives of t do not exist where lambda_min(H0)
+    is repeated; there the code uses the derivative along one eigenvector.
+    """
+    name = 'contraction'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels) + len(blk._contraction_terms[0])
+
+    @staticmethod
+    def _component_spectrum(blk, w, component):
+        """Matrix H0 of one component, its lowest eigenpair, and all eigenpairs."""
+        local, terms, li, lj, z = component
+        H0 = _np.zeros((len(local), len(local)), complex)
+        _np.add.at(H0, (li, lj), z * w[terms])
+        _np.add.at(H0, (lj, li), z.conj() * w[terms])
+        evals, evecs = _np.linalg.eigh(H0)
+        return evals, evecs
+
+    @staticmethod
+    def _gauge_derivatives(evals, evecs, component, order):
+        """t = -lambda_min(H0) and its first (and second) derivatives in the component's terms."""
+        _, terms, li, lj, z = component
+        t = -evals[0]
+        if not order:
+            return t, None, None
+        if t <= 0:  # H0 = 0: g'(0) = 0, so the derivative of t never contributes
+            return 0., _np.zeros(len(terms)), _np.zeros((len(terms), len(terms))) if order == 2 else None
+        v0 = evecs[:, 0]
+        # d(lambda)/dw = v0^dag E v0 with E = z e_i e_j^T + conj(z) e_j e_i^T.
+        dt = -2 * (z * v0[li].conj() * v0[lj]).real
+        if order == 1:
+            return t, dt, None
+        # V^dag E v0 for each term, then the standard second-order eigenvalue perturbation.
+        P = evecs[li, :].conj().T * (z * v0[lj]) + evecs[lj, :].conj().T * (z.conj() * v0[li])
+        gaps = evals[0] - evals[1:]
+        keep = _np.abs(gaps) > 1e-12 * max(1., _np.abs(evals).max())  # within a repeated eigenvalue: no term
+        Q = P[1:][keep] / _np.sqrt(-gaps[keep])[:, None]
+        d2lambda = -2 * (Q.conj().T @ Q).real
+        return t, dt, -d2lambda
+
+    def _evaluate(self, blk, v, order=0):
+        n = len(blk._bel_labels)
+        if _np.shape(v) != (blk.num_params,) or not _np.all(_np.isfinite(v)):
+            raise ValueError("Expected %d finite contraction-chart parameters." % blk.num_params)
+        c, w = v[:n], v[n:]
+        k, i, j, _ = blk._contraction_terms
+        m, nd = len(w), len(blk._eeg_labels)
+        g = _np.ones(m)
+        data = _np.zeros(nd)
+        data[blk._contraction_diagonal] = c * c
+        J = _np.zeros((nd, len(v))) if order else None
+        Hs = _np.zeros((nd, len(v), len(v))) if order == 2 else None
+        if order:
+            J[blk._contraction_diagonal, _np.arange(n)] = 2 * c
+        if order == 2:
+            Hs[blk._contraction_diagonal, _np.arange(n), _np.arange(n)] = 2.
+        for component in blk._contraction_components:
+            terms = component[1]
+            evals, evecs = self._component_spectrum(blk, w, component)
+            t, dt, d2t = self._gauge_derivatives(evals, evecs, component, order)
+            q = 1 + t * t
+            g[terms] = 2 / q
+            if not order:
+                continue
+            g1 = -4 * t / q**2
+            cc = c[i[terms]] * c[j[terms]]
+            kk, pw = k[terms], n + terms
+            # d(g w_a)/dw_b = g delta_ab + g' w_a dt_b
+            dgw = g[terms][0] * _np.eye(len(terms)) + g1 * _np.outer(w[terms], dt)
+            J[_np.ix_(kk, pw)] = cc[:, None] * dgw
+            if order == 2:
+                g2 = (12 * t * t - 4) / q**3
+                gw = g[terms][0] * w[terms]
+                # d2(g w_a)/dw_b dw_c = g'(dt_c delta_ab + dt_b delta_ac) + w_a (g'' dt_b dt_c + g' d2t_bc)
+                second = w[terms][:, None, None] * (g2 * _np.outer(dt, dt) + g1 * d2t)[None]
+                eye = _np.eye(len(terms))
+                second += g1 * (eye[:, :, None] * dt[None, None, :] + eye[:, None, :] * dt[None, :, None])
+                Hs[_np.ix_(kk, pw, pw)] = cc[:, None, None] * second
+                # mixed c/w and c/c terms
+                for row, a, b, ia, jb in zip(kk, range(len(terms)), terms, i[terms], j[terms]):
+                    Hs[row, ia, pw] += c[jb] * dgw[a]
+                    Hs[row, jb, pw] += c[ia] * dgw[a]
+                    Hs[row, pw, ia] += c[jb] * dgw[a]
+                    Hs[row, pw, jb] += c[ia] * dgw[a]
+                    Hs[row, ia, jb] += gw[a]
+                    Hs[row, jb, ia] += gw[a]
+        data[k] = c[i] * c[j] * g * w
+        if order:
+            # derivatives with respect to the pivots c
+            _np.add.at(J, (k, i), c[j] * g * w)
+            _np.add.at(J, (k, j), c[i] * g * w)
+        return data, J, Hs
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = self._evaluate(blk, v)[0]
+
+    def block_data_jacobian(self, blk, v):
+        return self._evaluate(blk, v, order=1)[1]
+
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
+        hessian = self._evaluate(blk, blk.to_vector() if v is None else v, order=2)[2]
+        return _np.einsum('cpq,cij->ijpq', hessian, superops)
+
+    def block_data_to_params(self, blk, ttol):
+        n = len(blk._bel_labels)
+        k, i, j, _ = blk._contraction_terms
+        if not _np.all(_np.isfinite(blk.block_data)):
+            raise ValueError("Contraction chart requires finite coefficients.")
+        rates = blk.block_data[blk._contraction_diagonal]
+        if _np.any(rates < ttol * max(1., _np.abs(rates).max())):
+            raise ValueError("Contraction chart requires nonnegative S coefficients.")
+        c = _np.sqrt(_np.clip(rates, 0, None))
+        scale = c[i] * c[j]
+        values = blk.block_data[k]
+        orphan = (scale == 0) & (values != 0)
+        if _np.any(orphan) and _np.isfinite(ttol):
+            raise ValueError("A C/A coefficient is nonzero where one of its S coefficients is zero; "
+                             "these coefficients are not positive semidefinite.")
+        h = _np.divide(values, scale, out=_np.zeros(len(k)), where=scale > 0)  # entries of H
+        tolerance = max(-ttol, 1e-9)
+        w = _np.zeros(len(k))
+        for component in blk._contraction_components:
+            terms = component[1]
+            evals, _ = self._component_spectrum(blk, h, component)
+            gamma = max(-evals[0], 0.)
+            if gamma > 1:
+                if gamma > 1 + tolerance:
+                    raise ValueError("Sparse S/C/A coefficients are not positive semidefinite "
+                                     "(lambda_min of the normalized matrix is %g)." % (1 - gamma))
+                h[terms] /= gamma
+                gamma = 1.
+            t = gamma / (1 + _np.sqrt(1 - gamma * gamma))  # root in [0, 1] of 2t / (1 + t^2) = gamma
+            w[terms] = h[terms] * (1 + t * t) / 2
+        return _np.r_[c, w]
+
+    def param_labels(self, blk):
+        k, i, j, active = blk._contraction_terms
+        return (["sqrt[S(%s) coefficient]" % b for b in blk._bel_labels]
+                + ["%s(%s,%s) contraction coordinate" % ('A' if a else 'C', blk._bel_labels[p], blk._bel_labels[q])
+                   for p, q, a in zip(i, j, active)])
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        torch = _import_torch()
+        index = lambda a: torch.tensor(_np.asarray(a), dtype=torch.long, device=device)
+        complex_dtype = torch.complex128 if real_dtype == torch.float64 else torch.complex64
+        k, i, j, _ = blk._contraction_terms
+        components = tuple((len(local), index(terms), index(li), index(lj),
+                            torch.tensor(z, dtype=complex_dtype, device=device))
+                           for local, terms, li, lj, z in blk._contraction_components)
+        return (len(blk._bel_labels), len(blk._eeg_labels), index(blk._contraction_diagonal),
+                index(k), index(i), index(j), components)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        torch = _import_torch()
+        n, nd, diagonal, k, i, j, components = sd
+        c, w = t_param[:n], t_param[n:]
+        g = t_param.new_ones(len(w))
+        for size, terms, li, lj, z in components:
+            entries = z * w[terms].to(z.dtype)
+            H0 = z.new_zeros((size, size)).index_put((li, lj), entries, accumulate=True)
+            H0 = H0.index_put((lj, li), entries.conj(), accumulate=True)
+            t = -torch.linalg.eigvalsh(H0)[0]
+            g = g.index_put((terms,), (2 / (1 + t * t)).to(g.dtype).expand(len(terms)))
+        data = t_param.new_zeros(nd).index_put((diagonal,), c * c)
+        return data.index_put((k,), c[i] * c[j] * g * w)
+
+    def _coefficient_polynomial(self, blk, index, pio, mpv):
+        raise NotImplementedError("The contraction chart is nonpolynomial; use matrix simulation or Torch, "
+                                  "rather than polynomial term simulation.")
+
+
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
     Class for storing and managing the parameters associated with particular subblocks of error-generator
@@ -1019,16 +1202,20 @@ class LindbladCoefficientBlock(_NicelySerializable):
             - For 'ham': 'elements'
             - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
             - For 'other': 'elements', 'cholesky'
-            - For 'other_sparse': 'elements', 'cholesky', 'cholesky completion', 'auto'
+            - For 'other_sparse': 'elements', 'cholesky', 'contraction', 'cholesky completion', 'auto'
 
             The fill-free 'cholesky' chart includes zero noise and singular PSD matrices.
+            'contraction' writes K = C (I + H) C with C the square roots of the S
+            coefficients and H a scaled contraction on the selected C/A components. It
+            covers every PSD matrix on any support, including zero noise and the
+            boundary, without completion, and does not support polynomial term simulation.
             'cholesky completion' covers the positive-definite interior on arbitrary
             support and independent C/A masks; its diagonal coordinates are logarithmic
             and free off-diagonal coordinates are divided by the row pivot. It starts
             at an identity Kossakowski matrix when no initial data is supplied. Singular
             inputs are rejected, including when `truncate` is requested. This chart does
             not support polynomial term simulation. 'auto' chooses the fill-free chart
-            when possible and completion otherwise.
+            when possible and the contraction chart otherwise.
 
             Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
             which when used in the right combination are utilized in the construction of GLND and CPTPLND
@@ -1970,12 +2157,15 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
     coefficients give the negative imaginary components in their ordered label orientation.
 
     The ``cholesky`` chart requires matching C/A edges, or no A (real factors). Every edge
-    endpoint needs an S coefficient. ``cholesky completion`` also supports nonchordal and
-    unequal component masks, using positive pivots and dependent factor entries. ``auto``
-    selects the appropriate chart. ``static`` and ``elements`` do not constrain positivity.
+    endpoint needs an S coefficient. ``contraction`` supports any C/A mask, including zero
+    noise and the PSD boundary. ``cholesky completion`` also supports nonchordal and
+    unequal component masks, using positive pivots and dependent factor entries, but only
+    in the positive-definite interior. ``auto`` selects ``cholesky`` when the mask allows
+    it and ``contraction`` otherwise. ``static`` and ``elements`` do not constrain positivity.
     """
     _PARAM_CLASSES = {'static': _StaticParam, 'elements': _EEGVectorElements, 'cholesky': _SparseCholesky,
-                      'cholesky completion': _CompletedCholesky, 'auto': _SparseCholesky}
+                      'cholesky completion': _CompletedCholesky, 'contraction': _Contraction,
+                      'auto': _SparseCholesky}
 
     def _init_labels(self, basis, basis_element_labels, error_generator_labels):
         super()._init_labels(basis, basis_element_labels, error_generator_labels)
@@ -2008,11 +2198,17 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
         pattern = _sps.coo_array((_np.ones(len(pairs)), (rows, cols)), shape=(n, n))
         if self._param_mode in ('static', 'elements'):
             return
+        if self._param_mode == 'contraction':
+            self._init_contraction()
+            return
         ordering = _sparsechol.perfect_elimination_ordering(pattern)
         if self._param_mode == 'auto':
             self._param_mode = ('cholesky' if ordering is not None and (not edges['A'] or edges['A'] == edges['C'])
-                                else 'cholesky completion')
+                                else 'contraction')
             self._parameterization = self._PARAM_CLASSES[self._param_mode]()
+            if self._param_mode == 'contraction':
+                self._init_contraction()
+                return
         if self._param_mode == 'cholesky completion':
             self.cholesky_structure = _sparsechol.CholeskyStructure(pattern, ordering=self._cholesky_ordering)
             self._init_completion(edges)
@@ -2056,6 +2252,34 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
                     terms.append(t); left.append(p); right.append(q); scales.append(s)
         self._quadratic_terms = (_np.array(terms, dtype=int), _np.array(left, dtype=int),
                                  _np.array(right, dtype=int), _np.array(scales, dtype=float))
+
+    def _init_contraction(self):
+        n = len(self._bel_labels)
+        diagonal, terms = {}, []
+        for index, (lbl, (i, j)) in enumerate(zip(self._eeg_labels, self._coefficient_pairs)):
+            if lbl.errorgen_type == 'S':
+                diagonal[i] = index
+            else:
+                terms.append((index, i, j, lbl.errorgen_type == 'A'))
+        self._contraction_diagonal = _np.array([diagonal[i] for i in range(n)], int)
+        k, i, j, active = (_np.array(a, dtype=d) for a, d in zip(zip(*terms) if terms else ([], [], [], []),
+                                                                  (int, int, int, bool)))
+        self._contraction_terms = (k, i, j, active)
+        # One gauge per connected component of the C/A graph, so separate components stay independent.
+        graph = _sps.coo_array((_np.ones(len(k)), (i, j)), shape=(n, n))
+        count, labels = _csgraph.connected_components(graph, directed=False)
+        components = []
+        for comp in range(count):
+            members = _np.flatnonzero(labels[i] == comp) if len(k) else _np.empty(0, int)
+            if not len(members):
+                continue
+            local = _np.flatnonzero(labels == comp)
+            position = {int(d): a for a, d in enumerate(local)}
+            li = _np.array([position[int(d)] for d in i[members]], int)
+            lj = _np.array([position[int(d)] for d in j[members]], int)
+            z = _np.where(active[members], -1j, 1. + 0j)  # A label (i, j): K_ij = -1j * A
+            components.append((local, members, li, lj, z))
+        self._contraction_components = components
 
     def _init_completion(self, edges):
         st = self.cholesky_structure

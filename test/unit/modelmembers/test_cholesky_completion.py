@@ -185,9 +185,8 @@ def test_four_qubit_weight_three_full_block_and_directional_derivative():
         if sum(x != 'I' or y != 'I' for x, y in zip(a, b)) <= 3:
             labels.extend([LEEL('C', (a, b)), LEEL('A', (a, b))])
     ordering = sorted(range(len(bels)), key=lambda i: -sum(c != 'I' for c in bels[i]))
-    blk = LCB('other_sparse', basis, param_mode='auto',
+    blk = LCB('other_sparse', basis, param_mode='cholesky completion',
                error_generator_labels=labels, cholesky_ordering=ordering)
-    assert blk._param_mode == 'cholesky completion'
     assert len(bels) == 174
     assert blk.num_params == 14562
     rng = np.random.default_rng(4)
@@ -227,7 +226,7 @@ def test_factory_independent_weights_and_physical_operation():
     errgen = LindbladErrorgen.from_weight_limited(
         QubitSpace(3), dict(H=1, S=2, C=2, A=3), initial_stochastic_rate=1e-4)
     block = errgen.coefficient_blocks[-1]
-    assert block._param_mode == 'cholesky completion'
+    assert block._param_mode == 'contraction'
     assert block.num_params == 972
     np.testing.assert_allclose(block.kossakowski_matrix(), 1e-4 * np.eye(36))
     vector = errgen.to_vector()
@@ -245,12 +244,13 @@ def test_factory_active_only_offdiagonals():
     from pygsti.modelmembers.operations import LindbladErrorgen
     errgen = LindbladErrorgen.from_weight_limited(QubitSpace(2), dict(S=2, A=2), ('S', 'A'))
     block = errgen.coefficient_blocks[0]
-    assert block._param_mode == 'cholesky completion'
+    assert block._param_mode == 'contraction'
+    np.testing.assert_array_equal(errgen.to_vector(), np.zeros(errgen.num_params))
     vector = errgen.to_vector() + np.random.default_rng(2).normal(scale=.02, size=errgen.num_params)
     errgen.from_vector(vector)
     K = block.kossakowski_matrix()
     np.testing.assert_array_equal(K.real - np.diag(K.diagonal().real), np.zeros(K.shape))
-    assert np.linalg.eigvalsh(K)[0] > 0
+    assert np.linalg.eigvalsh(K)[0] >= -1e-15 * np.abs(K).max()
 
 
 @pytest.mark.parametrize('kwargs', [

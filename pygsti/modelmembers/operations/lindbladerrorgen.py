@@ -91,15 +91,15 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Matrix representation basis, usually 'pp' for qubits, 'gm' for qudits.
         evotype : str or Evotype, optional
             Evolution type, as for the ordinary constructor.
-        param_mode : {'auto', 'cholesky', 'cholesky completion'}, optional
-            Auto selects fill-free Cholesky on chordal graphs and completion on
-            nonchordal graphs. Fill-free supports PSD boundaries and zero noise;
+        param_mode : {'auto', 'cholesky', 'contraction', 'cholesky completion'}, optional
+            Auto selects fill-free Cholesky on chordal graphs and the contraction chart
+            on nonchordal graphs. Both include PSD boundaries and zero noise;
             completion requires a positive-definite initial covariance.
         initial_stochastic_rate : float or None, optional
             Initial diagonal phase-noise covariance when initial_covariance is omitted.
-            None chooses zero for fill-free and DEFAULT_COMPLETION_STOCHASTIC_RATE
-            for completion. An explicit zero is rejected by completion. Units depend
-            on direction normalization.
+            None chooses zero for fill-free Cholesky and the contraction chart, and
+            DEFAULT_COMPLETION_STOCHASTIC_RATE for completion. An explicit zero is
+            rejected by completion. Units depend on direction normalization.
         completion_normalization : {'row', 'column'}, optional
             Normalization for completed Cholesky, as in from_weight_limited.
 
@@ -114,8 +114,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         """
         state_space = _statespace.StateSpace.cast(state_space)
         basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
-        if param_mode not in ('auto', 'cholesky', 'cholesky completion'):
-            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'cholesky completion'.")
+        if param_mode not in ('auto', 'cholesky', 'contraction', 'cholesky completion'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', 'contraction', or 'cholesky completion'.")
         if completion_normalization not in ('row', 'column'):
             raise ValueError("`completion_normalization` must be 'row' or 'column'.")
         if initial_covariance is not None and initial_stochastic_rate is not None:
@@ -210,7 +210,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             S/C/A errors with one-body Hamiltonian errors.
         errorgen_types : iterable of {'H', 'S', 'C', 'A'}, optional
             Included sectors. C/A require S. Independent C/A masks and A-only
-            off-diagonals use completion; omit C and A for S-only errors.
+            off-diagonals use the contraction chart; omit C and A for S-only errors.
         elementary_errorgen_basis : Basis, str or None, optional
             Hermitian, traceless, trace-orthogonal, identity-first operator basis. None
             selects the canonical PP/GM product basis. Weight limits require a basis
@@ -219,16 +219,19 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Matrix representation basis, usually ``'pp'`` for qubits or ``'gm'`` for qudits.
         evotype : str or Evotype, optional
             Evolution type, as for the ordinary constructor.
-        param_mode : {'auto', 'cholesky', 'cholesky completion'}, optional
+        param_mode : {'auto', 'cholesky', 'contraction', 'cholesky completion'}, optional
             Parameterization of the S/C/A block. Auto chooses the fill-free chart for
-            chordal, matched C/A masks (or real-only C), and completion otherwise.
-            Completion covers the positive-definite interior using logarithmic factor
-            pivots and row-normalized off-diagonals. It does not support polynomial terms.
+            chordal, matched C/A masks (or real-only C), and the contraction chart
+            otherwise. The contraction chart, K = C (I + H) C with H a scaled contraction
+            on the selected C/A components, covers every PSD matrix with the selected
+            support, including zero noise and the boundary, on any mask. Completion
+            covers only the positive-definite interior, using logarithmic factor pivots
+            and row-normalized off-diagonals. Neither supports polynomial terms.
         initial_stochastic_rate : float or None, optional
             Initial S coefficient on each selected direction; C/A and H start at zero.
-            None means zero for the fill-free chart and DEFAULT_COMPLETION_STOCHASTIC_RATE
-            for completion. Completion requires a strictly positive rate; an explicit
-            zero raises ValueError.
+            None means zero for the fill-free and contraction charts and
+            DEFAULT_COMPLETION_STOCHASTIC_RATE for completion. Completion requires a
+            strictly positive rate; an explicit zero raises ValueError.
         completion_normalization : {'row', 'column'}, optional
             Row normalization uses L = D T and unit-diagonal completion without pivot
             divisions. Column normalization uses L = T D and the pivot-dividing recurrence.
@@ -246,11 +249,12 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         S/C/A weight at most two always admits a perfect elimination order: remove all
         weight-two directions before the weight-one directions. Each weight-two support
         forms a clique attached to the central clique of weight-one directions. Higher
-        cutoffs need not be chordal and automatically use completion. The fill-free
-        parameterization includes singular PSD matrices and the zero generator, where
-        derivatives vanish as in dense CPTPLND. Completion instead uses positive pivots
-        and rejects singular inputs. Small overall noise is represented by shifting
-        all log pivots together, without changing normalized off-diagonal coordinates.
+        cutoffs need not be chordal and automatically use the contraction chart. The
+        fill-free and contraction charts include singular PSD matrices and the zero
+        generator, where derivatives vanish as in dense CPTPLND. In the contraction
+        chart a C/A coefficient is the product of two S square roots and a bounded
+        coordinate, so its derivative scales with the rate rather than its square root.
+        Completion instead uses positive pivots and rejects singular inputs.
         """
         state_space = _statespace.StateSpace.cast(state_space)
         sectors = set(errorgen_types)
@@ -258,8 +262,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             raise ValueError("`errorgen_types` must contain only H, S, C, and A.")
         if sectors & set('CA') and 'S' not in sectors:
             raise ValueError("C/A sectors require S directions for a positive-semidefinite matrix.")
-        if param_mode not in ('auto', 'cholesky', 'cholesky completion'):
-            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'cholesky completion'.")
+        if param_mode not in ('auto', 'cholesky', 'contraction', 'cholesky completion'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', 'contraction', or 'cholesky completion'.")
         if completion_normalization not in ('row', 'column'):
             raise ValueError("`completion_normalization` must be 'row' or 'column'.")
         if initial_stochastic_rate is not None and (

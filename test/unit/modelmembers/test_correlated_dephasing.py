@@ -34,7 +34,8 @@ def test_default_direction_order_and_independent_dense_counts():
 def test_nonchordal_real_completion_keeps_phase_covariance_zeros(normalization):
     bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
     edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
-    errorgen = construct(4, correlation_edges=edges, completion_normalization=normalization)
+    errorgen = construct(4, correlation_edges=edges, param_mode='cholesky completion',
+                         completion_normalization=normalization)
     block = errorgen.coefficient_blocks[0]
     assert errorgen.num_params == 8
     assert block._param_mode == 'cholesky completion'
@@ -104,12 +105,27 @@ def test_completion_rejects_boundary_and_explicit_zero():
     bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
     edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
     with pytest.raises(ValueError, match='positive.definite|positive pivots'):
-        construct(4, correlation_edges=edges, initial_stochastic_rate=0.)
+        construct(4, correlation_edges=edges, initial_stochastic_rate=0., param_mode='cholesky completion')
     laplacian = 2 * np.eye(4)
     for i in range(4):
         laplacian[i, (i + 1) % 4] = laplacian[(i + 1) % 4, i] = -1
     with pytest.raises(ValueError, match='positive.definite|positive pivots'):
-        construct(4, correlation_edges=edges, initial_covariance=laplacian)
+        construct(4, correlation_edges=edges, initial_covariance=laplacian, param_mode='cholesky completion')
+
+
+def test_default_nonchordal_chart_reaches_zero_and_the_boundary():
+    bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
+    edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
+    zero = construct(4, correlation_edges=edges)
+    assert zero.coefficient_blocks[0]._param_mode == 'contraction'
+    np.testing.assert_array_equal(phase_noise_covariance(zero), np.zeros((4, 4)))
+    laplacian = 2 * np.eye(4)
+    for i in range(4):
+        laplacian[i, (i + 1) % 4] = laplacian[(i + 1) % 4, i] = -1
+    errorgen = construct(4, correlation_edges=edges, initial_covariance=.01 * laplacian)
+    errorgen.from_vector(errorgen.to_vector())
+    np.testing.assert_allclose(phase_noise_covariance(errorgen), .01 * laplacian, atol=1e-16)
+    assert np.linalg.matrix_rank(phase_noise_covariance(errorgen), tol=1e-12) == 3
 
 
 def test_phase_covariance_derivatives_and_persistence():
