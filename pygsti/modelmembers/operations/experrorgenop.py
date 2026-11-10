@@ -15,12 +15,9 @@ import math
 from typing import Union, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
@@ -66,33 +63,27 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
 
         #Create representation object
         rep_type_order = ('dense', 'experrgen') if evotype.prefer_dense_reps else ('experrgen', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'experrgen': 'experrorgen'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'experrgen':
-                    # "sparse mode" => don't ever compute matrix-exponential explicitly
-                    rep = evotype.create_experrorgen_rep(self.errorgen._rep)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-
-                    # Cache values - for later work with dense rep
-                    self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
-                    self.base_deriv = None
-                    self.base_hessian = None
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'experrgen':
+            # "sparse mode" => don't ever compute matrix-exponential explicitly
+            rep = evotype.create_experrorgen_rep(self.errorgen._rep)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+
+            # Cache values - for later work with dense rep
+            self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
+            self.base_deriv = None
+            self.base_hessian = None
+        self._rep_type = rep_type
 
         # term caches: used only by the deprecated TermForwardSimulator machinery (remove in 0.12, see #916)
         self.terms = {}
@@ -234,6 +225,7 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
     @staticmethod
     def torch_base(sd, t_param):
         """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        _torch = _import_torch()
         etype, esd = sd
         L = etype.torch_base(esd, t_param)
         return _torch.linalg.matrix_exp(L)

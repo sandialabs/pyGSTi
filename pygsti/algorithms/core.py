@@ -814,7 +814,9 @@ def validate_and_extend_optimizer(optimizer: Union[_CustomLMOptimizer, _SimplerL
     else:
         optimizers = optimizer
 
-    assert len(optimizers) == 1 or len(optimizers) == size, f'Optimizers must be length 1 or length {size}'
+    if len(optimizers) not in (1, size):
+        raise ValueError(f'A list of optimizers must have length 1 or {size} (the number of GST iterations), '
+                         f'not {len(optimizers)}.')
     return optimizers
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,

@@ -82,14 +82,14 @@ pyGSTi represents each member as a single `ComposedOp([RootConjOperator(E_k), G_
 - **Trace preservation** of the *whole instrument* is exactly the statement that the effects $\{E_k\}$ form one POVM, $\sum_k E_k = I$.  pyGSTi gathers them into a single shared `ComposedPOVM` whose error map is *always* promoted to a CP-constrained parameterization (`convert` uses the least-expressive CP parameterization that subsumes your request: `"GLND"` → `"CPTPLND"`, `"H+s"` → `"H+S"`).  This keeps every $E_k$ positive and their sum equal to the identity.
 - **Complete positivity** of an *individual member* is the statement that its post-measurement gate $\mathcal{G}_k$ is CP (the `RootConjOperator` is always CP).  So you *opt into* per-member CP by choosing a CP-constrained gate parameterization (`"CPTPLND"`, `"H+S"`); a trace-preserving-only choice (`"GLND"`, `"H+s"`, `"full TP"`) keeps the instrument TP but allows non-CP members.
 
-An $n$-outcome instrument therefore needs only **one POVM ($n$ effects) and $n$ gates**, regardless of any member's Kraus rank.  Two constructors build instruments in this form directly: `Instrument.from_effects`, when you have the measurement effects $\{E_k\}$ (and, optionally, explicit post-measurement gates), and `Instrument.from_cptr_superops`, when you have arbitrary dense CPTR member superoperators and want pyGSTi to recover the $(E_k, \mathcal{G}_k)$ decomposition for you:
+An $n$-outcome instrument therefore needs only **one POVM ($n$ effects) and $n$ gates**, regardless of any member's Kraus rank.  For Lindblad gate parameterizations each gate is a static unitary followed by an error map: for all practical purposes the ideal post-measurement gate is unitary, so the ideal instrument is the parameterization's zero-error point and every noise process lives in the error maps' parameters.  Two constructors build instruments in this form directly: `Instrument.from_effects`, when you have the measurement effects $\{E_k\}$ (and, optionally, the post-measurement unitaries), and `Instrument.from_cptr_superops`, when you have dense member superoperators that each have a single Kraus operator, as an ideal instrument's members do, and want pyGSTi to recover the effects and unitaries for you:
 
 ```{code-cell} ipython3
 # From the measurement effects (post-measurement gates default to the identity):
 fe = Instrument.from_effects({'p0': E0, 'p1': E1}, basis)
 print("from_effects      :", type(fe).__name__, "num_params =", fe.num_params)
 
-# From arbitrary dense CPTR superoperators (here the ideal projectors):
+# From dense one-Kraus superoperators (here the ideal projectors):
 cptr = Instrument.from_cptr_superops(
     {'p0': Gmz_plus, 'p1': Gmz_minus},
     basis,
