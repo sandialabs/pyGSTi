@@ -226,6 +226,17 @@ except ImportError:
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
 #is like a third of runtime when using higher-order BCH, e.g.)
+def _rebuild_local_stim_errorgen_label(errorgen_type: str, pauli_strs: tuple[str, ...], label: Optional[str],
+                                       circuit_time: Optional[float], initial_label: Any) -> LocalStimErrorgenLabel:
+    """
+    Reconstruct a `LocalStimErrorgenLabel` from the plain-string forms of its basis element labels
+    (the pickle/copy constructor used by `LocalStimErrorgenLabel.__reduce__`).
+    """
+    return LocalStimErrorgenLabel(errorgen_type, tuple([stim.PauliString(ps) for ps in pauli_strs]),
+                                  initial_label=initial_label, label=label, circuit_time=circuit_time,
+                                  pauli_str_reps=pauli_strs)
+
+
 class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     """
@@ -436,10 +447,26 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         #return hash((self.errorgen_type, self._hashable_basis_element_labels))
         return hash(self._hashable_string_rep)
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """
+        Compact pickle reduction (also used by `copy`). Only the plain-string forms of the basis
+        element labels are serialized; the (comparatively expensive to pickle) `stim.PauliString`
+        objects are rebuilt from them on load, and all other cached attributes are re-derived.
+
+        Note that, like `bel_str`, this does not preserve the +/-1 sign of the `stim.PauliString`s in
+        `basis_element_labels`, which are ignored by the label's hashing and equality everywhere
+        (the propagation routines clear them). Cached attributes, such as the support mask, are
+        rebuilt on first use.
+        """
+        return (_rebuild_local_stim_errorgen_label,
+                (self.errorgen_type, self._hashable_basis_element_labels, self.label, self.circuit_time,
+                 self._initial_label))
+
     def __setstate__(self, state: dict[str, Any]) -> None:
         """
-        Restore from a pickled/copied state, migrating states written by older versions
-        of this class:
+        Restore from a pickled/copied dictionary state, migrating states written by older versions
+        of this class (pickles written by the current version go through
+        `_rebuild_local_stim_errorgen_label` instead):
 
         - `type_idx` did not exist: derive it from `errorgen_type`.
         - `initial_label` was a plain attribute (it is now the read-only property backed

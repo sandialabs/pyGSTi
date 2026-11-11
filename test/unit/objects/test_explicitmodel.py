@@ -180,6 +180,22 @@ class ExplicitOpModelToolTester(BaseCase):
         with self.assertRaises(AssertionError):
             self.gateset_2q.rotate("a string!")  # must be a 15-tuple
 
+    def test_convert_members_inplace_full_tp_after_cptplnd(self):
+        # Regression test for #544: full TP -> CPTPLND -> full TP used to raise an
+        # AssertionError in TPPOVM.to_vector().
+        model = smq1Q_XYI.target_model()
+        circuits = list(smq1Q_XYI.create_gst_experiment_design(1).all_circuits_needing_data)
+        model.convert_members_inplace('full TP')
+        model.convert_members_inplace('CPTPLND')
+        expected = model.sim.bulk_probs(circuits)
+        model.convert_members_inplace('full TP')
+        self.assertIsInstance(model.povms['Mdefault'], pygsti.modelmembers.povms.TPPOVM)
+        self.assertEqual(len(model.to_vector()), model.num_params)
+        actual = model.sim.bulk_probs(circuits)
+        for c in circuits:
+            for outcome, p in expected[c].items():
+                self.assertAlmostEqual(actual[c][outcome], p)
+
     def test_depolarize_raises_on_bad_arg_spec(self):
         with self.assertRaises(ValueError):
             self.model.depolarize(op_noise=0.1, max_op_noise=0.1, spam_noise=0)  # can't specify both

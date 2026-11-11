@@ -1,4 +1,7 @@
-from ..util import BaseCase
+from ..util import BaseCase, needs_matplotlib
+
+import importlib.util
+import unittest
 
 import pygsti
 import pandas
@@ -6,7 +9,38 @@ import os
 import numpy as np
 from pygsti.protocols import vbdataframe as _vbdataframe
 
+DATAFRAME_1_DEPTHS = [0, 4, 8, 12, 20, 28, 40, 56, 80, 112, 160, 224, 316]
+
+
+def load_dataframe_1():
+    df = pandas.read_csv(os.path.join(os.path.dirname(__file__), 'test_dataframe_1.csv'))
+    return _vbdataframe.VBDataFrame(df, x_values=DATAFRAME_1_DEPTHS)
+
+
 class TestVBDataFrame(BaseCase):
+
+    def test_capability_regions_plural_metric(self):
+        vbdf = load_dataframe_1()
+        kwargs = dict(threshold=0.5, significance=0.05, monotonic=True)
+        plural = vbdf.capability_regions(metric='success_probabilities', **kwargs)
+        singular = vbdf.capability_regions(metric='success_probability', **kwargs)
+        self.assertTrue(len(plural) > 0)
+        self.assertEqual(plural, singular)
+
+    @needs_matplotlib
+    @unittest.skipIf(importlib.util.find_spec('seaborn') is None, "seaborn is not installed")
+    def test_volumetric_distribution_plot_without_threshold(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from pygsti.report import vbplot
+        vbdf = load_dataframe_1()
+        for hypothesis_test in ['standard', 'none']:
+            with self.subTest(hypothesis_test=hypothesis_test):
+                fig, ax = vbplot.volumetric_distribution_plot(vbdf, threshold=None,
+                                                              hypothesis_test=hypothesis_test)
+                self.assertIsInstance(fig, matplotlib.figure.Figure)
+                plt.close(fig)
 
     def test_vbdataframe_1(self):
         

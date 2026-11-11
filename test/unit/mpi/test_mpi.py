@@ -5,6 +5,8 @@ import subprocess
 import sys
 import shutil
 
+from test.helpers.mpi_launch import openmpi_extra_args
+
 try:
     from mpi4py import MPI
 except (ImportError, RuntimeError):
@@ -13,24 +15,6 @@ except (ImportError, RuntimeError):
 
 @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
 class MPITester:
-
-    def _extra_mpi_args(self):
-        # CI runners tend to have fewer than four cores.
-        # --oversubscribe is an Open MPI flag; Intel MPI (Hydra) and MPICH
-        # don't recognise it, so only add it when Open MPI is detected.
-        launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-        if launcher is not None:
-            try:
-                result = subprocess.run(
-                    [launcher, '--version'],
-                    capture_output=True, text=True, timeout=10,
-                )
-                output = result.stdout + result.stderr
-                if 'Open MPI' in output or 'OpenRTE' in output:
-                    return ['--oversubscribe']
-            except Exception:
-                pass
-        return []
 
     @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
     def test_all(self, capfd: pytest.LogCaptureFixture):
@@ -51,7 +35,7 @@ class MPITester:
 
         launcher = shutil.which('mpiexec') or shutil.which('mpirun')
         subprocess_args = (
-            [launcher, '-np', '4'] + self._extra_mpi_args() + [sys.executable, '-W', 'ignore', str(to_run)]
+            [launcher, '-np', '4'] + openmpi_extra_args(launcher) + [sys.executable, '-W', 'ignore', str(to_run)]
         )
         env = {
             **os.environ,
