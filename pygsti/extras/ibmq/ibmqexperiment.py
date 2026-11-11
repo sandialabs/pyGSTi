@@ -47,8 +47,8 @@ except Exception as err:
 try:
     try:
         # qiskit-ibm-runtime 0.52 repointed the top-level SamplerV2 at the new client-side
-        # sampler, which returns results in a different form and needs qiskit-aer to run on
-        # fake backends. The server-side primitive that this module targets moved here.
+        # sampler, which needs qiskit-aer to run on fake backends and hasn't been validated
+        # with this module. The server-side primitive that this module targets moved here.
         from qiskit_ibm_runtime.server_side import SamplerV2 as _Sampler
     except ImportError:
         from qiskit_ibm_runtime import SamplerV2 as _Sampler
