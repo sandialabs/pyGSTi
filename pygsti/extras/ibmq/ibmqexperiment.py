@@ -45,7 +45,13 @@ except Exception as err:
 
 # Try to load IBM Runtime
 try:
-    from qiskit_ibm_runtime import SamplerV2 as _Sampler
+    try:
+        # qiskit-ibm-runtime 0.52 repointed the top-level SamplerV2 at the new client-side
+        # sampler, which returns results in a different form and needs qiskit-aer to run on
+        # fake backends. The server-side primitive that this module targets moved here.
+        from qiskit_ibm_runtime.server_side import SamplerV2 as _Sampler
+    except ImportError:
+        from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import Batch as _Batch
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
