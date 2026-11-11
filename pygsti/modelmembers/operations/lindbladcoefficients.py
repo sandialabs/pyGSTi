@@ -767,205 +767,6 @@ class _SparseCholesky(_BlockParameterization):
                             for p, q, s in zip(left[selected], right[selected], scale[selected])}, mpv)
 
 
-class _CompletedCholesky(_BlockParameterization):
-    """Interior sparse CPTP chart with dependent factor components.
-
-    Write L = D T with positive diagonal D and unit-lower T. Parameters are log(D_ii)
-    and the allowed components of T. Missing components are completed in T, without
-    pivot divisions. Column normalization is an alternative chart and supports earlier artifacts.
-    """
-    name = 'cholesky completion'
-
-    def num_params(self, blk):
-        return blk.cholesky_structure.n + len(blk._completion_free_params)
-
-    @staticmethod
-    def _gram_jet(values, gradients, hessians, left, right):
-        a, b = values[left], values[right].conj()
-        value = a @ b
-        gradient = hessian = None
-        if gradients is not None:
-            ga, gb = gradients[left], gradients[right].conj()
-            gradient = a @ gb + b @ ga
-        if hessians is not None:
-            cross = ga.T @ gb
-            hessian = (_np.einsum('m,mpq->pq', a, hessians[right].conj())
-                       + _np.einsum('m,mpq->pq', b, hessians[left]) + cross + cross.T)
-        return value, gradient, hessian
-
-    def _factor_jet(self, blk, v, order=0, directions=None):
-        """Factor and optional first/second derivatives along columns of ``directions``."""
-        n = blk.cholesky_structure.n
-        if _np.shape(v) != (blk.num_params,) or not _np.all(_np.isfinite(v)):
-            raise ValueError("Expected %d finite completed-Cholesky parameters." % blk.num_params)
-        with _np.errstate(over='ignore', under='ignore'):
-            diagonal = _np.exp(v[:n])
-        if _np.any(diagonal == 0) or not _np.all(_np.isfinite(diagonal)):
-            raise ValueError("Completed-Cholesky log pivots exceed floating-point range.")
-        cols = blk._completion_cols
-        row_normalized = blk._completion_normalization == 'row'
-        free, params, scales = blk._completion_free, blk._completion_free_params, blk._completion_scales
-        values = _np.zeros(len(cols), complex)
-        values[blk._completion_diagonal] = 1.
-        _np.add.at(values, free, scales * v[params])
-        if not row_normalized:
-            values *= diagonal[cols]
-        gradients = hessians = None
-        if order:
-            directions = _np.eye(blk.num_params) if directions is None else _np.asarray(directions)
-            log_deriv = directions[cols]
-            gradients = _np.zeros((len(cols), directions.shape[1]), complex) if row_normalized \
-                else values[:, None] * log_deriv
-            edge_scales = scales if row_normalized else scales * diagonal[cols[free]]
-            _np.add.at(gradients, free, edge_scales[:, None] * directions[params])
-        if order == 2:
-            hessians = _np.zeros((len(cols), directions.shape[1], directions.shape[1]), complex)
-            if not row_normalized:
-                hessians += values[:, None, None] * log_deriv[:, :, None] * log_deriv[:, None, :]
-                edge_deriv = (scales * diagonal[cols[free]])[:, None] * directions[params]
-                cross = edge_deriv[:, :, None] * directions[cols[free]][:, None, :]
-                _np.add.at(hessians, free, cross + cross.transpose(0, 2, 1))
-
-        for index, col, real_free, imag_free, left, right in blk._completion_steps:
-            s, gs, hs = self._gram_jet(values, gradients, hessians, left, right)
-            divisor = 1. if row_normalized else diagonal[col]
-            q = -s / divisor
-            values[index] = ((values[index].real if real_free else q.real)
-                             + 1j * (values[index].imag if imag_free else q.imag))
-            if order:
-                d = _np.zeros(directions.shape[1]) if row_normalized else directions[col]
-                gq = (-gs + s * d) / divisor
-                gradients[index] = ((gradients[index].real if real_free else gq.real)
-                                     + 1j * (gradients[index].imag if imag_free else gq.imag))
-            if order == 2:
-                hq = (-hs + _np.outer(gs, d) + _np.outer(d, gs) - s * _np.outer(d, d)) / divisor
-                hessians[index] = ((hessians[index].real if real_free else hq.real)
-                                   + 1j * (hessians[index].imag if imag_free else hq.imag))
-        if row_normalized:
-            rows = blk._completion_rows
-            if order == 2:
-                d = directions[rows]
-                cross = gradients[:, :, None] * d[:, None, :]
-                hessians = diagonal[rows, None, None] * (
-                    hessians + cross + cross.transpose(0, 2, 1) + values[:, None, None] * d[:, :, None] * d[:, None, :])
-            if order:
-                gradients = diagonal[rows, None] * (gradients + values[:, None] * directions[rows])
-            values *= diagonal[rows]
-        if not _np.all(_np.isfinite(values)):
-            raise ValueError("Completed-Cholesky factor overflow; check pivot sizes and free coordinates.")
-        return values, gradients, hessians
-
-    def _evaluate(self, blk, v, order=0, directions=None):
-        values, gradients, hessians = self._factor_jet(blk, v, order, directions)
-        if not order:
-            out = _np.zeros(len(blk._eeg_labels), complex)
-            terms, left, right = blk._completion_gram
-            _np.add.at(out, terms, values[left] * values[right].conj())
-            return _np.where(blk._completion_active, -out.imag, out.real), None, None
-        data, jacobian, hessian = [], [], []
-        for active, (left, right) in zip(blk._completion_active, blk._completion_coefficient_terms):
-            value, gradient, second = self._gram_jet(values, gradients, hessians, left, right)
-            data.append(-value.imag if active else value.real)
-            jacobian.append(-gradient.imag if active else gradient.real)
-            if order == 2:
-                hessian.append(-second.imag if active else second.real)
-        return _np.array(data), _np.array(jacobian), _np.array(hessian) if order == 2 else None
-
-    def params_to_block_data(self, blk, v):
-        data = self._evaluate(blk, v)[0]
-        if not _np.all(_np.isfinite(data)):
-            raise ValueError("Completed-Cholesky coefficients exceed floating-point range.")
-        blk.block_data[:] = data
-
-    def block_data_to_params(self, blk, ttol):
-        st = blk.cholesky_structure
-        if not st.n:
-            return _np.empty(0, 'd')
-        K = blk.kossakowski_matrix()[_np.ix_(st.perm, st.perm)]
-        if not _np.all(_np.isfinite(K)):
-            raise ValueError("Completed Cholesky requires finite positive-definite coefficients.")
-        # A singular PSD matrix can acquire a tiny positive last Cholesky pivot
-        # through roundoff. Check numerical rank after diagonal equilibration,
-        # so uniform scaling or a small physical row does not trigger rejection.
-        diagonal = K.diagonal().real
-        if _np.any(diagonal <= 0):
-            raise ValueError("Completed Cholesky requires positive-definite coefficients; "
-                             "zero noise and the singular PSD boundary are outside this chart.")
-        scale = _np.sqrt(diagonal)
-        equilibrated = (K / scale[:, None]) / scale[None, :]
-        spectrum = _np.linalg.eigvalsh(equilibrated)
-        if spectrum[0] <= st.n * _np.finfo(float).eps * spectrum[-1]:
-            raise ValueError("Completed Cholesky requires numerically positive-definite coefficients; "
-                             "the singular PSD boundary is outside this chart.")
-        try:
-            L = _np.linalg.cholesky(K)
-        except _np.linalg.LinAlgError as exc:
-            raise ValueError("Completed Cholesky requires positive-definite coefficients; "
-                             "zero noise and the singular PSD boundary are outside this chart.") from exc
-        diagonal = L.diagonal().real
-        entries = L[blk._completion_rows[blk._completion_free], blk._completion_cols[blk._completion_free]]
-        pivot_indices = blk._completion_rows if blk._completion_normalization == 'row' else blk._completion_cols
-        normalized = entries / diagonal[pivot_indices[blk._completion_free]]
-        return _np.r_[_np.log(diagonal), _np.where(blk._completion_scales.imag != 0,
-                                                  normalized.imag, normalized.real)]
-
-    def block_data_jacobian(self, blk, v):
-        return self._evaluate(blk, v, order=1)[1]
-
-    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
-        hessian = self._evaluate(blk, blk.to_vector() if v is None else v, order=2)[2]
-        return _np.einsum('cpq,cij->ijpq', hessian, superops)
-
-    def param_labels(self, blk):
-        st = blk.cholesky_structure
-        labels = ["log[%s completed non-H Cholesky pivot]" % blk._bel_labels[i] for i in st.perm]
-        for f, scale in zip(blk._completion_free, blk._completion_scales):
-            r, c = blk._completion_rows[f], blk._completion_cols[f]
-            pivot = r if blk._completion_normalization == 'row' else c
-            labels.append("%s[L(%s,%s)/L(%s,%s)]" %
-                          ('Im' if scale.imag else 'Re', blk._bel_labels[st.perm[r]],
-                           blk._bel_labels[st.perm[c]], blk._bel_labels[st.perm[pivot]], blk._bel_labels[st.perm[pivot]]))
-        return labels
-
-    def torch_stateless_data(self, blk, real_dtype, device):
-        torch = _import_torch()
-        index = lambda a: torch.tensor(a, dtype=torch.long, device=device)
-        complex_dtype = torch.complex128 if real_dtype == torch.float64 else torch.complex64
-        steps = [(i, j, re, im, left.tolist(), right.tolist())
-                 for i, j, re, im, left, right in blk._completion_steps]
-        return (blk.cholesky_structure.n, index(blk._completion_cols), index(blk._completion_diagonal),
-                index(blk._completion_free), index(blk._completion_free_params),
-                torch.tensor(blk._completion_scales, dtype=complex_dtype, device=device), steps,
-                tuple(index(a) for a in blk._completion_gram),
-                torch.tensor(blk._completion_active, dtype=torch.bool, device=device),
-                index(blk._completion_rows), blk._completion_normalization == 'row')
-
-    @staticmethod
-    def block_data_torch(sd, t_param):
-        torch = _import_torch()
-        n, cols, diag_indices, free, params, scales, steps, gram, active, rows, row_normalized = sd
-        diagonal = t_param[:n].exp()
-        base = scales.new_zeros(len(cols)).index_add(0, diag_indices, scales.new_ones(n))
-        base = base.index_add(0, free, scales * t_param[params])
-        entries = list((base if row_normalized else base * diagonal[cols]).unbind())
-        for index, col, real_free, imag_free, left, right in steps:
-            s = (torch.stack([entries[a] for a in left])
-                 * torch.stack([entries[b].conj() for b in right])).sum() if left else base.new_zeros(())
-            q = -s if row_normalized else -s / diagonal[col]
-            entries[index] = torch.complex(entries[index].real if real_free else q.real,
-                                            entries[index].imag if imag_free else q.imag)
-        factor = torch.stack(entries) if entries else base
-        if row_normalized:
-            factor = factor * diagonal[rows]
-        terms, left, right = gram
-        result = base.new_zeros(len(active)).index_add(0, terms, factor[left] * factor[right].conj())
-        return torch.where(active, -result.imag, result.real)
-
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
-        raise NotImplementedError("Completed Cholesky is nonpolynomial; use matrix simulation or Torch, "
-                                  "rather than polynomial term simulation.")
-
-
 class _Contraction(_BlockParameterization):
     """Sparse CPTP chart K = C (I + H) C that includes zero noise and the PSD boundary.
 
@@ -1173,8 +974,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return super().__new__(cls)
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
-                 truncate=False, *, error_generator_labels=None, cholesky_ordering=None,
-                 completion_normalization='row'):
+                 truncate=False, *, error_generator_labels=None, cholesky_ordering=None):
         """
         Parameters
         ----------
@@ -1202,20 +1002,14 @@ class LindbladCoefficientBlock(_NicelySerializable):
             - For 'ham': 'elements'
             - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
             - For 'other': 'elements', 'cholesky'
-            - For 'other_sparse': 'elements', 'cholesky', 'contraction', 'cholesky completion', 'auto'
+            - For 'other_sparse': 'elements', 'cholesky', 'contraction', 'auto'
 
             The fill-free 'cholesky' chart includes zero noise and singular PSD matrices.
             'contraction' writes K = C (I + H) C with C the square roots of the S
             coefficients and H a scaled contraction on the selected C/A components. It
             covers every PSD matrix on any support, including zero noise and the
-            boundary, without completion, and does not support polynomial term simulation.
-            'cholesky completion' covers the positive-definite interior on arbitrary
-            support and independent C/A masks; its diagonal coordinates are logarithmic
-            and free off-diagonal coordinates are divided by the row pivot. It starts
-            at an identity Kossakowski matrix when no initial data is supplied. Singular
-            inputs are rejected, including when `truncate` is requested. This chart does
-            not support polynomial term simulation. 'auto' chooses the fill-free chart
-            when possible and the contraction chart otherwise.
+            boundary, and does not support polynomial term simulation. 'auto' chooses
+            the fill-free chart when possible and the contraction chart otherwise.
 
             Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
             which when used in the right combination are utilized in the construction of GLND and CPTPLND
@@ -1238,16 +1032,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
             flexible parameterizations.  Must be `None` for the other (basis-element-keyed) block types.
 
         cholesky_ordering : array_like, optional
-            Only for 'other_sparse': an elimination permutation in S-direction order.
-            Completion accepts any permutation; the fill-free chart requires no fill.
-            The resolved ordering is saved with the block to preserve parameter meaning
-            across machines with different ordering backends.
-
-        completion_normalization : {'row', 'column'}, optional
-            For completion, normalize free factor entries by their row pivot (default),
-            giving a unit-diagonal completion without pivot divisions. Column normalization
-            can be better conditioned near other PSD boundaries, and also retains compatibility
-            with earlier development serializations.
+            Only for 'other_sparse' with the fill-free 'cholesky' chart: an elimination
+            permutation in S-direction order that introduces no fill. The resolved ordering
+            is saved with the block to preserve parameter meaning across machines with
+            different ordering backends.
         """
 
         super().__init__()
@@ -1261,9 +1049,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if cholesky_ordering is not None and block_type != 'other_sparse':
             raise ValueError("`cholesky_ordering` is only supported by 'other_sparse' blocks.")
         self._cholesky_ordering = cholesky_ordering
-        if completion_normalization not in ('row', 'column'):
-            raise ValueError("`completion_normalization` must be 'row' or 'column'.")
-        self._completion_normalization = completion_normalization
         self._init_labels(basis, basis_element_labels, error_generator_labels)
         self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
             if self._uses_cache_mx else None
@@ -1717,8 +1502,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
                                                for lbl in self._eeg_labels]
         if self._block_type == 'other_sparse' and hasattr(self, 'cholesky_structure'):
             state['cholesky_ordering'] = self.cholesky_structure.perm.tolist()
-        if self._param_mode == 'cholesky completion':
-            state['completion_normalization'] = self._completion_normalization
         return state
 
     @classmethod
@@ -1729,8 +1512,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             eeg_labels = [_LEEL(etype, tuple(bels)) for etype, bels in state['error_generator_labels']]
             return cls(state['block_type'], basis, initial_block_data=block_data,
                        param_mode=state['parameterization_mode'], error_generator_labels=eeg_labels,
-                       cholesky_ordering=state.get('cholesky_ordering'),
-                       completion_normalization=state.get('completion_normalization', 'column'))
+                       cholesky_ordering=state.get('cholesky_ordering'))
         return cls(state['block_type'], basis, state['basis_element_labels'], block_data,
                    state['parameterization_mode'])
 
@@ -2158,14 +1940,11 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
 
     The ``cholesky`` chart requires matching C/A edges, or no A (real factors). Every edge
     endpoint needs an S coefficient. ``contraction`` supports any C/A mask, including zero
-    noise and the PSD boundary. ``cholesky completion`` also supports nonchordal and
-    unequal component masks, using positive pivots and dependent factor entries, but only
-    in the positive-definite interior. ``auto`` selects ``cholesky`` when the mask allows
+    noise and the PSD boundary. ``auto`` selects ``cholesky`` when the mask allows
     it and ``contraction`` otherwise. ``static`` and ``elements`` do not constrain positivity.
     """
     _PARAM_CLASSES = {'static': _StaticParam, 'elements': _EEGVectorElements, 'cholesky': _SparseCholesky,
-                      'cholesky completion': _CompletedCholesky, 'contraction': _Contraction,
-                      'auto': _SparseCholesky}
+                      'contraction': _Contraction, 'auto': _SparseCholesky}
 
     def _init_labels(self, basis, basis_element_labels, error_generator_labels):
         super()._init_labels(basis, basis_element_labels, error_generator_labels)
@@ -2209,19 +1988,17 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
             if self._param_mode == 'contraction':
                 self._init_contraction()
                 return
-        if self._param_mode == 'cholesky completion':
-            self.cholesky_structure = _sparsechol.CholeskyStructure(pattern, ordering=self._cholesky_ordering)
-            self._init_completion(edges)
-            return
         if edges['A'] and edges['A'] != edges['C']:
-            raise ValueError("Sparse Cholesky requires matching C/A supports, or no A coefficients.")
+            raise ValueError("Sparse Cholesky requires matching C/A supports, or no A coefficients; "
+                             "use 'contraction' for other masks.")
         if ordering is None:
-            raise ValueError("Sparse Cholesky requires chordal Kossakowski support; this pattern needs fill.")
+            raise ValueError("Sparse Cholesky requires chordal Kossakowski support; this pattern needs fill. "
+                             "Use 'contraction' instead.")
         if self._cholesky_ordering is not None:
             ordering = self._cholesky_ordering
         self.cholesky_structure = st = _sparsechol.CholeskyStructure(pattern, ordering=ordering)
         if st.factor_pattern.nnz != n + st.pattern.nnz // 2:
-            raise ValueError("The requested Cholesky ordering introduces fill; use 'cholesky completion'.")
+            raise ValueError("The requested Cholesky ordering introduces fill; use 'contraction'.")
 
         # One real diagonal parameter, then real (and optionally imaginary) strict-lower
         # entries in CSC order. These arrays describe a linear map from parameters to L.
@@ -2281,48 +2058,6 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
             components.append((local, members, li, lj, z))
         self._contraction_components = components
 
-    def _init_completion(self, edges):
-        st = self.cholesky_structure
-        self._completion_rows = st.factor_pattern.indices.copy()
-        self._completion_cols = _np.repeat(_np.arange(st.n), _np.diff(st.factor_pattern.indptr))
-        self._completion_diagonal = _np.flatnonzero(self._completion_rows == self._completion_cols)
-        row_entries = [{} for _ in range(st.n)]
-        for index, (i, j) in enumerate(zip(self._completion_rows, self._completion_cols)):
-            row_entries[i][j] = index
-        free_real, free_imag, steps = [], [], []
-        for index, (i, j) in enumerate(zip(self._completion_rows, self._completion_cols)):
-            if i == j:
-                continue
-            edge = tuple(sorted((int(st.perm[i]), int(st.perm[j]))))
-            re, im = edge in edges['C'], edge in edges['A']
-            if re:
-                free_real.append(index)
-            if im:
-                free_imag.append(index)
-            if not (re and im):
-                common = sorted(c for c in row_entries[i].keys() & row_entries[j].keys() if c < j)
-                steps.append((index, j, re, im, _np.array([row_entries[i][c] for c in common], int),
-                               _np.array([row_entries[j][c] for c in common], int)))
-        self._completion_steps = steps
-        self._completion_free = _np.array(free_real + free_imag, int)
-        self._completion_free_params = st.n + _np.arange(len(self._completion_free))
-        self._completion_scales = _np.r_[_np.ones(len(free_real)), 1j * _np.ones(len(free_imag))]
-        terms, left, right, coefficient_terms = [], [], [], []
-        for index, (i, j) in enumerate(self._coefficient_pairs):
-            a, b = row_entries[st.inv[i]], row_entries[st.inv[j]]
-            common = sorted(a.keys() & b.keys())
-            l, r = _np.array([a[c] for c in common], int), _np.array([b[c] for c in common], int)
-            coefficient_terms.append((l, r))
-            terms.extend([index] * len(common)); left.extend(l); right.extend(r)
-        self._completion_coefficient_terms = coefficient_terms
-        self._completion_gram = (_np.array(terms, int), _np.array(left, int), _np.array(right, int))
-        self._completion_active = _np.array([lbl.errorgen_type == 'A' for lbl in self._eeg_labels])
-
-    def _set_block_data(self, block_data, truncate):
-        if block_data is None and self._param_mode == 'cholesky completion':
-            block_data = _np.array([float(lbl.errorgen_type == 'S') for lbl in self._eeg_labels])
-        super()._set_block_data(block_data, truncate)
-
     def _compute_term_generators(self, mxs, d2, sparse):
         if not sparse:
             return super()._compute_term_generators(mxs, d2, sparse)
@@ -2359,15 +2094,13 @@ class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
         ordering = self.cholesky_structure.perm if hasattr(self, 'cholesky_structure') else None
         return LindbladCoefficientBlock(self._block_type, self._basis, initial_block_data=self.block_data.copy(),
                                         param_mode=param_mode, error_generator_labels=self._eeg_labels,
-                                        cholesky_ordering=ordering, completion_normalization=self._completion_normalization)
+                                        cholesky_ordering=ordering)
 
     def is_similar(self, other_coeff_block):
         if not super().is_similar(other_coeff_block):
             return False
-        if self._param_mode in ('cholesky', 'cholesky completion'):
-            return (_np.array_equal(self.cholesky_structure.perm, other_coeff_block.cholesky_structure.perm)
-                    and (self._param_mode != 'cholesky completion'
-                         or self._completion_normalization == other_coeff_block._completion_normalization))
+        if self._param_mode == 'cholesky':
+            return _np.array_equal(self.cholesky_structure.perm, other_coeff_block.cholesky_structure.perm)
         return True
 
     def kossakowski_matrix(self):

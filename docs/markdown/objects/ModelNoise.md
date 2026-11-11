@@ -510,7 +510,7 @@ Preparation noise acts after the reference state; measurement noise acts before 
 
 The weight-two case admits a perfect elimination order. All weight-one directions form a clique. For each two-subsystem support, its weight-two directions and the weight-one directions on those two subsystems form another clique. Eliminate all weight-two directions first, then the weight-one directions. Every eliminated vertex's remaining neighbors form a clique, so factorization adds no fill. On three qubits, this leaves 648 real S/C/A parameters rather than the 1296 of a full Hermitian matrix on the same 36 stochastic directions.
 
-By default, the constructor chooses a fill-free chart for a chordal graph with matching C/A masks, or C-only real factors. For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Nonchordal patterns, independent C/A limits, and A-only off-diagonals automatically use the contraction chart described below. Set `param_mode='cholesky'` to require the fill-free chart, `param_mode='contraction'` to request the contraction chart on any mask, or `param_mode='cholesky completion'` to request completion explicitly.
+By default, the constructor chooses a fill-free chart for a chordal graph with matching C/A masks, or C-only real factors. For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Nonchordal patterns, independent C/A limits, and A-only off-diagonals automatically use the contraction chart described below. Set `param_mode='cholesky'` to require the fill-free chart, or `param_mode='contraction'` to request the contraction chart on any mask.
 
 The default operator basis is the canonical PP/GM tensor product for the state space. Qudits are supported; supply a compatible matrix basis such as `mx_basis='gm'` for a qutrit. The fill-free chart starts at zero and includes singular PSD matrices. As with dense CPTPLND, its quadratic S/C/A derivatives vanish at zero factor parameters. `sample_errorgen_rates` remains available to draw physical initial rates, while this constructor supplies the parameterization that preserves zeros during optimization.
 
@@ -526,19 +526,9 @@ $$H=\frac{2}{1+t^2}\,H_0,\qquad t=-\lambda_{\min}(H_0),\qquad -\lambda_{\min}(H)
 
 Because $H_0$ has zero trace, $t\ge0$ with equality only at $H_0=0$. A scalar multiple keeps any C/A support, so no completion is needed, and the map reaches every positive-semidefinite matrix on the support, including zero noise and rank-deficient matrices such as amplitude damping or dephasing about a tilted axis. Each connected component of the C/A graph has its own $t$. For purely imaginary $H$ (S+A) the spectrum is symmetric and $t$ is the spectral norm; for real C entries it is not, which is why the chart uses $-\lambda_{\min}$. The zero-noise point is stationary, as for dense CPTPLND; the default initialization is zero. A C/A coefficient is $C_{ii}C_{jj}$ times a bounded coordinate, so near zero its derivative scales with the rate rather than with its square root. The derivative of $t$ does not exist where $\lambda_{\min}(H_0)$ is repeated; the implementation then differentiates along one eigenvector. Evaluation costs one dense Hermitian eigendecomposition per connected component.
 
-Completion, available as `param_mode='cholesky completion'`, makes factor entries at forbidden matrix components **dependent** on the free entries. Write $L=DT$, with positive diagonal $D$ and unit-lower-triangular $T$. For $i>j$, a forbidden complex entry is enforced by
+Raw parameter vectors have chart-specific meanings; switch charts by constructing a generator with the other `param_mode` and transferring its elementary coefficients with `set_coefficients`.
 
-$$T_{ij}=-\sum_{a<j}T_{ia}\overline{T_{ja}}.$$
-
-If only the real or imaginary component is forbidden, apply the corresponding part of this equation. The resulting $K=DTT^\dagger D$ preserves the requested zeros. Symbolic fill entries do not add free coefficients or relax the weight limits, and completion does not divide by small pivots.
-
-Completion uses positive pivots: diagonal parameters are $\log D_{ii}$ and free off-diagonal parameters are the allowed components of $T_{ij}=L_{ij}/L_{ii}$. These row-normalized coordinates make diagonal congruences a shift of the log pivots with unchanged off-diagonal coordinates. The map covers the positive-definite interior; singular PSD matrices and exact zero noise are outside this chart. Numerical conditioning can still deteriorate near the boundary.
-
-`completion_normalization='column'` selects the alternative $L=TD$ chart. It uses pivot-dividing completion and can be better conditioned when approaching a rank-deficient matrix with nonzero diagonal entries. Row normalization is better suited to shrinking entire matrix rows and columns. Neither chart has uniformly good conditioning at every PSD boundary; both describe the same positive-definite coefficient class.
-
-Switch charts by constructing a generator with the desired normalization and transferring its elementary coefficients with `set_coefficients`. Raw parameter vectors have chart-specific meanings.
-
-The default completion initialization is a diagonal Kossakowski matrix with S rates given by `DEFAULT_COMPLETION_STOCHASTIC_RATE` in `pygsti.modelmembers.operations.lindbladerrorgen`, zero C/A, and zero H. Supply `initial_stochastic_rate` to choose a different positive rate; an explicit zero raises `ValueError`. The contraction chart accepts any nonnegative rate, including the default zero. For example, use different C and A limits on three qubits, which selects the contraction chart:
+Supply `initial_stochastic_rate` to start the S rates at a nonnegative value other than the default zero. For example, use different C and A limits on three qubits, which selects the contraction chart:
 
 ```{code-cell} ipython3
 from pygsti.baseobjs import QubitSpace
@@ -568,7 +558,7 @@ print(interior_model.probabilities(('Gx', 'Gx')))
 
 Common S/C/A weight three on four or more qubits also selects the contraction chart automatically. Dense density-matrix simulation still constructs global superoperator data; coefficient sparsity does not remove that state-space cost. The full four-qubit weight-three coefficient block has 174 directions and 14562 real parameters.
 
-Contraction and completed blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter maps are nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. The resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
+Contraction blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. For the fill-free chart, the resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
 
 ## Correlated dephasing with phase-noise covariance graphs
 
@@ -624,8 +614,8 @@ assert phase_model.num_params == 24
 print(phase_model.probabilities(('Gi',)))
 ```
 
-The cycle is nonchordal and automatically uses completion. Pass `correlation_edges=()` for independent noise or omit it for a dense phase-noise covariance matrix. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
+The cycle is nonchordal and automatically uses the contraction chart. Pass `correlation_edges=()` for independent noise or omit it for a dense phase-noise covariance matrix. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
 
-All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero for fill-free, positive diagonal for completion, and configurable `initial_stochastic_rate` and `completion_normalization`. Completion requires a numerically positive-definite covariance after diagonal scaling; singular inputs are rejected. Tiny overall rates and strongly unequal diagonal scales alone do not cause that numerical-rank rejection. Dense/chordal fill-free graphs can represent collective rank-one covariance exactly.
+All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero by default, or a configurable `initial_stochastic_rate`. Both charts represent singular covariances exactly, including collective rank-one covariance.
 
 For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; XX/YY pair measurements are needed to identify off-diagonal phase-noise covariance entries in this experiment. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters per channel, versus $n(n+1)/2$ for a dense matrix on the same directions. These are different hypotheses even though all directions have support weight one. The [correlated-dephasing experiment](../examples/CorrelatedDephasing.md) jointly fits independent gate, preparation, and pre-measurement channels in each of these families, using composed Lindblad SPAM as above.

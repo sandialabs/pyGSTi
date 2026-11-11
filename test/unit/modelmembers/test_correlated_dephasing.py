@@ -6,7 +6,6 @@ import pytest
 from pygsti.baseobjs import Basis, ExplicitBasis, ExplicitStateSpace, QubitSpace
 from pygsti.baseobjs.statespace import QuditSpace
 from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
-from pygsti.modelmembers.operations.lindbladerrorgen import DEFAULT_COMPLETION_STOCHASTIC_RATE
 from pygsti.tools.basistools import change_basis
 
 
@@ -28,28 +27,6 @@ def test_default_direction_order_and_independent_dense_counts():
     assert independent.num_params == 3
     np.testing.assert_allclose(phase_noise_covariance(independent), .02 * np.eye(3))
     assert {label.errorgen_type for label in block.elementary_errorgens} == {'S', 'C'}
-
-
-@pytest.mark.parametrize('normalization', ['row', 'column'])
-def test_nonchordal_real_completion_keeps_phase_covariance_zeros(normalization):
-    bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
-    edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
-    errorgen = construct(4, correlation_edges=edges, param_mode='cholesky completion',
-                         completion_normalization=normalization)
-    block = errorgen.coefficient_blocks[0]
-    assert errorgen.num_params == 8
-    assert block._param_mode == 'cholesky completion'
-    np.testing.assert_allclose(phase_noise_covariance(errorgen), DEFAULT_COMPLETION_STOCHASTIC_RATE * np.eye(4))
-    vector = errorgen.to_vector()
-    vector += np.random.default_rng(8).normal(scale=.08, size=8)
-    errorgen.from_vector(vector)
-    result = phase_noise_covariance(errorgen)
-    assert result[0, 2] == result[1, 3] == 0
-    assert np.linalg.eigvalsh(result)[0] > 0
-    standard = change_basis(errorgen.to_dense(), 'pp', 'std')
-    # Matrix units are eigenvectors and every population is fixed.
-    np.testing.assert_allclose(standard - np.diag(standard.diagonal()), 0, atol=1e-14)
-    np.testing.assert_allclose(standard.diagonal()[np.arange(16) * 17], 0, atol=1e-14)
 
 
 @pytest.mark.parametrize('directions', [None, ('IZ', 'ZZ', 'ZI')])
@@ -99,18 +76,6 @@ def test_singular_common_mode_and_zero_supported_without_ridge():
     np.testing.assert_allclose(phase_noise_covariance(errorgen), target, atol=1e-14)
     assert np.linalg.matrix_rank(phase_noise_covariance(errorgen), tol=1e-12) == 1
     np.testing.assert_array_equal(phase_noise_covariance(construct()), np.zeros((2, 2)))
-
-
-def test_completion_rejects_boundary_and_explicit_zero():
-    bels = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
-    edges = [(bels[i], bels[(i + 1) % 4]) for i in range(4)]
-    with pytest.raises(ValueError, match='positive.definite|positive pivots'):
-        construct(4, correlation_edges=edges, initial_stochastic_rate=0., param_mode='cholesky completion')
-    laplacian = 2 * np.eye(4)
-    for i in range(4):
-        laplacian[i, (i + 1) % 4] = laplacian[(i + 1) % 4, i] = -1
-    with pytest.raises(ValueError, match='positive.definite|positive pivots'):
-        construct(4, correlation_edges=edges, initial_covariance=laplacian, param_mode='cholesky completion')
 
 
 def test_default_nonchordal_chart_reaches_zero_and_the_boundary():
@@ -191,7 +156,6 @@ def test_phase_covariance_derivatives_and_persistence():
     ({'initial_stochastic_rate': -1.}, 'finite nonnegative'),
     ({'initial_stochastic_rate': np.nan}, 'finite nonnegative'),
     ({'param_mode': 'elements'}, 'param_mode'),
-    ({'completion_normalization': 'invalid'}, 'completion_normalization'),
 ])
 def test_invalid_requests(kwargs, match):
     with pytest.raises(ValueError, match=match):

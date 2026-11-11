@@ -42,7 +42,6 @@ from pygsti import SpaceT
 from typing import Literal
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
-DEFAULT_COMPLETION_STOCHASTIC_RATE = 1e-6  # positive initial S rate for completed Cholesky
 
 
 class LindbladErrorgen(_LinearOperator, _Torchable):
@@ -53,8 +52,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
     @classmethod
     def from_correlated_dephasing(cls, state_space, correlation_edges=None, *, basis_element_labels=None,
                                  elementary_errorgen_basis=None, initial_covariance=None, mx_basis='pp',
-                                 evotype='default', param_mode='auto', initial_stochastic_rate=None,
-                                 completion_normalization='row'):
+                                 evotype='default', param_mode='auto', initial_stochastic_rate=None):
         """Construct real correlated dephasing with a fixed phase-noise covariance graph.
 
         For diagonal Hermitian directions F_a and a real positive-semidefinite
@@ -91,17 +89,12 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Matrix representation basis, usually 'pp' for qubits, 'gm' for qudits.
         evotype : str or Evotype, optional
             Evolution type, as for the ordinary constructor.
-        param_mode : {'auto', 'cholesky', 'contraction', 'cholesky completion'}, optional
+        param_mode : {'auto', 'cholesky', 'contraction'}, optional
             Auto selects fill-free Cholesky on chordal graphs and the contraction chart
-            on nonchordal graphs. Both include PSD boundaries and zero noise;
-            completion requires a positive-definite initial covariance.
+            on nonchordal graphs. Both include PSD boundaries and zero noise.
         initial_stochastic_rate : float or None, optional
-            Initial diagonal phase-noise covariance when initial_covariance is omitted.
-            None chooses zero for fill-free Cholesky and the contraction chart, and
-            DEFAULT_COMPLETION_STOCHASTIC_RATE for completion. An explicit zero is
-            rejected by completion. Units depend on direction normalization.
-        completion_normalization : {'row', 'column'}, optional
-            Normalization for completed Cholesky, as in from_weight_limited.
+            Initial diagonal phase-noise covariance when initial_covariance is omitted;
+            None means zero. Units depend on direction normalization.
 
         Notes
         -----
@@ -114,10 +107,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         """
         state_space = _statespace.StateSpace.cast(state_space)
         basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
-        if param_mode not in ('auto', 'cholesky', 'contraction', 'cholesky completion'):
-            raise ValueError("`param_mode` must be 'auto', 'cholesky', 'contraction', or 'cholesky completion'.")
-        if completion_normalization not in ('row', 'column'):
-            raise ValueError("`completion_normalization` must be 'row' or 'column'.")
+        if param_mode not in ('auto', 'cholesky', 'contraction'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'contraction'.")
         if initial_covariance is not None and initial_stochastic_rate is not None:
             raise ValueError("Supply initial_covariance or initial_stochastic_rate, not both.")
         if initial_stochastic_rate is not None and (
@@ -160,12 +151,10 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         labels = [_LocalElementaryErrorgenLabel('S', (b,)) for b in bels]
         labels += [_LocalElementaryErrorgenLabel('C', (bels[i], bels[j])) for i, j in pairs]
         block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
-                                         error_generator_labels=labels,
-                                         completion_normalization=completion_normalization)
+                                         error_generator_labels=labels)
         n = len(bels)
         if initial_covariance is None:
-            rate = ((DEFAULT_COMPLETION_STOCHASTIC_RATE if block._param_mode == 'cholesky completion' else 0.)
-                    if initial_stochastic_rate is None else initial_stochastic_rate)
+            rate = 0. if initial_stochastic_rate is None else initial_stochastic_rate
             covariance = rate * _np.eye(n)
         else:
             covariance = _np.asarray(initial_covariance)
@@ -189,7 +178,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
     @classmethod
     def from_weight_limited(cls, state_space, max_weights=None, errorgen_types=('H', 'S', 'C', 'A'),
                            elementary_errorgen_basis=None, mx_basis='pp', evotype='default', *,
-                           param_mode='auto', initial_stochastic_rate=None, completion_normalization='row'):
+                           param_mode='auto', initial_stochastic_rate=None):
         """Construct a weight-limited CPTP Lindblad error generator.
 
         The selected elementary coefficients remain constrained throughout optimization.
@@ -219,30 +208,22 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Matrix representation basis, usually ``'pp'`` for qubits or ``'gm'`` for qudits.
         evotype : str or Evotype, optional
             Evolution type, as for the ordinary constructor.
-        param_mode : {'auto', 'cholesky', 'contraction', 'cholesky completion'}, optional
+        param_mode : {'auto', 'cholesky', 'contraction'}, optional
             Parameterization of the S/C/A block. Auto chooses the fill-free chart for
             chordal, matched C/A masks (or real-only C), and the contraction chart
             otherwise. The contraction chart, K = C (I + H) C with H a scaled contraction
             on the selected C/A components, covers every PSD matrix with the selected
-            support, including zero noise and the boundary, on any mask. Completion
-            covers only the positive-definite interior, using logarithmic factor pivots
-            and row-normalized off-diagonals. Neither supports polynomial terms.
+            support, including zero noise and the boundary, on any mask. It does not
+            support polynomial terms.
         initial_stochastic_rate : float or None, optional
             Initial S coefficient on each selected direction; C/A and H start at zero.
-            None means zero for the fill-free and contraction charts and
-            DEFAULT_COMPLETION_STOCHASTIC_RATE for completion. Completion requires a
-            strictly positive rate; an explicit zero raises ValueError.
-        completion_normalization : {'row', 'column'}, optional
-            Row normalization uses L = D T and unit-diagonal completion without pivot
-            divisions. Column normalization uses L = T D and the pivot-dividing recurrence.
-            Row coordinates are invariant under diagonal congruence; column coordinates
-            can be better conditioned near other rank-deficient boundaries.
+            None means zero.
 
         Raises
         ------
         ValueError
             If the requested chart cannot represent the pattern or initialization,
-            or no directions are selected. Fill entries are dependent, not free errors.
+            or no directions are selected.
 
         Notes
         -----
@@ -254,7 +235,6 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         generator, where derivatives vanish as in dense CPTPLND. In the contraction
         chart a C/A coefficient is the product of two S square roots and a bounded
         coordinate, so its derivative scales with the rate rather than its square root.
-        Completion instead uses positive pivots and rejects singular inputs.
         """
         state_space = _statespace.StateSpace.cast(state_space)
         sectors = set(errorgen_types)
@@ -262,10 +242,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             raise ValueError("`errorgen_types` must contain only H, S, C, and A.")
         if sectors & set('CA') and 'S' not in sectors:
             raise ValueError("C/A sectors require S directions for a positive-semidefinite matrix.")
-        if param_mode not in ('auto', 'cholesky', 'contraction', 'cholesky completion'):
-            raise ValueError("`param_mode` must be 'auto', 'cholesky', 'contraction', or 'cholesky completion'.")
-        if completion_normalization not in ('row', 'column'):
-            raise ValueError("`completion_normalization` must be 'row' or 'column'.")
+        if param_mode not in ('auto', 'cholesky', 'contraction'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'contraction'.")
         if initial_stochastic_rate is not None and (
                 not isinstance(initial_stochastic_rate, (int, float, _np.integer, _np.floating))
                 or not _np.isfinite(initial_stochastic_rate) or initial_stochastic_rate < 0):
@@ -302,14 +280,8 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                         if sector in sectors and pair_weight <= limits.get(sector, _np.inf):
                             labels.append(_LocalElementaryErrorgenLabel(sector, (bels[i], bels[j])))
             block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
-                                             error_generator_labels=labels,
-                                             completion_normalization=completion_normalization)
-            completed = block._param_mode == 'cholesky completion'
-            rate = ((DEFAULT_COMPLETION_STOCHASTIC_RATE if completed else 0.)
-                    if initial_stochastic_rate is None else initial_stochastic_rate)
-            if completed and rate == 0:
-                raise ValueError("Cholesky completion requires a positive initial_stochastic_rate; "
-                                 "zero noise is outside this interior chart.")
+                                             error_generator_labels=labels)
+            rate = 0. if initial_stochastic_rate is None else initial_stochastic_rate
             block.block_data[:] = [rate if lbl.errorgen_type == 'S' else 0. for lbl in labels]
             blocks.append(block)
         if not blocks:

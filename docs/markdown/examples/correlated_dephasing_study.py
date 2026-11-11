@@ -102,11 +102,8 @@ class KossakowskiChart:
     def __init__(self, family, initial_rate):
         edges = () if family == 'independent' else (
             None if family == 'dense' else [(DIRECTIONS[i], DIRECTIONS[j]) for i, j in EDGES])
-        # The published results use completion for the cycle graph (the default there is now
-        # the contraction chart); the fill-free chart applies to the other families either way.
         errorgen = LindbladErrorgen.from_correlated_dephasing(
-            QubitSpace(4), edges, initial_stochastic_rate=initial_rate,
-            param_mode='cholesky completion' if family not in ('independent', 'dense') else 'auto'
+            QubitSpace(4), edges, initial_stochastic_rate=initial_rate
         )
         self.family = family
         self.block = errorgen.coefficient_blocks[0]
