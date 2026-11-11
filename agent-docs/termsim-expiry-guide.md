@@ -33,7 +33,7 @@ These were reviewed and deliberately **kept**. Several look term-related but are
 | `objectivefns.TermWeighted` | Least-squares objective-term weighting; unrelated |
 | Optimizer `oob_check_interval` / `oob_check_mode` / `oob_action` (`optimize/customlm.py`, `simplerlm.py`) | Used by gauge optimization (`algorithms/gaugeopt.py`) |
 | `circuits/cloudcircuitconstruction.py` | Keep it and its sequence-selection tests (`test_nqubit.py`). In 0.11 it still uses the term simulator (the `_TermFSim` uses and the `_ignore_term_deprecation_warnings` decorator) until #969 Part 1 replaces it |
-| `tools/legacytools.py`: `deprecate(..., message=, suppress_nested=)`, `warn_deprecated(..., message=, stacklevel=)` and their tests | General deprecation tooling added alongside this work. Only the `TERM_SIM_DEPRECATION_MESSAGE` constant goes |
+| `tools/legacytools.py`: `deprecate(..., message=, suppress_nested=)`, `warn_deprecated(..., message=)` and their tests | General deprecation tooling added alongside this work. Only the `TERM_SIM_DEPRECATION_MESSAGE` constant goes |
 | `Evotype.supports()` / `supported_reptypes()` | Generic. Only the `'term'`/`'direct term'` dict entries go |
 
 ## 2. Recommended order of work

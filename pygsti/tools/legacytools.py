@@ -11,10 +11,17 @@ Functions related deprecating other functions
 #***************************************************************************************************
 
 import functools as _functools
+import os as _os
 import sys as _sys
 import types as _types
 import warnings as _warnings
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+
+# The pygsti package directory; the trailing separator keeps a sibling such as `pygsti_scripts/`
+# from matching.
+_PYGSTI_DIR = _os.path.dirname(_os.path.dirname(__file__)) + _os.sep
+# Tests set this to False to run the Python 3.10/3.11 path on newer Pythons.
+_HAS_SKIP_FILE_PREFIXES = _sys.version_info >= (3, 12)
 
 #: Deprecation message shared by `TermForwardSimulator` and the term-based machinery that exists
 #: solely to support it (see https://github.com/sandialabs/pyGSTi/issues/916).  For use with
@@ -27,9 +34,13 @@ TERM_SIM_DEPRECATION_MESSAGE = (
     "See https://github.com/sandialabs/pyGSTi/issues/916.")
 
 
-def warn_deprecated(name, replacement=None, message=None, stacklevel=2):
+def warn_deprecated(name, replacement=None, message=None):
     """
     Formats and issues a deprecation warning message.
+
+    The warning is attributed to the first caller outside pyGSTi, so it shows
+    under Python's default filters when that caller is the user's script or
+    notebook, however deep inside pyGSTi the call was made.
 
     Parameters
     ----------
@@ -45,10 +56,6 @@ def warn_deprecated(name, replacement=None, message=None, stacklevel=2):
         occurrence of the literal substring ``{name}`` is replaced by `name`
         (plain substitution, not ``str.format``, so other braces are safe).
 
-    stacklevel : int, optional
-        Passed to :func:`warnings.warn`.  The default, 2, attributes the
-        warning to the code that called `warn_deprecated`.
-
     Returns
     -------
     None
@@ -60,7 +67,14 @@ def warn_deprecated(name, replacement=None, message=None, stacklevel=2):
         if replacement is not None:
             message += '\n    '
             message += 'Please use {} instead.'.format(replacement)
-    _warnings.warn(message, _pyGSTiDeprecationWarning, stacklevel=stacklevel)
+    if _HAS_SKIP_FILE_PREFIXES:
+        _warnings.warn(message, _pyGSTiDeprecationWarning, skip_file_prefixes=(_PYGSTI_DIR,))
+    else:  # Python 3.10, 3.11: count the frames up to the first one outside pygsti
+        frame, stacklevel = _sys._getframe(), 1
+        while frame is not None and frame.f_code.co_filename.startswith(_PYGSTI_DIR):
+            frame, stacklevel = frame.f_back, stacklevel + 1
+        del frame  # break the frame/locals reference cycle
+        _warnings.warn(message, _pyGSTiDeprecationWarning, stacklevel=stacklevel)
 
 
 def deprecate(replacement=None, message=None, suppress_nested=False):
@@ -94,7 +108,8 @@ def deprecate(replacement=None, message=None, suppress_nested=False):
     suppress_nested : bool, optional
         If True, `pyGSTiDeprecationWarning`s raised *while executing* the
         deprecated function are silenced, so that a call issues exactly one
-        warning (attributed to the caller) even when the deprecated function
+        warning (attributed to the first caller outside pyGSTi, as for
+        :func:`warn_deprecated`) even when the deprecated function
         itself calls other deprecated functions.  Useful for families of
         deprecated methods that call one another.
 
@@ -116,9 +131,7 @@ def deprecate(replacement=None, message=None, suppress_nested=False):
 
         @_functools.wraps(fn)
         def _inner(*args, **kwargs):
-            # stacklevel=3 attributes the warning to the caller of the deprecated function
-            # (1 = warn_deprecated, 2 = _inner, 3 = caller).
-            warn_deprecated(name, replacement, message=message, stacklevel=3)
+            warn_deprecated(name, replacement, message=message)
             if not suppress_nested:
                 return fn(*args, **kwargs)
             with _warnings.catch_warnings():
