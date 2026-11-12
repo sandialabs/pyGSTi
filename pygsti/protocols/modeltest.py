@@ -290,7 +290,9 @@ class ModelTest(_proto.Protocol):
             #generation looks at to determine the names of the gauge optimized models).
             #Set the value to None as a placeholder.
             ret.estimates[self.name].goparameters['trivial_gauge_opt']= None
-        
+
+        from .gst import _release_comm_bound_stores
+        _release_comm_bound_stores(ret, resource_alloc)
         return ret
 
 
