@@ -577,6 +577,58 @@ class MakeSimultaneousGSTDesignTester(_SGSTFixture, BaseCase):
         self.assertNotEqual(other.circuit_lists, self.design.circuit_lists)
 
 
+def _grid_2x3_pspec():
+    """A 2x3 grid processor spec: not a canonical topology, bipartite, max degree 3."""
+    edges = [(0, 1), (1, 2), (3, 4), (4, 5), (0, 3), (1, 4), (2, 5)]
+    oneq_locations = [(q,) for q in range(6)]
+    availability = {'Gi': oneq_locations, 'Gxpi2': oneq_locations, 'Gypi2': oneq_locations,
+                    'Gcnot': edges, 'Gii': edges}
+    pspec = QubitProcessorSpec(
+        6, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
+        nonstd_gate_unitaries={'Gii': np.eye(4)},
+        availability=availability, qubit_labels=tuple(range(6)))
+    return pspec, edges
+
+
+class EmptyColorPatchTester(BaseCase):
+    """An empty color class must not become a patch of circuits that test no edge (#938)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.pspec, cls.edges = _grid_2x3_pspec()
+        cls.oneq, cls.twoq = _make_designs()
+
+    def test_make_simultaneous_gst_design_uses_max_degree_patches(self):
+        # 'auto' used to return the Vizing palette's deg+1 colors with one left empty here.
+        for seed in range(4):
+            design = make_simultaneous_gst_design(self.pspec, self.oneq, self.twoq, seed=seed)
+            self.assertEqual(len(design.color_patches), 3, msg=f"seed={seed}")
+            self.assertTrue(all(design.color_patches.values()), msg=f"seed={seed}")
+
+    def test_user_supplied_empty_patch_is_dropped_with_a_warning(self):
+        coloring = {0: [(4, 5), (0, 3), (1, 2)], 1: [(0, 1), (3, 4), (2, 5)], 2: [(1, 4)]}
+        expected = SimultaneousGSTDesign(self.pspec, self.oneq, self.twoq, coloring, seed=0)
+        with self.assertWarnsRegex(UserWarning, "empty color classes \\[3\\]"):
+            design = SimultaneousGSTDesign(
+                self.pspec, self.oneq, self.twoq, {**coloring, 3: []}, seed=0)
+        self.assertEqual(design.color_patches, coloring)
+        self.assertEqual(design.circuit_lists, expected.circuit_lists)
+
+    def test_device_without_edges_keeps_one_empty_patch(self):
+        oneq_locations = [(q,) for q in range(3)]
+        pspec = QubitProcessorSpec(
+            3, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot'],
+            availability={'Gi': oneq_locations, 'Gxpi2': oneq_locations,
+                          'Gypi2': oneq_locations, 'Gcnot': []},
+            qubit_labels=(0, 1, 2))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            design = make_simultaneous_gst_design(pspec, self.oneq, self.twoq, seed=0)
+        self.assertEqual(design.color_patches, {0: []})
+        self.assertGreater(len(design.all_circuits_needing_data), 0)
+
+
 class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
     """
     Cover the *detection power* of the verification helpers.
