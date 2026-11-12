@@ -195,3 +195,31 @@ class FisherInformationTester(BaseCase):
         fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model_inst, self.lsgst_list_instruments, self.Ls,
                                                                         approx=True)
         self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[4])<1e-3)
+
+    def test_fisher_information_against_direct_computation(self):
+        # Compare against sum_c sum_o J_o J_o^T / p_o computed directly. The noisy
+        # model keeps every probability above the clipping floor, so the
+        # regularization in the FIM routines should not change anything.
+        model = smq1Q_XYI.target_model('full TP').depolarize(op_noise=0.05, spam_noise=0.02)
+        circuits = smq1Q_XYI.create_gst_experiment_design(2).all_circuits_needing_data
+
+        expected = dict()
+        for c in circuits:
+            p, dp = model.probabilities(c), model.sim.dprobs(c)
+            self.assertGreater(min(p.values()), 1e-3)
+            expected[c] = sum(_np.outer(dp[o], dp[o]) / p[o] for o in p)
+        expected_total = sum(expected.values())
+
+        def relerr(a, b):
+            return _np.linalg.norm(a - b) / _np.linalg.norm(b)
+
+        fim = et.calculate_fisher_information_matrix(model, circuits, approx=True)
+        self.assertLess(relerr(fim, expected_total), 1e-8)
+        # With approx=False the Hessian terms sum to zero analytically, but the
+        # Map simulator computes them by finite differences.
+        fim = et.calculate_fisher_information_matrix(model, circuits, approx=False)
+        self.assertLess(relerr(fim, expected_total), 1e-5)
+
+        per_circuit = et.calculate_fisher_information_per_circuit(model, circuits, approx=True)
+        for c in circuits:
+            self.assertLess(relerr(per_circuit[c], expected[c]), 1e-8)
