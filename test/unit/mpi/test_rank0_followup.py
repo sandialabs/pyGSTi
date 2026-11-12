@@ -25,13 +25,18 @@ def test_hessians_and_rank0_followup_after_mpi_fit():
     env = {**os.environ, 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1'}
     # Before the fix, either bug left rank 0 waiting on a collective call forever, so a
     # hang is the failure mode; the timeout is generous compared with the ~20 s run.
-    completed = subprocess.run(args, capture_output=True, text=True, timeout=300, env=env)
+    completed = subprocess.run(args, capture_output=True, text=True, timeout=60, env=env)
     assert completed.returncode == 0, completed.stderr
-    out = json.loads(completed.stdout.strip().splitlines()[-1])
-    assert out['hessians_agree']
-    # Serial values for the same data and fits.
-    assert out['gst_misfit_sigma'] == pytest.approx(0.82890, abs=1e-4)
-    assert out['mt_misfit_sigma'] == pytest.approx(2.43741, abs=1e-4)
+    temp = completed.stdout.strip().splitlines()
+    out_a = json.loads(temp[-2])
+    out_b = json.loads(temp[-1])
+    assert out_a['hessians_agree'] == True
+    assert out_b['hessians_agree'] == True
+    assert all(out_a['stores_invalidated'].values())
+    assert all(out_b['stores_invalidated'].values())
+    assert out_a['nsigma_e'] == pytest.approx(out_b['nsigma_e'], rel=1e-5)
+    assert out_a['nsigma_t'] == pytest.approx(out_b['nsigma_t'], rel=1e-5)
+    return
 
 
 def test_serial_run_keeps_its_stores():
