@@ -60,6 +60,8 @@ import warnings as _warnings
 
 import numpy as _np
 from scipy import optimize as _optimize
+from scipy import sparse as _sps
+from scipy.sparse import linalg as _spla
 
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
@@ -190,10 +192,11 @@ def _split_basis_element_label(bel, default_support):
     return pauli, tokens
 
 
-def _canonical_pauli_string(pauli, tokens, qubit_labels, virtual_qubit_token, allow_virtual):
+def _canonical_pauli_string(pauli, tokens, qubit_labels, virtual_qubit_token, allow_virtual, str_labels=None):
     """Build the (num_qubits + 1)-character canonical Pauli string (virtual slot last)."""
     n = len(qubit_labels)
-    str_labels = {str(lbl): i for i, lbl in enumerate(qubit_labels)}
+    if str_labels is None:
+        str_labels = {str(lbl): i for i, lbl in enumerate(qubit_labels)}
     chars = ['I'] * (n + 1)
     for ch, tok in zip(pauli, tokens):
         tok = str(tok)
@@ -211,6 +214,30 @@ def _canonical_pauli_string(pauli, tokens, qubit_labels, virtual_qubit_token, al
         if ch != 'I':
             chars[idx] = ch
     return ''.join(chars)
+
+
+def _canonical_stim_pauli(pauli, tokens, qubit_labels, virtual_qubit_token, allow_virtual, str_labels):
+    """Build the (num_qubits + 1)-qubit canonical stim.PauliString directly (virtual slot last)."""
+    n = len(qubit_labels)
+    ps = _stim.PauliString(n + 1)
+    seen = set()
+    for ch, tok in zip(pauli, tokens):
+        tok = str(tok)
+        if tok == str(virtual_qubit_token) and tok not in str_labels:
+            if not allow_virtual:
+                raise ValueError("Only mid-circuit-measurement error generators may act on the virtual qubit '%s'."
+                                 % virtual_qubit_token)
+            idx = n
+        elif tok in str_labels:
+            idx = str_labels[tok]
+        else:
+            raise ValueError("Unknown qubit label '%s' (known labels: %s)" % (tok, str(qubit_labels)))
+        if idx in seen and ch != 'I':
+            raise ValueError("Qubit '%s' appears more than once in a basis element label." % tok)
+        if ch != 'I':
+            seen.add(idx)
+            ps[idx] = ch
+    return ps
 
 
 def build_model_parameter_indexing(lindblad_coeff, num_qubits=None, qubit_labels=None,
@@ -267,6 +294,7 @@ def build_model_parameter_indexing(lindblad_coeff, num_qubits=None, qubit_labels
 
     params = ModelParameterList([], qubit_labels, mcm_gate_names, virtual_qubit_token)
     rates = []
+    str_labels = {str(lbl): i for i, lbl in enumerate(qubit_labels)}
     for key, errors in lindblad_coeff.items():
         if key in _SPAM_KEYS:
             default_support = [str(l) for l in qubit_labels]
@@ -291,12 +319,12 @@ def build_model_parameter_indexing(lindblad_coeff, num_qubits=None, qubit_labels
             bels = list(error[1:]) if not (len(error) == 2 and isinstance(error[1], (tuple, list))) else list(error[1])
             if typ in ('H', 'S') and len(bels) != 1 or typ in ('C', 'A') and len(bels) != 2 or typ not in 'HSCA':
                 raise ValueError("Invalid error generator specification %s" % str(error))
-            canonical = []
+            stim_bels = []
             for bel in bels:
                 pauli, tokens = _split_basis_element_label(bel, default_support)
-                canonical.append(_canonical_pauli_string(pauli, tokens, qubit_labels, virtual_qubit_token,
-                                                         allow_virtual))
-            errgen = _lseg.LocalStimErrorgenLabel(typ, [_stim.PauliString(c) for c in canonical])
+                stim_bels.append(_canonical_stim_pauli(pauli, tokens, qubit_labels, virtual_qubit_token,
+                                                       allow_virtual, str_labels))
+            errgen = _lseg.LocalStimErrorgenLabel(typ, stim_bels)
             params.append(ModelParameter(errgen, key))
             rates.append(rate)
     return params, rates
@@ -321,17 +349,21 @@ def instantiate_parameter_errorgen(param, num_qubits, num_virtual=0, virtual_ind
     LocalStimErrorgenLabel
     """
     new_bels = []
+    total = num_qubits + num_virtual
     for p in param.errorgen.basis_element_labels:
-        s = str(p)[1:].replace('_', 'I')
-        assert len(s) == num_qubits + 1, "Canonical Pauli string has the wrong length"
-        chars = list(s[:num_qubits]) + ['I'] * num_virtual
-        if s[num_qubits] != 'I':
-            if virtual_index is None:
-                raise ValueError("Parameter %s acts on the virtual qubit but no virtual index was given" % str(param))
-            chars[num_qubits + virtual_index] = s[num_qubits]
-        new_bels.append(_stim.PauliString(''.join(chars)))
+        assert len(p) == num_qubits + 1, "Canonical Pauli string has the wrong length"
+        ps = _stim.PauliString(total)
+        for q in p.pauli_indices():
+            if q == num_qubits:
+                if virtual_index is None:
+                    raise ValueError("Parameter %s acts on the virtual qubit but no virtual index was given"
+                                     % str(param))
+                ps[num_qubits + virtual_index] = p[q]
+            else:
+                ps[q] = p[q]
+        new_bels.append(ps)
     return _lseg.LocalStimErrorgenLabel(param.errorgen.errorgen_type, new_bels,
-                                        initial_label=param.errorgen.initial_label)
+                                        initial_label=param.errorgen._initial_label)
 
 
 def _component_key(comp):
@@ -388,7 +420,7 @@ class PropagatedCircuit(object):
         Stabilizer tableau of the ideal expanded circuit.
     eoc_errorgens : list of LocalStimErrorgenLabel
         The distinct end-of-circuit error generators.
-    parameter_matrix : numpy.ndarray
+    parameter_matrix : scipy.sparse.csr_matrix
         Shape ``(len(eoc_errorgens), num_params)``: entry ``[k, j]`` is the (signed) coefficient with which
         parameter ``j`` contributes to end-of-circuit error generator ``k`` (the "permutation matrix").
     """
@@ -469,30 +501,44 @@ def propagate_parameter_errorgens(circuit, model_parameter_indexing, qubit_label
 
     expanded, infos = _mcm.expand_mcm_circuit(circuit, mcm_gate_names, cnot_name)
     m = len(infos)
+    total = n + m
     all_labels = tuple(qubit_labels) + tuple(info.virtual_qubit for info in infos)
     label_to_index = {lbl: i for i, lbl in enumerate(all_labels)}
     # expanded circuit lines: circuit.line_labels (possibly permuted w.r.t. qubit_labels) + virtual labels
     qubit_label_conversions = {lbl: label_to_index[lbl] for lbl in expanded.line_labels}
 
-    stim_layers = expanded.convert_to_stim_tableau_layers(gate_name_conversions=gate_name_conversions,
-                                                          num_qubits=n + m,
-                                                          qubit_label_conversions=qubit_label_conversions)
-    depth = len(stim_layers)
-    # prop_from[k] = product of layers k..depth-1 (prop_from[depth] = identity)
+    depth = len(expanded)
+    # prop_from[k] = product of layers k..depth-1 (prop_from[depth] = identity).
+    # Prepending each gate onto prop_from[k + 1] updates only the gate's target rows (O(1) per gate).
     prop_from = [None] * (depth + 1)
-    prop_from[depth] = _stim.Tableau(n + m)
+    prop_from[depth] = _stim.Tableau(total)
     for k in reversed(range(depth)):
-        prop_from[k] = prop_from[k + 1] * stim_layers[k]
+        cur = prop_from[k + 1].copy()
+        for sub_lbl in reversed(expanded[k].components):
+            qubits = sub_lbl.qubits if sub_lbl.qubits is not None else expanded.line_labels
+            cur.prepend(gate_name_conversions[sub_lbl.name], [qubit_label_conversions[q] for q in qubits])
+        prop_from[k] = cur
     tableau = prop_from[0]
 
-    # --- assemble per-layer (parameter index, instantiated error generator) pairs
+    # --- assemble per-layer (parameter index, virtual_index) pairs
     key_to_indices = _collections.defaultdict(list)
     for j, p in enumerate(model_parameter_indexing):
         key_to_indices[p.key].append(j)
 
-    layers = []  # list of (propagation tableau, [(param_idx, errorgen), ...])
-    layers.append((prop_from[0], [(j, instantiate_parameter_errorgen(model_parameter_indexing[j], n, m))
-                                  for j in key_to_indices.get('prep', [])]))
+    param_supports = {}
+
+    def get_support(j):
+        s = param_supports.get(j)
+        if s is None:
+            bels = model_parameter_indexing[j].errorgen.basis_element_labels
+            for b in bels:
+                assert len(b) == n + 1, "Canonical Pauli string has the wrong length"
+            s = tuple(tuple((q, b[q]) for q in b.pauli_indices()) for b in bels)
+            param_supports[j] = s
+        return s
+
+    layers = []  # list of (propagation tableau, [(param_idx, virtual_idx_or_None), ...])
+    layers.append((prop_from[0], [(j, None) for j in key_to_indices.get('prep', [])]))
     mcm_iter = iter(infos)
     for layer_index, layer_lbl in enumerate(circuit):
         entries = []
@@ -502,28 +548,103 @@ def propagate_parameter_errorgens(circuit, model_parameter_indexing, qubit_label
                 for q in qubits:
                     info = next(mcm_iter)
                     for j in key_to_indices.get((comp.name, q), []):
-                        entries.append((j, instantiate_parameter_errorgen(model_parameter_indexing[j], n, m,
-                                                                          virtual_index=info.mcm_index)))
+                        entries.append((j, info.mcm_index))
             else:
                 for j in key_to_indices.get(_component_key(comp), []):
-                    entries.append((j, instantiate_parameter_errorgen(model_parameter_indexing[j], n, m)))
+                    entries.append((j, None))
         layers.append((prop_from[layer_index + 1], entries))
-    layers.append((prop_from[depth], [(j, instantiate_parameter_errorgen(model_parameter_indexing[j], n, m))
-                                      for j in key_to_indices.get('povm', [])]))
+    layers.append((prop_from[depth], [(j, None) for j in key_to_indices.get('povm', [])]))
 
     # --- propagate and accumulate
-    eoc_index = _collections.OrderedDict()
-    contributions = []  # (eoc_idx, param_idx, coefficient)
+    eoc_by_key = {}
+    eoc_list = []
+    rows, cols, coeffs = [], [], []
     for prop_tableau, entries in layers:
-        for j, errgen in entries:
-            propagated, coeff = errgen.propagate_error_gen_tableau(prop_tableau, 1.0)
-            if propagated not in eoc_index:
-                eoc_index[propagated] = len(eoc_index)
-            contributions.append((eoc_index[propagated], j, coeff))
-    parameter_matrix = _np.zeros((len(eoc_index), num_params))
-    for k, j, coeff in contributions:
-        parameter_matrix[k, j] += coeff
-    return PropagatedCircuit(circuit, expanded, infos, qubit_labels, tableau, list(eoc_index.keys()), parameter_matrix)
+        if not entries:
+            continue
+        x_out = {}
+        z_out = {}
+        y_out = {}
+
+        def get_1q(q, op):
+            if op == 1:
+                res = x_out.get(q)
+                if res is None:
+                    res = prop_tableau.x_output(q)
+                    x_out[q] = res
+                return res
+            if op == 3:
+                res = z_out.get(q)
+                if res is None:
+                    res = prop_tableau.z_output(q)
+                    z_out[q] = res
+                return res
+            res = y_out.get(q)
+            if res is None:
+                xo = x_out.get(q)
+                if xo is None:
+                    xo = prop_tableau.x_output(q)
+                    x_out[q] = xo
+                zo = z_out.get(q)
+                if zo is None:
+                    zo = prop_tableau.z_output(q)
+                    z_out[q] = zo
+                res = 1j * xo * zo
+                y_out[q] = res
+            return res
+
+        bel_cache = {}
+        for j, v_idx in entries:
+            param = model_parameter_indexing[j]
+            typ = param.errorgen.errorgen_type
+            supps = get_support(j)
+            new_bels = []
+            bel_keys = []
+            weightmod = 1.0
+            for supp in supps:
+                if any(q == n for q, _ in supp):
+                    if v_idx is None:
+                        raise ValueError("Parameter %s acts on the virtual qubit but no virtual index was given"
+                                         % str(param))
+                    mapped = tuple((n + v_idx if q == n else q, op) for q, op in supp)
+                else:
+                    mapped = supp
+                cached = bel_cache.get(mapped)
+                if cached is None:
+                    if len(mapped) == 1:
+                        q0, op0 = mapped[0]
+                        temp = get_1q(q0, op0)
+                    elif len(mapped) == 2:
+                        (q0, op0), (q1, op1) = mapped
+                        temp = get_1q(q0, op0) * get_1q(q1, op1)
+                    else:
+                        temp = _stim.PauliString(total)
+                        for q0, op0 in mapped:
+                            temp = temp * get_1q(q0, op0)
+                    tsign = temp.sign
+                    unsigned = temp if tsign == 1 else temp * tsign
+                    bkey = (tuple(unsigned.pauli_indices('XY')), tuple(unsigned.pauli_indices('YZ')))
+                    cached = (unsigned, float(tsign.real), bkey)
+                    bel_cache[mapped] = cached
+                unsigned, s_real, bkey = cached
+                new_bels.append(unsigned)
+                bel_keys.append(bkey)
+                if typ != 'S':
+                    weightmod *= s_real
+            ekey = (typ, bel_keys[0]) if len(bel_keys) == 1 else (typ, bel_keys[0], bel_keys[1])
+            k_idx = eoc_by_key.get(ekey)
+            if k_idx is None:
+                k_idx = len(eoc_list)
+                eoc_by_key[ekey] = k_idx
+                eoc_list.append(_lseg.LocalStimErrorgenLabel(typ, new_bels,
+                                                             initial_label=param.errorgen._initial_label))
+            rows.append(k_idx)
+            cols.append(j)
+            coeffs.append(weightmod)
+
+    parameter_matrix = _sps.coo_matrix((coeffs, (rows, cols)), shape=(len(eoc_list), num_params),
+                                       dtype=float).tocsr()
+    return PropagatedCircuit(circuit, expanded, infos, qubit_labels, tableau, eoc_list, parameter_matrix)
 
 
 def build_permutation_matrix(circuit, model_parameter_indexing, **kwargs):
@@ -536,7 +657,7 @@ def build_permutation_matrix(circuit, model_parameter_indexing, **kwargs):
     eoc_errorgens : list of LocalStimErrorgenLabel
     """
     prop = propagate_parameter_errorgens(circuit, model_parameter_indexing, **kwargs)
-    return prop.parameter_matrix, prop.eoc_errorgens
+    return prop.parameter_matrix.toarray(), prop.eoc_errorgens
 
 
 def generate_ideal_state(circ, mcm_gate_names=DEFAULT_MCM_GATE_NAMES, cnot_name='Gcnot', gate_name_conversions=None):
@@ -558,8 +679,12 @@ def generate_ideal_state(circ, mcm_gate_names=DEFAULT_MCM_GATE_NAMES, cnot_name=
     if gate_name_conversions is None:
         gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
     conv = {lbl: i for i, lbl in enumerate(expanded.line_labels)}
-    return expanded.convert_to_stim_tableau(gate_name_conversions=gate_name_conversions,
-                                            num_qubits=len(expanded.line_labels), qubit_label_conversions=conv)
+    tab = _stim.Tableau(len(expanded.line_labels))
+    for k in reversed(range(len(expanded))):
+        for sub_lbl in reversed(expanded[k].components):
+            qubits = sub_lbl.qubits if sub_lbl.qubits is not None else expanded.line_labels
+            tab.prepend(gate_name_conversions[sub_lbl.name], [conv[q] for q in qubits])
+    return tab
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -587,10 +712,10 @@ def default_pauli_measurements(num_qubits, max_weight=2, num_mcms=0):
     paulis = []
     for w in range(1, min(max_weight, total) + 1):
         for support in _itertools.combinations(range(total), w):
-            chars = ['I'] * total
+            p = _stim.PauliString(total)
             for i in support:
-                chars[i] = 'Z'
-            paulis.append(_stim.PauliString(''.join(chars)))
+                p[i] = 3
+            paulis.append(p)
     return paulis
 
 
@@ -601,7 +726,9 @@ def _pad_pauli(pauli, total_num_qubits):
     if len(pauli) > total_num_qubits:
         raise ValueError("Pauli observable %s acts on more qubits than the (expanded) circuit has (%d)"
                          % (str(pauli), total_num_qubits))
-    return _stim.PauliString(str(pauli) + '_' * (total_num_qubits - len(pauli)))
+    p = pauli.copy()
+    p += _stim.PauliString(total_num_qubits - len(pauli))
+    return p
 
 
 def _resolve_pauli_measurements(pauli_measurements, num_qubits, num_mcms, max_pauli_weight):
@@ -613,7 +740,268 @@ def _resolve_pauli_measurements(pauli_measurements, num_qubits, num_mcms, max_pa
     return [_pad_pauli(p, total) for p in pauli_measurements]
 
 
-def calculate_sensitivity_matrix_paulis(ideal_state, errorgen_list, num_qubits=None, pauli_subset=None):
+_AUTO_SPARSE_MIN_SIZE = 100_000
+_AUTO_SPARSE_MAX_DENSITY = 0.05
+
+
+def _resolve_sparse_matrix(csr_mat, sparse='auto'):
+    """Return `csr_mat` as a CSR sparse matrix or a dense ndarray according to `sparse` (True, False, or 'auto')."""
+    if sparse is True:
+        return csr_mat
+    if sparse is False:
+        return csr_mat.toarray()
+    if sparse == 'auto':
+        size = csr_mat.shape[0] * csr_mat.shape[1]
+        if size >= _AUTO_SPARSE_MIN_SIZE and csr_mat.nnz <= _AUTO_SPARSE_MAX_DENSITY * size:
+            return csr_mat
+        return csr_mat.toarray()
+    raise ValueError("sparse must be True, False, or 'auto'")
+
+
+def _pauli_sensitivities_and_expectations(ideal_state, errorgen_list, paulis, num_qubits=None, sparse='auto'):
+    """
+    Compute both the Pauli sensitivity matrix (dense or CSR) and the ideal expectation values of `paulis`
+    in the stabilizer state `ideal_state`, exploiting the locality of the observables and error generators.
+    """
+    if sparse not in (True, False, 'auto'):
+        raise ValueError("sparse must be True, False, or 'auto'")
+    errorgens = list(errorgen_list)
+    n_paulis = len(paulis)
+    n_err = len(errorgens)
+    if n_paulis == 0:
+        empty_csr = _sps.csr_matrix((0, n_err), dtype=float)
+        return _resolve_sparse_matrix(empty_csr, sparse), _np.zeros(0, dtype=float)
+
+    if isinstance(ideal_state, _stim.TableauSimulator):
+        t_inv = ideal_state.current_inverse_tableau()
+    else:
+        t_inv = ideal_state ** -1
+    n = len(t_inv) if num_qubits is None else num_qubits
+    x_out = {}
+    z_out = {}
+    y_out = {}
+
+    def get_1q(q, op):
+        if op == 1:
+            res = x_out.get(q)
+            if res is None:
+                res = t_inv.x_output(q)
+                x_out[q] = res
+            return res
+        if op == 3:
+            res = z_out.get(q)
+            if res is None:
+                res = t_inv.z_output(q)
+                z_out[q] = res
+            return res
+        res = y_out.get(q)
+        if res is None:
+            xo = x_out.get(q)
+            if xo is None:
+                xo = t_inv.x_output(q)
+                x_out[q] = xo
+            zo = z_out.get(q)
+            if zo is None:
+                zo = t_inv.z_output(q)
+                z_out[q] = zo
+            res = 1j * xo * zo
+            y_out[q] = res
+        return res
+
+    def apply_t_inv(p):
+        idxs = p.pauli_indices()
+        if not idxs:
+            return _stim.PauliString(n) * p.sign
+        acc = get_1q(idxs[0], p[idxs[0]])
+        for q in idxs[1:]:
+            acc = acc * get_1q(q, p[q])
+        return acc if p.sign == 1 else acc * p.sign
+
+    ideal = _np.zeros(n_paulis, dtype=float)
+    pauli_data = []
+    all_z = True
+    for i, pauli in enumerate(paulis):
+        if not isinstance(pauli, _stim.PauliString):
+            pauli = _stim.PauliString(str(pauli))
+        if all_z and len(pauli.pauli_indices('XY')) > 0:
+            all_z = False
+        rp = apply_t_inv(pauli)
+        xmask = tuple(rp.pauli_indices('XY'))
+        if not xmask:
+            ideal[i] = float(rp.sign.real)
+        pauli_data.append((pauli, rp, xmask))
+
+    if n_err == 0:
+        empty_csr = _sps.csr_matrix((n_paulis, 0), dtype=float)
+        return _resolve_sparse_matrix(empty_csr, sparse), ideal
+
+    s_by_qubit = [[] for _ in range(n)]
+    h_by_qubit = [[] for _ in range(n)]
+    gen_by_qubit = [[] for _ in range(n)]
+    has_gen = False
+    for j, eg in enumerate(errorgens):
+        typ = eg.errorgen_type
+        bels = eg.basis_element_labels
+        if not isinstance(bels[0], _stim.PauliString):
+            bels = tuple(_stim.PauliString(b) for b in bels)
+        if all_z and typ == 'S':
+            for q in bels[0].pauli_indices('XY'):
+                s_by_qubit[q].append(j)
+        elif all_z and typ == 'H':
+            a = bels[0]
+            for q in a.pauli_indices('XY'):
+                h_by_qubit[q].append((j, a))
+        else:
+            has_gen = True
+            if len(bels) == 1:
+                supp = bels[0].pauli_indices()
+            else:
+                supp = set(bels[0].pauli_indices()).union(bels[1].pauli_indices())
+            for q in supp:
+                gen_by_qubit[q].append((j, typ, bels))
+
+    h_cache = {}
+
+    def get_h_info(j, a):
+        info = h_cache.get(j)
+        if info is None:
+            r = apply_t_inv(a)
+            info = (tuple(r.pauli_indices('XY')), r)
+            h_cache[j] = info
+        return info
+
+    gen_cache = {}
+
+    def get_gen_info(j, typ, bels):
+        info = gen_cache.get(j)
+        if info is None:
+            if typ == 'H':
+                r = apply_t_inv(bels[0])
+                info = (False, tuple(r.pauli_indices('XY')), r)
+            else:
+                r = apply_t_inv(bels[0] * bels[1])
+                info = (bels[0].commutes(bels[1]), tuple(r.pauli_indices('XY')), r)
+            gen_cache[j] = info
+        return info
+
+    rows, cols, vals = [], [], []
+
+    def add_entry(r_idx, c_idx, v):
+        rows.append(r_idx)
+        cols.append(c_idx)
+        vals.append(float(_egpt._real_if_close(v)))
+
+    for i, (pauli, rp, xmask) in enumerate(pauli_data):
+        if all_z:
+            p_idxs = pauli.pauli_indices('Z')
+            w = len(p_idxs)
+            if not xmask and w > 0:
+                val = float(_egpt._real_if_close(-2.0 * rp.sign))
+                if w == 1:
+                    for j in s_by_qubit[p_idxs[0]]:
+                        rows.append(i); cols.append(j); vals.append(val)
+                elif w == 2:
+                    c0, c1 = s_by_qubit[p_idxs[0]], s_by_qubit[p_idxs[1]]
+                    s0, s1 = set(c0), set(c1)
+                    for j in c0:
+                        if j not in s1:
+                            rows.append(i); cols.append(j); vals.append(val)
+                    for j in c1:
+                        if j not in s0:
+                            rows.append(i); cols.append(j); vals.append(val)
+                else:
+                    counts = {}
+                    for q in p_idxs:
+                        for j in s_by_qubit[q]:
+                            counts[j] = counts.get(j, 0) + 1
+                    for j, c in counts.items():
+                        if c & 1:
+                            rows.append(i); cols.append(j); vals.append(val)
+            if w == 1:
+                for j, a in h_by_qubit[p_idxs[0]]:
+                    xm, r = get_h_info(j, a)
+                    if xm == xmask:
+                        add_entry(i, j, -2j * (rp * r).sign)
+            elif w == 2:
+                c0, c1 = h_by_qubit[p_idxs[0]], h_by_qubit[p_idxs[1]]
+                s0, s1 = {j for j, _ in c0}, {j for j, _ in c1}
+                for j, a in c0:
+                    if j not in s1:
+                        xm, r = get_h_info(j, a)
+                        if xm == xmask:
+                            add_entry(i, j, -2j * (rp * r).sign)
+                for j, a in c1:
+                    if j not in s0:
+                        xm, r = get_h_info(j, a)
+                        if xm == xmask:
+                            add_entry(i, j, -2j * (rp * r).sign)
+            elif w > 2:
+                counts = {}
+                a_map = {}
+                for q in p_idxs:
+                    for j, a in h_by_qubit[q]:
+                        counts[j] = counts.get(j, 0) + 1
+                        a_map[j] = a
+                for j, c in counts.items():
+                    if c & 1:
+                        xm, r = get_h_info(j, a_map[j])
+                        if xm == xmask:
+                            add_entry(i, j, -2j * (rp * r).sign)
+
+        if has_gen:
+            p_idxs = pauli.pauli_indices()
+            seen = set()
+            for q in p_idxs:
+                for j, typ, bels in gen_by_qubit[q]:
+                    if j in seen:
+                        continue
+                    seen.add(j)
+                    if typ == 'S':
+                        if not xmask and not pauli.commutes(bels[0]):
+                            add_entry(i, j, -2.0 * rp.sign)
+                        continue
+                    com_ab, xm, r = get_gen_info(j, typ, bels)
+                    if xm != xmask:
+                        continue
+                    if typ == 'H':
+                        if not pauli.commutes(bels[0]):
+                            add_entry(i, j, -2j * (rp * r).sign)
+                    elif typ == 'C':
+                        a, b = bels[0], bels[1]
+                        com_ap = a.commutes(pauli)
+                        if com_ab:
+                            if not com_ap and not b.commutes(pauli):
+                                add_entry(i, j, -4.0 * (r * rp).sign)
+                        else:
+                            com_bp = b.commutes(pauli)
+                            if com_ap and not com_bp:
+                                add_entry(i, j, -2.0 * (r * rp).sign)
+                            elif not com_ap and com_bp:
+                                add_entry(i, j, 2.0 * (r * rp).sign)
+                    else:  # 'A'
+                        a, b = bels[0], bels[1]
+                        com_ap = a.commutes(pauli)
+                        if com_ab:
+                            com_bp = b.commutes(pauli)
+                            if com_ap and not com_bp:
+                                add_entry(i, j, 2j * (r * rp).sign)
+                            elif not com_ap and com_bp:
+                                add_entry(i, j, -2j * (r * rp).sign)
+                        else:
+                            if not com_ap and not b.commutes(pauli):
+                                add_entry(i, j, 4j * (r * rp).sign)
+
+    if sparse is False:
+        mat = _np.zeros((n_paulis, n_err), dtype=float)
+        if rows:
+            mat[rows, cols] = vals
+    else:
+        csr = _sps.coo_matrix((vals, (rows, cols)), shape=(n_paulis, n_err), dtype=float).tocsr()
+        mat = _resolve_sparse_matrix(csr, sparse)
+    return mat, ideal
+
+
+def calculate_sensitivity_matrix_paulis(ideal_state, errorgen_list, num_qubits=None, pauli_subset=None, sparse='auto'):
     """
     First-order sensitivities of Pauli expectation values to end-of-circuit error generators.
 
@@ -625,22 +1013,21 @@ def calculate_sensitivity_matrix_paulis(ideal_state, errorgen_list, num_qubits=N
         Total number of qubits of `ideal_state` (inferred if None).
     pauli_subset : list of stim.PauliString, optional
         Observables; defaults to all Z-type Paulis of weight <= 2.
+    sparse : {'auto', True, False}, optional
+        Whether to return a `scipy.sparse.csr_matrix` or a dense `numpy.ndarray`.  ``'auto'`` (default) returns
+        a sparse matrix when the matrix has at least ``10**5`` entries and at most 5% nonzeros, and a dense
+        array otherwise.
 
     Returns
     -------
-    numpy.ndarray
+    numpy.ndarray or scipy.sparse.csr_matrix
         Shape ``(len(paulis), len(errorgen_list))``.
     """
     if num_qubits is None:
         num_qubits = len(ideal_state)
     paulis = _resolve_pauli_measurements(pauli_subset, num_qubits, 0, 2)
-    if len(errorgen_list) == 0:
-        return _np.zeros((len(paulis), 0))
-    mat = _np.asarray(_egpt.bulk_alpha_pauli(errorgen_list, ideal_state, paulis))
-    if _np.iscomplexobj(mat):
-        assert _np.allclose(mat.imag, 0), "Unexpected complex sensitivities"
-        mat = mat.real
-    return mat.reshape((len(paulis), len(errorgen_list)))
+    mat, _ = _pauli_sensitivities_and_expectations(ideal_state, errorgen_list, paulis, num_qubits, sparse=sparse)
+    return mat
 
 
 def calculate_sensitivity_matrix_probs(ideal_state, errorgen_list, num_qubits=None):
@@ -687,7 +1074,8 @@ def ideal_pauli_expectations(tableau, paulis):
     -------
     numpy.ndarray
     """
-    return _np.array([_egpt.stabilizer_pauli_expectation(tableau, p) for p in paulis], dtype=float)
+    _, ideal = _pauli_sensitivities_and_expectations(tableau, (), list(paulis))
+    return ideal
 
 
 class CircuitDesign(_collections.namedtuple('CircuitDesign', ['design_matrix', 'paulis', 'ideal_expectations',
@@ -697,7 +1085,7 @@ class CircuitDesign(_collections.namedtuple('CircuitDesign', ['design_matrix', '
 
     Attributes
     ----------
-    design_matrix : numpy.ndarray
+    design_matrix : numpy.ndarray or scipy.sparse.csr_matrix
         Shape ``(len(paulis), num_params)`` -- or ``(2**(num_qubits+num_mcms), num_params)`` for bitstring
         probabilities, in which case `paulis` is None.
     paulis : list of stim.PauliString
@@ -715,12 +1103,13 @@ class CircuitDesign(_collections.namedtuple('CircuitDesign', ['design_matrix', '
         return self.design_matrix.shape
 
     def __array__(self, dtype=None, copy=None):
-        return _np.asarray(self.design_matrix, dtype=dtype)
+        arr = self.design_matrix.toarray() if _sps.issparse(self.design_matrix) else self.design_matrix
+        return _np.asarray(arr, dtype=dtype)
 
 
 def create_circuit_design_matrix(circuit, model_parameter_indexing, usePaulis=True, pauli_measurements=None,
                                  max_pauli_weight=2, qubit_labels=None, mcm_gate_names=None, cnot_name='Gcnot',
-                                 gate_name_conversions=None, return_info=False, include_spam=None):
+                                 gate_name_conversions=None, return_info=False, include_spam=None, sparse='auto'):
     """
     Compute the linearized-GST design matrix of a single circuit.
 
@@ -766,10 +1155,17 @@ def create_circuit_design_matrix(circuit, model_parameter_indexing, usePaulis=Tr
     include_spam : None
         Deprecated/ignored: SPAM parameters are included whenever the ansatz contains ``'prep'`` / ``'povm'`` keys.
 
+    sparse : {'auto', True, False}, optional
+        Whether to return the design matrix as a `scipy.sparse.csr_matrix` or a dense `numpy.ndarray`.
+        ``'auto'`` (default) keeps the CSR representation when the matrix has at least ``10**5`` entries and at
+        most 5% nonzeros, and converts to a dense array otherwise.
+
     Returns
     -------
-    numpy.ndarray or CircuitDesign
+    numpy.ndarray, scipy.sparse.csr_matrix, or CircuitDesign
     """
+    if sparse not in (True, False, 'auto'):
+        raise ValueError("sparse must be True, False, or 'auto'")
     if hasattr(model_parameter_indexing, 'state_space') or hasattr(model_parameter_indexing, 'probabilities'):
         raise TypeError("The second argument must be the model parameter list from `build_model_parameter_indexing`; "
                         "pyGSTi models are no longer needed to construct design matrices.")
@@ -778,13 +1174,19 @@ def create_circuit_design_matrix(circuit, model_parameter_indexing, usePaulis=Tr
     n, m = prop.num_qubits, prop.num_mcms
     if usePaulis:
         paulis = _resolve_pauli_measurements(pauli_measurements, n, m, max_pauli_weight)
-        sensitivity = calculate_sensitivity_matrix_paulis(prop.tableau, prop.eoc_errorgens, n + m, paulis)
-        ideal = ideal_pauli_expectations(prop.tableau, paulis)
+        sensitivity, ideal = _pauli_sensitivities_and_expectations(prop.tableau, prop.eoc_errorgens, paulis,
+                                                                   n + m, sparse=True)
+        design_csr = (sensitivity @ prop.parameter_matrix).tocsr()
+        design_matrix = _resolve_sparse_matrix(design_csr, sparse)
     else:
         paulis = None
         sensitivity = calculate_sensitivity_matrix_probs(prop.tableau, prop.eoc_errorgens, n + m)
         ideal = _np.array([_egpt.stabilizer_probability(prop.tableau, int_to_bin(i, n + m)) for i in range(2**(n + m))])
-    design_matrix = sensitivity @ prop.parameter_matrix
+        if sparse is False:
+            design_matrix = sensitivity @ prop.parameter_matrix
+        else:
+            design_csr = (_sps.csr_matrix(sensitivity) @ prop.parameter_matrix).tocsr()
+            design_matrix = _resolve_sparse_matrix(design_csr, sparse)
     if return_info:
         return CircuitDesign(design_matrix, paulis, ideal, n, m, circuit)
     return design_matrix
@@ -806,7 +1208,7 @@ def create_design_matrix_list(circuit_list, model_parameter_indexing, usePaulis=
 
     Returns
     -------
-    list of numpy.ndarray or list of CircuitDesign
+    list of numpy.ndarray, list of scipy.sparse.csr_matrix, or list of CircuitDesign
     """
     iterator = circuit_list
     if show_progress_bar:
@@ -824,10 +1226,19 @@ def create_design_matrix(circuit_list, model_parameter_indexing, **kwargs):
 
     Returns
     -------
-    numpy.ndarray
+    numpy.ndarray or scipy.sparse.csr_matrix
     """
     kwargs.pop('return_info', None)
-    return _np.vstack(create_design_matrix_list(circuit_list, model_parameter_indexing, return_info=False, **kwargs))
+    sparse_kw = kwargs.get('sparse', 'auto')
+    mats = create_design_matrix_list(circuit_list, model_parameter_indexing, return_info=False, **kwargs)
+    if sparse_kw is True or (len(mats) > 0 and any(_sps.issparse(m) for m in mats)):
+        return _sps.vstack(mats, format='csr')
+    stacked = _np.vstack(mats)
+    if sparse_kw == 'auto':
+        size = stacked.size
+        if size >= _AUTO_SPARSE_MIN_SIZE and _np.count_nonzero(stacked) <= _AUTO_SPARSE_MAX_DENSITY * size:
+            return _sps.csr_matrix(stacked)
+    return stacked
 
 
 def create_design_matrix_list_parallel_pathos(circuit_list, model_parameter_indexing, usePaulis=True,
@@ -971,17 +1382,29 @@ def _resample_probability_distribution(prob_distribution, shots, rng=None):
 # Estimation
 # ---------------------------------------------------------------------------------------------------
 
-def _as_design_arrays(design_matrices):
-    """Split a list of arrays / CircuitDesign objects into (arrays, designs-or-None)."""
+def _as_design_arrays(design_matrices, allow_sparse=False):
+    """Split a list of arrays / sparse matrices / CircuitDesign objects into (arrays, designs-or-None)."""
     arrays, infos = [], []
     for d in design_matrices:
         if isinstance(d, CircuitDesign):
-            arrays.append(d.design_matrix)
+            mat = d.design_matrix
+            if not allow_sparse and _sps.issparse(mat):
+                mat = mat.toarray()
+            arrays.append(mat)
             infos.append(d)
+        elif _sps.issparse(d):
+            arrays.append(d if allow_sparse else d.toarray())
+            infos.append(None)
         else:
             arrays.append(_np.asarray(d))
             infos.append(None)
     return arrays, infos
+
+
+def _vstack_designs(arrays):
+    if any(_sps.issparse(a) for a in arrays):
+        return _sps.vstack(arrays, format='csr')
+    return _np.vstack(arrays)
 
 
 def unidentifiable_directions(design_matrices, model_parameter_indexing, tol=1e-10):
@@ -1010,6 +1433,8 @@ def unidentifiable_directions(design_matrices, model_parameter_indexing, tol=1e-
     """
     if isinstance(design_matrices, _np.ndarray) and design_matrices.ndim == 2:
         design_matrix = design_matrices
+    elif _sps.issparse(design_matrices):
+        design_matrix = design_matrices.toarray()
     else:
         design_matrix = _np.vstack(_as_design_arrays(design_matrices)[0])
     P = len(model_parameter_indexing)
@@ -1086,6 +1511,8 @@ def predicted_error_bars(design_matrices, shots=1, tol=1e-10):
     """
     if isinstance(design_matrices, _np.ndarray) and design_matrices.ndim == 2:
         arrays, infos = [design_matrices], [None]
+    elif _sps.issparse(design_matrices):
+        arrays, infos = [design_matrices.toarray()], [None]
     else:
         arrays, infos = _as_design_arrays(design_matrices)
     covariances = [_ideal_observable_covariance(info) if _has_circuit_info(info) else None for info in infos]
@@ -1679,17 +2106,24 @@ def _product_observables(paulis):
     """Distinct pairwise products of a list of Z-type Paulis and the (k, k) index map into them."""
     k = len(paulis)
     pair_index = -_np.ones((k, k), dtype=int)
+    if k == 0:
+        return [], pair_index
+    total = len(paulis[0])
+    supports = [frozenset(p.pauli_indices('Z')) for p in paulis]
     products, where = [], {}
     for a in range(k):
+        sa = supports[a]
         for b in range(a + 1, k):
-            prod = paulis[a] * paulis[b]
-            if prod.sign != 1:
-                prod = prod / prod.sign  # cannot happen for Z-type Paulis, but keep the sign out of the key
-            key = str(prod)
-            if key not in where:
-                where[key] = len(products)
+            key = sa ^ supports[b]
+            idx = where.get(key)
+            if idx is None:
+                idx = len(products)
+                where[key] = idx
+                prod = _stim.PauliString(total)
+                for q in key:
+                    prod[q] = 3
                 products.append(prod)
-            pair_index[a, b] = pair_index[b, a] = where[key]
+            pair_index[a, b] = pair_index[b, a] = idx
     return products, pair_index
 
 
@@ -1712,26 +2146,42 @@ def create_design_moments(designs_or_circuits, model_parameter_indexing, **desig
     list of CircuitMoments
     """
     out = []
+    prop_kwargs = {k: design_kwargs[k] for k in ('qubit_labels', 'mcm_gate_names', 'cnot_name',
+                                                 'gate_name_conversions') if k in design_kwargs}
+    sparse_kw = design_kwargs.get('sparse', 'auto')
+    if sparse_kw not in (True, False, 'auto'):
+        raise ValueError("sparse must be True, False, or 'auto'")
     for item in designs_or_circuits:
         if isinstance(item, CircuitDesign):
             design = item
             if design.paulis is None or design.circuit is None:
                 raise ValueError("create_design_moments needs CircuitDesign objects with observables and circuits "
                                  "(use create_design_matrix_list(..., return_info=True)).")
+            prop = propagate_parameter_errorgens(design.circuit, model_parameter_indexing, **prop_kwargs)
+            prod_sparse_mode = True if _sps.issparse(design.design_matrix) else sparse_kw
         else:
-            design = create_circuit_design_matrix(item, model_parameter_indexing, return_info=True, **design_kwargs)
-        prop_kwargs = {k: design_kwargs[k] for k in ('qubit_labels', 'mcm_gate_names', 'cnot_name',
-                                                      'gate_name_conversions') if k in design_kwargs}
-        prop = propagate_parameter_errorgens(design.circuit, model_parameter_indexing, **prop_kwargs)
+            prop = propagate_parameter_errorgens(item, model_parameter_indexing, **prop_kwargs)
+            n, m = prop.num_qubits, prop.num_mcms
+            paulis = _resolve_pauli_measurements(design_kwargs.get('pauli_measurements', None), n, m,
+                                                 design_kwargs.get('max_pauli_weight', 2))
+            sens0, ideal0 = _pauli_sensitivities_and_expectations(prop.tableau, prop.eoc_errorgens, paulis,
+                                                                  n + m, sparse=True)
+            d_csr = (sens0 @ prop.parameter_matrix).tocsr()
+            d_mat = _resolve_sparse_matrix(d_csr, sparse_kw)
+            design = CircuitDesign(d_mat, paulis, ideal0, n, m, item)
+            prod_sparse_mode = True if _sps.issparse(d_mat) else sparse_kw
         paulis = list(design.paulis)
         products, pair_index = _product_observables(paulis)
         total = prop.num_qubits + prop.num_mcms
         if len(products) > 0:
-            sens = calculate_sensitivity_matrix_paulis(prop.tableau, prop.eoc_errorgens, total, products)
-            product_design = sens @ prop.parameter_matrix
-            product_ideal = ideal_pauli_expectations(prop.tableau, products)
+            sens, product_ideal = _pauli_sensitivities_and_expectations(prop.tableau, prop.eoc_errorgens, products,
+                                                                        total, sparse=True)
+            prod_csr = (sens @ prop.parameter_matrix).tocsr()
+            product_design = _resolve_sparse_matrix(prod_csr, prod_sparse_mode)
         else:
-            product_design = _np.zeros((0, prop.parameter_matrix.shape[1]))
+            num_p = prop.parameter_matrix.shape[1]
+            empty_csr = _sps.csr_matrix((0, num_p), dtype=float)
+            product_design = _resolve_sparse_matrix(empty_csr, prod_sparse_mode)
             product_ideal = _np.zeros(0)
         out.append(CircuitMoments(design, products, pair_index, product_design, product_ideal))
     return out
@@ -1944,7 +2394,8 @@ def predicted_covariance(information, shots, nominal_rates=None, estimator='gls'
         return _pinv_covariance(A, tol)
     if estimator != 'ols':
         raise ValueError("estimator must be 'gls' or 'ols'")
-    D = _np.vstack([moments[c].design.design_matrix for c in used])
+    D = _np.vstack([moments[c].design.design_matrix.toarray() if _sps.issparse(moments[c].design.design_matrix)
+                    else moments[c].design.design_matrix for c in used])
     U, s, Vt = _np.linalg.svd(D, full_matrices=False)
     identifiable = s > tol * max(s[0], 1e-300)
     pinv = (Vt[identifiable].T / s[identifiable]) @ U[:, identifiable].T
@@ -2001,9 +2452,11 @@ def prediction_weight(application_designs, ridge=1e-3):
     -------
     numpy.ndarray
     """
-    arrays, _ = _as_design_arrays(application_designs)
-    D = _np.vstack(arrays)
+    arrays, _ = _as_design_arrays(application_designs, allow_sparse=True)
+    D = _vstack_designs(arrays)
     W = D.T @ D / D.shape[0]
+    if _sps.issparse(W):
+        W = W.toarray()
     return W + ridge * _np.mean(_np.diag(W)) * _np.eye(W.shape[0])
 
 
@@ -2520,7 +2973,7 @@ def observed_expectation_shifts(design_matrices, probability_dict_list, measurem
     observed_values : numpy.ndarray
     per_circuit_paulis : list of list
     """
-    arrays, infos = _as_design_arrays(design_matrices)
+    arrays, infos = _as_design_arrays(design_matrices, allow_sparse=True)
     observed_dicts, ideal_dicts = probability_dict_list[0], probability_dict_list[1]
     num_circuits = len(arrays)
     if len(observed_dicts) != num_circuits:
@@ -2556,25 +3009,95 @@ def observed_expectation_shifts(design_matrices, probability_dict_list, measurem
     return _np.concatenate(shifts) if len(shifts) > 0 else _np.zeros(0), per_circuit_paulis
 
 
+def _sparse_min_norm_lsq(A, b, tol=1e-14):
+    """Minimum-norm least-squares solution of ``A @ x ≈ b`` for a sparse matrix ``A``, via LSMR."""
+    A = _sps.csr_matrix(A, dtype=float)
+    if A.shape[1] == 0:
+        return _np.zeros(0)
+    maxiter = max(1000, 10 * A.shape[1])
+    return _spla.lsmr(A, _np.asarray(b, dtype=float), atol=tol, btol=tol, conlim=0, maxiter=maxiter)[0]
+
+
+def _sparse_bounded_lsq(A, b, lb=0.0, tol=1e-14):
+    """
+    Bounded least-squares solution ``min 0.5 * ||A x - b||²`` subject to ``x >= lb`` for a sparse matrix ``A``.
+
+    Warm-starts from the clipped minimum-norm LSMR solution, optimizes with L-BFGS-B using sparse matrix-vector
+    products, and polishes the active free set with LSMR.
+    """
+    A = _sps.csr_matrix(A, dtype=float)
+    b = _np.asarray(b, dtype=float)
+    n = A.shape[1]
+    if n == 0:
+        return _np.zeros(0)
+    lb = _np.full(n, float(lb)) if _np.ndim(lb) == 0 else _np.asarray(lb, dtype=float)
+    unconstrained = _np.isneginf(lb)
+    maxiter = max(1000, 10 * n)
+    x = _spla.lsmr(A, b, atol=tol, btol=tol, conlim=0, maxiter=maxiter)[0]
+    if _np.all(x >= lb):
+        return x
+    b_scale = max(float(_np.linalg.norm(b)), 1e-300)
+    b_unit = b / b_scale
+    lb_unit = lb / b_scale
+    x0 = _np.maximum(x / b_scale, lb_unit)
+    A_csc = A.tocsc()
+
+    def fun_grad(v):
+        r = A @ v - b_unit
+        return 0.5 * float(_np.dot(r, r)), A_csc.T @ r
+
+    bounds = [(None if u else float(l), None) for l, u in zip(lb_unit, unconstrained)]
+    res = _optimize.minimize(fun_grad, x0, method='L-BFGS-B', jac=True, bounds=bounds,
+                             options={'ftol': 0.0, 'gtol': tol, 'maxiter': 2000})
+    x = res.x * b_scale
+    free = (x > lb + 1e-11 * b_scale) | unconstrained
+    for _ in range(10):
+        fixed = ~free
+        if _np.any(free):
+            b_rem = b - (A_csc[:, fixed] @ x[fixed] if _np.any(fixed) else 0.0)
+            x_free = _spla.lsmr(A_csc[:, free], b_rem, atol=tol, btol=tol, conlim=0, maxiter=maxiter)[0]
+        else:
+            x_free = _np.empty(0)
+        viol = x_free < lb[free]
+        if _np.any(viol):
+            free_idx = _np.nonzero(free)[0]
+            x[free_idx] = _np.maximum(x_free, lb[free])
+            free[free_idx[viol]] = False
+            continue
+        x[free] = x_free
+        if not _np.any(fixed):
+            break
+        g = A_csc.T @ (A @ x - b)
+        release = fixed & (g < -tol * b_scale)
+        if not _np.any(release):
+            break
+        free[release] = True
+    return x
+
+
 def solve_linearized_gst(design_matrix, observed_values, errorgen_types, coherent_solver='inversion',
-                         stochastic_solver='nnls'):
+                         stochastic_solver='nnls', sparse='auto'):
     """
     Solve ``design_matrix @ rates = observed_values`` for the error rates.
 
     For error models containing only 'H' and 'S' parameters each row is sensitive to only one of the two
-    sectors, so the problem decouples: Hamiltonian rates are obtained by pseudo-inversion and stochastic
-    rates by non-negative least squares (or pseudo-inversion).  If 'C'/'A' parameters are present a joint
-    bounded least-squares problem is solved instead (stochastic rates constrained to be non-negative when
-    `stochastic_solver` is ``'nnls'``).
+    sectors, so the problem decouples: Hamiltonian rates are obtained by pseudo-inversion (or minimum-norm LSMR
+    when `design_matrix` is sparse) and stochastic rates by non-negative least squares (or pseudo-inversion /
+    LSMR).  If 'C'/'A' parameters are present a joint bounded least-squares problem is solved instead
+    (stochastic rates constrained to be non-negative when `stochastic_solver` is ``'nnls'``).
 
     Parameters
     ----------
-    design_matrix : numpy.ndarray
+    design_matrix : numpy.ndarray or scipy.sparse.spmatrix
     observed_values : numpy.ndarray
     errorgen_types : list of str
         The sector ('H', 'S', 'C', 'A') of each column.
     coherent_solver : {'inversion'}
     stochastic_solver : {'nnls', 'inversion'}
+    sparse : {'auto', True, False}, optional
+        Whether to use sparse (LSMR / L-BFGS-B) or dense (`pinv` / `nnls` / `lsq_linear`) solvers.  ``'auto'``
+        (default) uses the sparse solver whenever `design_matrix` is a `scipy.sparse` matrix or is a dense
+        array with at least ``10**5`` entries and at most 5% nonzeros.
 
     Returns
     -------
@@ -2584,6 +3107,8 @@ def solve_linearized_gst(design_matrix, observed_values, errorgen_types, coheren
         raise ValueError("Unknown coherent_solver '%s'" % coherent_solver)
     if stochastic_solver not in ('nnls', 'inversion'):
         raise ValueError("Unknown stochastic_solver '%s'" % stochastic_solver)
+    if sparse not in (True, False, 'auto'):
+        raise ValueError("sparse must be True, False, or 'auto'")
     types = _np.array(list(errorgen_types))
     rates = _np.zeros(design_matrix.shape[1])
     if design_matrix.shape[1] == 0:
@@ -2591,23 +3116,56 @@ def solve_linearized_gst(design_matrix, observed_values, errorgen_types, coheren
     h_cols = _np.nonzero(types == 'H')[0]
     s_cols = _np.nonzero(types == 'S')[0]
     other_cols = _np.nonzero((types != 'H') & (types != 'S'))[0]
+    if sparse is True:
+        is_sparse = True
+        design_matrix = _sps.csc_matrix(design_matrix, dtype=float)
+    elif sparse is False:
+        is_sparse = False
+        if _sps.issparse(design_matrix):
+            design_matrix = design_matrix.toarray()
+    elif _sps.issparse(design_matrix):
+        is_sparse = True
+        design_matrix = design_matrix.tocsc()
+    else:
+        design_matrix = _np.asarray(design_matrix, dtype=float)
+        size = design_matrix.size
+        if size >= _AUTO_SPARSE_MIN_SIZE and _np.count_nonzero(design_matrix) <= _AUTO_SPARSE_MAX_DENSITY * size:
+            is_sparse = True
+            design_matrix = _sps.csc_matrix(design_matrix)
+        else:
+            is_sparse = False
 
     if len(other_cols) == 0:
         if len(h_cols) > 0:
-            rates[h_cols] = _np.linalg.pinv(design_matrix[:, h_cols]) @ observed_values
+            if is_sparse:
+                rates[h_cols] = _sparse_min_norm_lsq(design_matrix[:, h_cols], observed_values)
+            else:
+                rates[h_cols] = _np.linalg.pinv(design_matrix[:, h_cols]) @ observed_values
         if len(s_cols) > 0:
             if stochastic_solver == 'nnls':
-                rates[s_cols], _ = _optimize.nnls(design_matrix[:, s_cols], observed_values)
+                if is_sparse:
+                    rates[s_cols] = _sparse_bounded_lsq(design_matrix[:, s_cols], observed_values, lb=0.0)
+                else:
+                    rates[s_cols], _ = _optimize.nnls(design_matrix[:, s_cols], observed_values)
             else:
-                rates[s_cols] = _np.linalg.pinv(design_matrix[:, s_cols]) @ observed_values
+                if is_sparse:
+                    rates[s_cols] = _sparse_min_norm_lsq(design_matrix[:, s_cols], observed_values)
+                else:
+                    rates[s_cols] = _np.linalg.pinv(design_matrix[:, s_cols]) @ observed_values
     else:
         if stochastic_solver == 'nnls':
             lb = _np.full(design_matrix.shape[1], -_np.inf)
             lb[s_cols] = 0.0
-            res = _optimize.lsq_linear(design_matrix, observed_values, bounds=(lb, _np.inf))
-            rates = res.x
+            if is_sparse:
+                rates = _sparse_bounded_lsq(design_matrix, observed_values, lb=lb)
+            else:
+                res = _optimize.lsq_linear(design_matrix, observed_values, bounds=(lb, _np.inf))
+                rates = res.x
         else:
-            rates = _np.linalg.pinv(design_matrix) @ observed_values
+            if is_sparse:
+                rates = _sparse_min_norm_lsq(design_matrix, observed_values)
+            else:
+                rates = _np.linalg.pinv(design_matrix) @ observed_values
     return rates
 
 
@@ -2621,7 +3179,7 @@ def estimate_error_rates(design_matrices, probability_dict_list, measurement_lis
     ----------
     design_matrices : list
         One :class:`CircuitDesign` (recommended; from ``create_design_matrix_list(..., return_info=True)``) or
-        design-matrix array per circuit.
+        design-matrix array (or `scipy.sparse` matrix) per circuit.
 
     probability_dict_list : list
         ``[observed_dicts, ideal_dicts]``: lists (over circuits, in the same order as `design_matrices`) of
@@ -2659,10 +3217,10 @@ def estimate_error_rates(design_matrices, probability_dict_list, measurement_lis
     """
     if error_indexing_list is None:
         raise ValueError("`error_indexing_list` (the model parameter list) is required.")
-    arrays, _ = _as_design_arrays(design_matrices)
+    arrays, _ = _as_design_arrays(design_matrices, allow_sparse=True)
     observed_values, per_circuit_paulis = observed_expectation_shifts(design_matrices, probability_dict_list,
                                                                       measurement_list)
-    design_matrix = _np.vstack(arrays)
+    design_matrix = _vstack_designs(arrays)
     if design_matrix.shape[1] != len(error_indexing_list):
         raise ValueError("Design matrices have %d columns but %d parameters were given"
                          % (design_matrix.shape[1], len(error_indexing_list)))

@@ -1,6 +1,7 @@
 import importlib.util
 
 import numpy as np
+from scipy import sparse as sps
 import pytest
 import stim
 
@@ -1003,3 +1004,109 @@ class MCMDesignMatrixTester(BaseCase):
                                                     return_info=True)
         self.assertEqual(str(design2.paulis[0]), '+__Z')
         self.assertGreater(np.abs(design2.design_matrix).max(), 0.1)  # the MCM outcome is sensitive to readout error
+
+    def test_sparse_parameter_and_design_matrices(self):
+        circ = self.circuits[0]
+        prop = lgst.propagate_parameter_errorgens(circ, self.params)
+        self.assertTrue(sps.isspmatrix_csr(prop.parameter_matrix))
+        pmat, eoc = lgst.build_permutation_matrix(circ, self.params)
+        self.assertIsInstance(pmat, np.ndarray)
+        self.assertArraysAlmostEqual(pmat, prop.parameter_matrix.toarray())
+        self.assertEqual(eoc, prop.eoc_errorgens)
+
+        sens_dense = lgst.calculate_sensitivity_matrix_paulis(prop.tableau, prop.eoc_errorgens)
+        sens_sparse = lgst.calculate_sensitivity_matrix_paulis(prop.tableau, prop.eoc_errorgens, sparse=True)
+        self.assertTrue(sps.isspmatrix_csr(sens_sparse))
+        self.assertArraysAlmostEqual(sens_dense, sens_sparse.toarray())
+
+        designs_dense = lgst.create_design_matrix_list(self.circuits, self.params, return_info=True)
+        designs_sparse = lgst.create_design_matrix_list(self.circuits, self.params, return_info=True, sparse=True)
+        for dd, ds in zip(designs_dense, designs_sparse):
+            self.assertTrue(sps.isspmatrix_csr(ds.design_matrix))
+            self.assertArraysAlmostEqual(dd.design_matrix, ds.design_matrix.toarray())
+            self.assertArraysAlmostEqual(dd.ideal_expectations, ds.ideal_expectations)
+            self.assertArraysAlmostEqual(np.asarray(ds), dd.design_matrix)
+
+        stacked_dense = lgst.create_design_matrix(self.circuits[:6], self.params)
+        stacked_sparse = lgst.create_design_matrix(self.circuits[:6], self.params, sparse=True)
+        self.assertTrue(sps.isspmatrix_csr(stacked_sparse))
+        self.assertArraysAlmostEqual(stacked_dense, stacked_sparse.toarray())
+
+        # Probability design matrix with sparse=True
+        p_dense = lgst.create_circuit_design_matrix(circ, self.params, usePaulis=False)
+        p_sparse = lgst.create_circuit_design_matrix(circ, self.params, usePaulis=False, sparse=True)
+        self.assertTrue(sps.isspmatrix_csr(p_sparse))
+        self.assertArraysAlmostEqual(p_dense, p_sparse.toarray())
+
+        # Sparse solvers (H+S and H+S+C+A, both nnls and inversion)
+        obs, _ = _simulate(self.pspec, self.ansatz, self.circuits, self.params)
+        rates_d, _ = lgst.estimate_error_rates(designs_dense, [obs, None], None, self.params)
+        rates_s, _ = lgst.estimate_error_rates(designs_sparse, [obs, None], None, self.params)
+        self.assertArraysAlmostEqual(rates_d, rates_s, places=10)
+
+        rates_d_inv, _ = lgst.estimate_error_rates(designs_dense, [obs, None], None, self.params,
+                                                   stochastic_solver='inversion')
+        rates_s_inv, _ = lgst.estimate_error_rates(designs_sparse, [obs, None], None, self.params,
+                                                   stochastic_solver='inversion')
+        self.assertArraysAlmostEqual(rates_d_inv, rates_s_inv, places=10)
+
+        # H+S+C+A joint bounded and unconstrained sparse solve
+        ansatz_hsca = {k: dict(v) for k, v in self.ansatz.items()}
+        ansatz_hsca[('Gcphase', 0, 1)][('C', 'ZI', 'IZ')] = 0.0005
+        ansatz_hsca[('Gxpi2', 0)][('A', 'X', 'Y')] = -0.0005
+        params_hsca, _ = lgst.build_model_parameter_indexing(ansatz_hsca, 2)
+        D_hsca_d = lgst.create_design_matrix_list(self.circuits, params_hsca, return_info=True)
+        D_hsca_s = lgst.create_design_matrix_list(self.circuits, params_hsca, return_info=True, sparse=True)
+        obs_hsca, _ = _simulate(self.pspec, ansatz_hsca, self.circuits, params_hsca)
+        for solver in ('nnls', 'inversion'):
+            r_d, _ = lgst.estimate_error_rates(D_hsca_d, [obs_hsca, None], None, params_hsca, stochastic_solver=solver)
+            r_s, _ = lgst.estimate_error_rates(D_hsca_s, [obs_hsca, None], None, params_hsca, stochastic_solver=solver)
+            self.assertArraysAlmostEqual(r_d, r_s, places=9)
+
+        # Moments, prediction_weight, and downstream helpers with sparse designs
+        moments_d = lgst.create_design_moments(self.circuits[:4], self.params)
+        moments_s = lgst.create_design_moments(self.circuits[:4], self.params, sparse=True)
+        for md, ms in zip(moments_d, moments_s):
+            self.assertTrue(sps.isspmatrix_csr(ms.design.design_matrix))
+            self.assertTrue(sps.isspmatrix_csr(ms.product_design_matrix))
+            self.assertArraysAlmostEqual(md.expectations(self.true_rates), ms.expectations(self.true_rates))
+            self.assertArraysAlmostEqual(md.covariance(self.true_rates), ms.covariance(self.true_rates))
+            self.assertArraysAlmostEqual(md.whitened_design(self.true_rates), ms.whitened_design(self.true_rates))
+        self.assertArraysAlmostEqual(lgst.prediction_weight(designs_dense[:5]),
+                                     lgst.prediction_weight(designs_sparse[:5]))
+        self.assertEqual(lgst.unidentifiable_directions(designs_sparse, self.params), [])
+        self.assertArraysAlmostEqual(lgst.predicted_error_bars(designs_dense, shots=1000),
+                                     lgst.predicted_error_bars(designs_sparse, shots=1000))
+
+        # Automatic sparsity detection (sparse='auto' is the default):
+        # On a 100-qubit register (~8,400 parameters x 100 observables > 10**6 entries, < 1% nonzero),
+        # create_circuit_design_matrix returns a CSR sparse matrix automatically without passing sparse=True.
+        n_large = 100
+        ansatz_large = {('Gxpi2', q): {('H', p): 0.001 for p in 'XYZ'} for q in range(n_large)}
+        ansatz_large.update({('Gypi2', q): {('S', p): 0.001 for p in 'XYZ'} for q in range(n_large)})
+        params_large, _ = lgst.build_model_parameter_indexing(ansatz_large, n_large)
+        circ_large = Circuit([Label([Label('Gxpi2', q) for q in range(n_large)]),
+                              Label([Label('Gypi2', q) for q in range(n_large)])],
+                             line_labels=tuple(range(n_large)))
+        obs_1q = lgst.default_pauli_measurements(n_large, max_weight=1)
+        # 100 x 600 = 60,000 (< 10**6) -> dense; with 200 observables x 6000 params (> 10**6) -> sparse
+        ansatz_100 = {}
+        for q in range(n_large):
+            for g in ('Gi', 'Gxpi2', 'Gypi2'):
+                ansatz_100[(g, q)] = {(t, p): 0.001 for t in ('H', 'S') for p in 'XYZ'}
+        for q in range(n_large - 1):
+            ansatz_100[('Gcphase', q, q + 1)] = {(t, p1 + p2): 0.001 for t in ('H', 'S')
+                                                 for p1 in 'IXYZ' for p2 in 'IXYZ' if p1 + p2 != 'II'}
+        params_100, _ = lgst.build_model_parameter_indexing(ansatz_100, n_large)
+        obs_100 = obs_1q + [obs_1q[q] * obs_1q[q + 1] for q in range(n_large - 1)]
+        auto_mat = lgst.create_circuit_design_matrix(circ_large, params_100, pauli_measurements=obs_100)
+        self.assertTrue(sps.isspmatrix_csr(auto_mat))
+        forced_dense = lgst.create_circuit_design_matrix(circ_large, params_100, pauli_measurements=obs_100,
+                                                         sparse=False)
+        self.assertIsInstance(forced_dense, np.ndarray)
+        self.assertArraysAlmostEqual(auto_mat.toarray(), forced_dense)
+        with self.assertRaises(ValueError):
+            lgst.create_circuit_design_matrix(circ, self.params, sparse='invalid')
+        with self.assertRaises(ValueError):
+            lgst.solve_linearized_gst(stacked_dense, np.zeros(stacked_dense.shape[0]),
+                                      self.params.errorgen_types(), sparse='invalid')
