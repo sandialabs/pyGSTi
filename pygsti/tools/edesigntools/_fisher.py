@@ -685,8 +685,8 @@ def _accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js,
         p = ps[circuit]
         #regularize any probabilities that are too small.
         clipped_p = _np.clip(_np.fromiter(p.values(), dtype=_np.double), a_min=regularization, a_max=None)
-        #renormalize this vector (probably not necessary, but better to be safe).
-        renormalized_clipped_p = clipped_p/_np.linalg.norm(clipped_p) 
+        #renormalize so the clipped probabilities sum to one again.
+        renormalized_clipped_p = clipped_p/clipped_p.sum()
         regularized_p = {outcome_lbl: val for outcome_lbl, val in zip(p.keys(), renormalized_clipped_p)}
 
         j = js[circuit]
@@ -718,8 +718,8 @@ def _accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js
         p = ps[circuit]
         #regularize any probabilities that are too small.
         clipped_p = _np.clip(_np.fromiter(p.values(), dtype=_np.double), a_min=regularization, a_max=None)
-        #renormalize this vector (probably not necessary, but better to be safe).
-        renormalized_clipped_p = clipped_p/_np.linalg.norm(clipped_p) 
+        #renormalize so the clipped probabilities sum to one again.
+        renormalized_clipped_p = clipped_p/clipped_p.sum()
         regularized_p = {outcome_lbl: val for outcome_lbl, val in zip(p.keys(), renormalized_clipped_p)}
 
         j = js[circuit]
