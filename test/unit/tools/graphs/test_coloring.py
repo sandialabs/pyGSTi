@@ -19,6 +19,7 @@ from pygsti.tools.graphs import (
     canonical_edges, find_neighbors, order, max_degree,
 )
 from pygsti.tools.graphs.coloring._topology import detect_topology
+from pygsti.tools.graphs.coloring._vizing import _BipartiteEdgeColoring
 from pygsti.tools.graphs.coloring._sinnamon import (
     sinnamon_2d_minus_1_edge_coloring,
     sinnamon_euler_color_edge_coloring,
@@ -603,6 +604,66 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
         r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=1)
         r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=999)
         self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
+
+class NoEmptyColorClassesTester(BaseCase):
+    """Colorers return only the colors they use (#938).
+
+    The Vizing family allocates deg+1 colors up front and often needs only deg, so it
+    used to return an empty class, which `make_simultaneous_gst_design` turned into a
+    patch of circuits that test no edge.
+    """
+
+    GRAPHS = [
+        ("grid_2x3", make_grid_graph(2, 3)),
+        ("grid_3x5", make_grid_graph(3, 5)),
+        ("tee", make_tee_graph()),
+        ("high_degree_hub", make_high_degree_graph()),
+        ("K6", make_complete_graph(6)),
+        ("C7", make_cycle_graph(7)),
+    ]
+
+    def test_no_algorithm_returns_an_empty_color_class(self):
+        for algorithm in ("misra_gries", "vizing", "deterministic_euler_color",
+                          "random_euler_color", "auto"):
+            for name, (vertices, edges, neighbors, deg) in self.GRAPHS:
+                cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=0)
+                self.assertTrue(all(cp.values()), msg=f"{algorithm} on {name}: {cp}")
+
+
+class BipartiteEdgeColoringTester(BaseCase):
+    """'auto' colors a non-canonical bipartite graph with exactly deg colors (König)."""
+
+    def test_rectangular_grids_use_exactly_deg_colors(self):
+        # r x c grids with r != c are not detected as "grid", so they take the bipartite path.
+        for rows, cols in ((2, 3), (2, 5), (3, 4), (3, 7), (4, 6)):
+            vertices, edges, neighbors, deg = make_grid_graph(rows, cols)
+            self.assertEqual(detect_topology(vertices, edges, neighbors), "unknown")
+            for seed in range(5):
+                cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=seed)
+                proper, complete, ncolors = assess_coloring(cp, edges)
+                self.assertTrue(proper and complete, msg=f"{rows}x{cols}, seed={seed}")
+                self.assertEqual(ncolors, deg, msg=f"{rows}x{cols}, seed={seed}")
+
+    def test_random_bipartite_graphs_use_exactly_deg_colors(self):
+        rng = np.random.default_rng(0)
+        for trial in range(40):
+            n1, n2 = rng.integers(2, 12, size=2)
+            edges = [(i, n1 + j) for i in range(n1) for j in range(n2) if rng.random() < 0.35]
+            if not edges:
+                continue
+            vertices, edges, neighbors, deg = _finalize(range(n1 + n2), edges)
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=trial)
+            proper, complete, ncolors = assess_coloring(cp, edges)
+            self.assertTrue(proper and complete, msg=f"trial {trial}")
+            self.assertEqual(ncolors, deg, msg=f"trial {trial}")
+
+    def test_rejects_a_graph_that_is_not_bipartite(self):
+        # 'auto' never passes one, but the colorer should not silently miscolor it.
+        # An odd cycle needs 3 > deg colors, so the alternating path must reach u.
+        vertices, edges, neighbors, deg = make_cycle_graph(5)
+        with self.assertRaisesRegex(RuntimeError, "not bipartite"):
+            _BipartiteEdgeColoring(deg, edges, neighbors, seed=0).color()
 
 
 class CheckValidEdgeColoringTester(BaseCase):

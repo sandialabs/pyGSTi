@@ -11,7 +11,7 @@
 Topology detection and closed-form (optimal) edge colorings for the
 canonical topologies produced by `ProcessorSpec(geometry=...)` /
 `QubitGraph.common_graph`: "line", "ring", "grid", "torus". Falls back to
-bipartite-optimal coloring for arbitrary bipartite graphs, and to
+an exact `deg`-coloring for arbitrary bipartite graphs, and to
 `vizing_edge_coloring` for anything else (see `auto_edge_coloring`).
 """
 import numpy as np
@@ -19,7 +19,7 @@ import networkx as _nx
 from typing import List, Optional, Union
 
 from .._common import Vertex, Edge, NeighborMap, order
-from ._definitions import Coloring
+from ._definitions import Coloring, drop_empty_colors
 from ._vizing import vizing_edge_coloring, _BipartiteEdgeColoring
 
 
@@ -101,11 +101,7 @@ def detect_topology(vertices: List[Vertex], edges: List[Edge], neighbors: Neighb
 class _ClosedFormEdgeColoring:
     """Shared helper for the closed-form (topology-specific) colorers below."""
 
-    @staticmethod
-    def _drop_empty_colors(color_patches: Coloring) -> Coloring:
-        """Strip any color class that ended up unused, so the returned
-        coloring reports the true (optimal) number of colors needed."""
-        return {c: v for c, v in color_patches.items() if v}
+    _drop_empty_colors = staticmethod(drop_empty_colors)
 
 
 class _LineRingEdgeColoring(_ClosedFormEdgeColoring):
@@ -203,8 +199,10 @@ def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
     number of colors (the true chromatic index) for that topology.
 
     If not, it checks whether the graph is bipartite; if so, it uses an internal
-    bipartite-optimal randomized coloring (using `seed`) that frequently achieves
-    the optimal `deg` colors in practice.
+    alternating-path coloring that always uses exactly `deg` colors (optimal, by
+    König's theorem). `seed` randomizes the order in which it colors edges, and
+    so which of the many optimal colorings it returns. Rectangular r x c grids
+    with r != c are not detected as "grid" and take this path.
 
     Otherwise, it falls back to `vizing_edge_coloring` -- a deterministic algorithm that is
     always valid and complete, using at most deg+1 colors -- for graphs that
@@ -220,7 +218,7 @@ def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
     neighbors (dict): A dictionary mapping each vertex to its neighboring
         vertices.
     seed (None, int, or numpy.random.Generator): Seed or generator controlling the
-        randomization of the bipartite fallback. Ignored otherwise.
+        edge order of the bipartite coloring. Ignored otherwise.
 
     Returns:
     color_patches (dict): A dictionary mapping each color to a list of edges
