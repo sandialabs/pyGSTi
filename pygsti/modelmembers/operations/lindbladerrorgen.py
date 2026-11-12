@@ -36,6 +36,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import lindbladtools as _lt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from typing import Literal
@@ -47,6 +48,245 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
     """
     A class for representing noisy quantum operations using Lindblad error generators.
     """
+
+    @classmethod
+    def from_correlated_dephasing(cls, state_space, correlation_edges=None, *, basis_element_labels=None,
+                                 elementary_errorgen_basis=None, initial_covariance=None, mx_basis='pp',
+                                 evotype='default', param_mode='auto', initial_stochastic_rate=None):
+        """Construct real correlated dephasing with a fixed phase-noise covariance graph.
+
+        For diagonal Hermitian directions F_a and a real positive-semidefinite
+        phase-noise covariance K per unit time, the generator is
+        -1/2 sum_ab K_ab [F_a, [F_b, rho]]. Only S coefficients and C-type
+        correlation pair terms are used. Every computational-basis population
+        is fixed, and all parameter updates preserve the prescribed phase-noise
+        covariance zeros and complete positivity of the exponentiated channel.
+
+        Parameters
+        ----------
+        state_space : StateSpace or castable
+            A single tensor product of quantum subsystems.
+        correlation_edges : iterable of pairs of basis-element labels, optional
+            Allowed off-diagonal phase-noise covariance entries. None selects all pairs;
+            an empty iterable gives independent noise in the selected directions.
+            Self-edges, duplicates (including reversed pairs), and unknown endpoints
+            are rejected. These are phase-noise covariance zeros, not inverse-covariance zeros.
+        basis_element_labels : iterable, optional
+            Selected nonidentity diagonal directions, in phase-noise covariance matrix order.
+            None selects the one-body diagonal PP/GM directions, ordered first by
+            subsystem and then by their order in the elementary basis. Explicit
+            selections may include higher-body diagonal directions, such as ZZ.
+        elementary_errorgen_basis : Basis, str or None, optional
+            Hermitian, traceless, orthogonal, identity-first basis. None chooses
+            the canonical PP/GM product basis. With custom labels that do not
+            identify subsystem support, supply basis_element_labels explicitly.
+        initial_covariance : array_like, optional
+            Real symmetric positive-semidefinite phase-noise covariance matrix in basis_element_labels
+            order, with exact zeros at forbidden entries. Incompatible matrices
+            are rejected rather than projected. Cannot be combined with
+            initial_stochastic_rate.
+        mx_basis : Basis or str, optional
+            Matrix representation basis, usually 'pp' for qubits, 'gm' for qudits.
+        evotype : str or Evotype, optional
+            Evolution type, as for the ordinary constructor.
+        param_mode : {'auto', 'cholesky', 'contraction'}, optional
+            Auto selects fill-free Cholesky on chordal graphs and the contraction chart
+            on nonchordal graphs. Both include PSD boundaries and zero noise.
+        initial_stochastic_rate : float or None, optional
+            Initial diagonal phase-noise covariance when initial_covariance is omitted;
+            None means zero. Units depend on direction normalization.
+
+        Notes
+        -----
+        This models classical Gaussian Markovian phase-noise covariance. More
+        general pure-dephasing generators can also have A-type active pair terms,
+        represented by imaginary off-diagonal Kossakowski components. A colored-noise
+        spectrum is outside this model.
+        For unnormalized Pauli Z_i, a coherence |x><y| decays at rate
+        (z(x)-z(y))^T K (z(x)-z(y))/2. No Hamiltonian is included.
+        """
+        state_space = _statespace.StateSpace.cast(state_space)
+        basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
+        if param_mode not in ('auto', 'cholesky', 'contraction'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'contraction'.")
+        if initial_covariance is not None and initial_stochastic_rate is not None:
+            raise ValueError("Supply initial_covariance or initial_stochastic_rate, not both.")
+        if initial_stochastic_rate is not None and (
+                not isinstance(initial_stochastic_rate, (int, float, _np.integer, _np.floating))
+                or not _np.isfinite(initial_stochastic_rate) or initial_stochastic_rate < 0):
+            raise ValueError("`initial_stochastic_rate` must be a finite nonnegative scalar.")
+
+        def is_diagonal(bel):
+            mx = basis[bel]
+            mx = mx.toarray() if _sps.issparse(mx) else _np.asarray(mx)
+            return _np.allclose(mx, _np.diag(mx.diagonal()), rtol=0, atol=1e-12 * _np.max(_np.abs(mx)))
+
+        if basis_element_labels is None:
+            supports = _lt._direction_supports(basis, state_space)
+            if supports is None:
+                raise ValueError("Supply basis_element_labels when subsystem support is unknown.")
+            candidates = [i for i, s in enumerate(supports) if s.sum() == 1]
+            candidates.sort(key=lambda i: int(supports[i].argmax()))
+            bels = tuple(basis.labels[i + 1] for i in candidates if is_diagonal(basis.labels[i + 1]))
+        else:
+            bels = tuple(basis_element_labels)
+        if not bels or len(set(bels)) != len(bels) or any(b not in basis.labels[1:] for b in bels):
+            raise ValueError("Select distinct nonidentity basis_element_labels from the elementary basis.")
+        if any(not is_diagonal(b) for b in bels):
+            raise ValueError("Correlated dephasing requires diagonal Hermitian directions.")
+        pos = {b: i for i, b in enumerate(bels)}
+        if correlation_edges is None:
+            pairs = list(_itertools.combinations(range(len(bels)), 2))
+        else:
+            pairs, seen = [], set()
+            for edge in correlation_edges:
+                if len(edge) != 2 or any(b not in pos for b in edge) or edge[0] == edge[1]:
+                    raise ValueError("Each phase-noise covariance edge must join two distinct selected directions.")
+                pair = tuple(sorted((pos[edge[0]], pos[edge[1]])))
+                if pair in seen:
+                    raise ValueError("Duplicate phase-noise covariance edge, including reversed pairs.")
+                seen.add(pair)
+                pairs.append(pair)
+            pairs.sort()
+        labels = [_LocalElementaryErrorgenLabel('S', (b,)) for b in bels]
+        labels += [_LocalElementaryErrorgenLabel('C', (bels[i], bels[j])) for i, j in pairs]
+        block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
+                                         error_generator_labels=labels)
+        n = len(bels)
+        if initial_covariance is None:
+            rate = 0. if initial_stochastic_rate is None else initial_stochastic_rate
+            covariance = rate * _np.eye(n)
+        else:
+            covariance = _np.asarray(initial_covariance)
+            if covariance.shape != (n, n) or not _np.all(_np.isfinite(covariance)):
+                raise ValueError("initial_covariance must be a finite square matrix on the selected directions.")
+            if _np.iscomplexobj(covariance) and _np.any(covariance.imag != 0):
+                raise ValueError("initial_covariance must be real for this dephasing model.")
+            covariance = _np.array(covariance.real, dtype=float, copy=True)
+            scale = _np.max(_np.abs(covariance))
+            if not _np.allclose(covariance, covariance.T, rtol=1e-12, atol=1e-12 * scale):
+                raise ValueError("initial_covariance must be symmetric.")
+            covariance = (covariance + covariance.T) / 2
+            supported = _np.eye(n, dtype=bool)
+            for i, j in pairs:
+                supported[i, j] = supported[j, i] = True
+            if _np.any(covariance[~supported] != 0):
+                raise ValueError("initial_covariance contains a forbidden phase-noise covariance entry.")
+        block.block_data[:] = [covariance[i, i] for i in range(n)] + [covariance[i, j] for i, j in pairs]
+        return cls([block], basis, mx_basis, evotype, state_space)
+
+    @classmethod
+    def from_weight_limited(cls, state_space, max_weights=None, errorgen_types=('H', 'S', 'C', 'A'),
+                           elementary_errorgen_basis=None, mx_basis='pp', evotype='default', *,
+                           param_mode='auto', initial_stochastic_rate=None):
+        """Construct a weight-limited CPTP Lindblad error generator.
+
+        The selected elementary coefficients remain constrained throughout optimization.
+        The S/C/A block uses a fill-free or completed sparse Cholesky parameterization,
+        preserving positive semidefiniteness and the selected support. Exponentiate
+        with :class:`ExpErrorgenOp` and compose after an ideal operation to model post-gate
+        errors, e.g. ``ComposedOp([ideal_op, ExpErrorgenOp(errorgen)])``.
+
+        Parameters
+        ----------
+        state_space : StateSpace or castable
+            A single tensor product of quantum subsystems (qubits or qudits).
+        max_weights : mapping, optional
+            Nonnegative integer limits keyed by H, S, C, A; omitted sectors have no limit.
+            Direction weight is the number of nonidentity subsystem factors. A C/A pair term's
+            weight is the union of its two directions' supports, and both endpoints must be selected
+            S directions. For example, ``dict(H=1, S=2, C=2, A=2)`` gives weight-two
+            S/C/A errors with one-body Hamiltonian errors.
+        errorgen_types : iterable of {'H', 'S', 'C', 'A'}, optional
+            Included sectors. C/A require S. Independent C/A masks and A-only
+            off-diagonals use the contraction chart; omit C and A for S-only errors.
+        elementary_errorgen_basis : Basis, str or None, optional
+            Hermitian, traceless, trace-orthogonal, identity-first operator basis. None
+            selects the canonical PP/GM product basis. Weight limits require a basis
+            with one recognizable PP/GM-style factor per subsystem.
+        mx_basis : Basis or str, optional
+            Matrix representation basis, usually ``'pp'`` for qubits or ``'gm'`` for qudits.
+        evotype : str or Evotype, optional
+            Evolution type, as for the ordinary constructor.
+        param_mode : {'auto', 'cholesky', 'contraction'}, optional
+            Parameterization of the S/C/A block. Auto chooses the fill-free chart for
+            chordal, matched C/A masks (or real-only C), and the contraction chart
+            otherwise. The contraction chart, K = C (I + H) C with H a scaled contraction
+            on the selected C/A components, covers every PSD matrix with the selected
+            support, including zero noise and the boundary, on any mask. It does not
+            support polynomial terms.
+        initial_stochastic_rate : float or None, optional
+            Initial S coefficient on each selected direction; C/A and H start at zero.
+            None means zero.
+
+        Raises
+        ------
+        ValueError
+            If the requested chart cannot represent the pattern or initialization,
+            or no directions are selected.
+
+        Notes
+        -----
+        S/C/A weight at most two always admits a perfect elimination order: remove all
+        weight-two directions before the weight-one directions. Each weight-two support
+        forms a clique attached to the central clique of weight-one directions. Higher
+        cutoffs need not be chordal and automatically use the contraction chart. The
+        fill-free and contraction charts include singular PSD matrices and the zero
+        generator, where derivatives vanish as in dense CPTPLND. In the contraction
+        chart a C/A coefficient is the product of two S square roots and a bounded
+        coordinate, so its derivative scales with the rate rather than its square root.
+        """
+        state_space = _statespace.StateSpace.cast(state_space)
+        sectors = set(errorgen_types)
+        if not sectors <= set('HSCA'):
+            raise ValueError("`errorgen_types` must contain only H, S, C, and A.")
+        if sectors & set('CA') and 'S' not in sectors:
+            raise ValueError("C/A sectors require S directions for a positive-semidefinite matrix.")
+        if param_mode not in ('auto', 'cholesky', 'contraction'):
+            raise ValueError("`param_mode` must be 'auto', 'cholesky', or 'contraction'.")
+        if initial_stochastic_rate is not None and (
+                not isinstance(initial_stochastic_rate, (int, float, _np.integer, _np.floating))
+                or not _np.isfinite(initial_stochastic_rate) or initial_stochastic_rate < 0):
+            raise ValueError("`initial_stochastic_rate` must be a finite nonnegative scalar.")
+        limits = dict(max_weights or {})
+        if not set(limits) <= set('HSCA') or any(
+                isinstance(w, (bool, _np.bool_)) or not isinstance(w, (int, _np.integer)) or w < 0
+                for w in limits.values()):
+            raise ValueError("`max_weights` must map H/S/C/A to nonnegative integer limits.")
+        basis = _lt._resolve_errorgen_basis(state_space, elementary_errorgen_basis)
+        supports = _lt._direction_supports(basis, state_space)
+        if supports is None:
+            if limits:
+                raise ValueError("Weight limits require a basis with one PP/GM-style factor per subsystem.")
+            supports = _np.zeros((len(basis.labels) - 1, 0), dtype=bool)
+        weights = supports.sum(axis=1)
+        bels = tuple(basis.labels[1:])
+
+        def selected(sector):
+            return [i for i, weight in enumerate(weights)
+                    if sector in sectors and weight <= limits.get(sector, _np.inf)]
+
+        blocks = []
+        ham = selected('H')
+        if ham:
+            blocks.append(_LindbladCoefficientBlock('ham', basis, [bels[i] for i in ham], param_mode='elements'))
+        stochastic = selected('S')
+        if stochastic:
+            labels = [_LocalElementaryErrorgenLabel('S', (bels[i],)) for i in stochastic]
+            for a, i in enumerate(stochastic):
+                for j in stochastic[a + 1:]:
+                    pair_weight = _np.count_nonzero(supports[i] | supports[j])
+                    for sector in ('C', 'A'):
+                        if sector in sectors and pair_weight <= limits.get(sector, _np.inf):
+                            labels.append(_LocalElementaryErrorgenLabel(sector, (bels[i], bels[j])))
+            block = _LindbladCoefficientBlock('other_sparse', basis, param_mode=param_mode,
+                                             error_generator_labels=labels)
+            rate = 0. if initial_stochastic_rate is None else initial_stochastic_rate
+            block.block_data[:] = [rate if lbl.errorgen_type == 'S' else 0. for lbl in labels]
+            blocks.append(block)
+        if not blocks:
+            raise ValueError("Select at least one Hamiltonian or stochastic direction.")
+        return cls(blocks, basis, mx_basis, evotype, state_space)
 
     @classmethod
     def from_operation_matrix_and_blocks(cls, op_matrix, lindblad_coefficient_blocks, elementary_errorgen_basis='PP',
@@ -1036,7 +1276,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         basis : Basis
@@ -1102,7 +1342,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             list of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
         """
         labels = []
@@ -1211,7 +1451,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
@@ -1232,7 +1472,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
             values are corresponding error generator rates for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         action : {"update","add","reset"}
@@ -1325,7 +1565,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
             values are corresponding error generator rates for each coefficient.
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            `"C"` (C-type correlation) or `"A"` (active).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
 
         action : {"update","add","reset"}

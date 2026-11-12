@@ -21,12 +21,14 @@ from pygsti.models import modelnoise as mn
 ```
 
 ## Standard noise types
-There are three standard types of noise that can be added to operations in pyGSTi: depolarization, stochastic, and Lindbladian.  The first two types are common in the literature, while the third, "Lindbladian", needs a bit more explanation.  Many types of gate errors can be represented in terms of an *error generator*.  If $G$ is a noisy gate (a CPTP map) and $G_0$ is it's ideal counterpart, then if we write $G = e^{\Lambda}G_0$ then $\Lambda$ is called the gate's *error generator*.  A `LindbladErrorgen` object, exponentiated using a `ExpErrorgenOp` object represent this $e^{\Lambda}$ in pyGSTi.  If we write $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i + \sum_{i\neq j} \alpha_{ij} F_{ij}$ then, when the $F_i/F_{ij}$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i/\alpha_{ij}$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  PyGSTi has three specific generator types (where $P_i$ is a Pauli operator or tensor product of Pauli operators):
+There are three standard types of noise that can be added to operations in pyGSTi: depolarization, stochastic, and Lindbladian.  The first two types are common in the literature, while the third, "Lindbladian", needs a bit more explanation.  Many types of gate errors can be represented in terms of an *error generator*.  If $G$ is a noisy gate (a CPTP map) and $G_0$ is it's ideal counterpart, then if we write $G = e^{\Lambda}G_0$ then $\Lambda$ is called the gate's *error generator*.  A `LindbladErrorgen` object, exponentiated using a `ExpErrorgenOp` object represent this $e^{\Lambda}$ in pyGSTi.  If we write $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i + \sum_{i\neq j} \alpha_{ij} F_{ij}$ then, when the $F_i/F_{ij}$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i/\alpha_{ij}$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  PyGSTi uses the following elementary generator types (where $P_i$ is a Pauli operator or tensor product of Pauli operators):
 
 - **Hamiltonian**: $H_i : \rho \rightarrow -i[P_i,\rho]$
 - **Stochastic**: $S_i : \rho \rightarrow P_i \rho P_i - \rho$
-- **Correlated**: $C_{ij} : \rho \rightarrow P_i \rho P_j + P_j \rho P_i - \frac{1}{2}\{\{P_i,P_j\}, \rho\}$
-- **Affine/Active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j + P_j \rho P_i + \frac{1}{2}\{[P_i,P_j], \rho\}\right)$
+- **C-type correlation**: $C_{ij} : \rho \rightarrow P_i \rho P_j + P_j \rho P_i - \frac{1}{2}\{\{P_i,P_j\}, \rho\}$
+- **A-type active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j - P_j \rho P_i + \frac{1}{2}\{[P_i, P_j], \rho\}\right)$
+
+C/A pair terms are indexed by two distinct operator-basis directions. C-type correlation coefficients give the real off-diagonal Kossakowski components; A-type active coefficients give the negative imaginary components in their ordered label orientation. Stochastic joint Pauli errors such as `S(ZZ)` can also be physically correlated while contributing to the diagonal of that matrix.
 
 See our paper on [the taxonomy of small errors](https://arxiv.org/abs/2103.01928v1) for a more theoretical foundation of error generators.
 
@@ -37,8 +39,8 @@ Many of the model construction functions take arguments that allow users to add 
 - `lindblad_error_coeffs`: Values are a dict where the key has the form `(<type>, <basis_elements>)` and the values are the $\alpha_i$ coefficients in the sum of Lindblad terms, which are then exponentiated to give the final noise. The type includes:
   - `'H'` for Hamiltonian errors
   - `'S'` for Pauli-stochastic errors
-  - `'C'` for correlated Pauli-stochastic errors
-  - `'A'` for affine/active errors
+  - `'C'` for C-type correlation pair terms
+  - `'A'` for A-type active pair terms
   
   and strings of `I`, `X`, `Y`, and `Z` can be used to label a Pauli basis element. 
 
@@ -438,3 +440,182 @@ cloudmodel = pygsti.models.create_cloud_crosstalk_model(
 )
 print(cloudmodel.num_params, "params because 1 H-type and a Hermitian 3x3 block of S-type coefficients")
 ```
+
+## Weight-limited CPTPLND post-gate errors
+
+`LindbladErrorgen.from_weight_limited` constructs a CPTP Lindblad error generator whose selected elementary-error support remains fixed when its parameters change. The stochastic directions index a Kossakowski matrix $K$, with $K_{ii}=S_i$ and $K_{ij}=C_{ij}-iA_{ij}$ for an oriented pair $(i,j)$. Its sparse Cholesky factor makes $K$ positive semidefinite for every parameter vector.
+
+Direction weight counts the subsystems on which the operator is nonidentity. A C/A pair term's weight counts the **union** of its two operator directions' supports. Thus `C(XII, IXX)` has weight three, even though each direction has weight at most two. Each C/A pair-term endpoint must also be an allowed S direction. Limits are specified independently by sector; an omitted limit leaves that sector unrestricted.
+
+For example, create independent post-gate errors with one-body Hamiltonian terms and S/C/A terms of weight at most two:
+
+```{code-cell} ipython3
+import numpy as np
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import (
+    LindbladErrorgen, ExpErrorgenOp, StaticUnitaryOp, ComposedOp
+)
+
+space = QubitSpace(3)
+errorgen = LindbladErrorgen.from_weight_limited(
+    space, max_weights=dict(H=1, S=2, C=2, A=2), initial_stochastic_rate=1e-4
+)
+
+# Use a positive stochastic diagonal with smaller factor perturbations for a
+# well-conditioned example. S/C/A factor parameters are not physical rates.
+rng = np.random.default_rng(1234)
+errorgen.from_vector(errorgen.to_vector() + rng.normal(scale=.001, size=errorgen.num_params))
+
+ideal_gate = StaticUnitaryOp(
+    np.kron(np.array([[0., 1.], [1., 0.]]), np.eye(4)), state_space=space
+)
+noisy_gate = ComposedOp([ideal_gate, ExpErrorgenOp(errorgen)])
+# ComposedOp lists factors in application order: exp(errorgen) @ ideal_gate.
+print(errorgen.num_params, "parameters")  # 657: 9 H + 648 sparse S/C/A
+
+# SPAM has independent noise channels with exactly the same weight limits.
+from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.states import ComputationalBasisState, ComposedState
+from pygsti.modelmembers.povms import ComputationalBasisPOVM, ComposedPOVM
+
+
+def weight_limited_noise(max_weights, seed):
+    generator = LindbladErrorgen.from_weight_limited(
+        space, max_weights, initial_stochastic_rate=1e-4
+    )
+    vector = generator.to_vector()
+    generator.from_vector(vector + np.random.default_rng(seed).normal(scale=.001, size=len(vector)))
+    return ExpErrorgenOp(generator)
+
+
+limits = dict(H=1, S=2, C=2, A=2)
+weight_model = ExplicitOpModel(space, basis='pp')
+weight_model.preps['rho0'] = ComposedState(
+    ComputationalBasisState([0, 0, 0], state_space=space), weight_limited_noise(limits, 21)
+)
+weight_model.povms['Mdefault'] = ComposedPOVM(
+    weight_limited_noise(limits, 22), ComputationalBasisPOVM(3, state_space=space), mx_basis='pp'
+)
+weight_model.operations['Gx'] = noisy_gate
+assert weight_model.num_params == 3 * 657
+print(weight_model.probabilities(('Gx', 'Gx')))
+
+sca_block = errorgen.coefficient_blocks[-1]
+K = sca_block.kossakowski_matrix()  # Optional dense inspection, in basis_element_labels order.
+print(K.shape)                     # (36, 36)
+assert np.linalg.eigvalsh(K)[0] >= -1e-12
+```
+
+Preparation noise acts after the reference state; measurement noise acts before the reference POVM, so its adjoint acts on effects. The gate and both SPAM channels have independent parameters in the same hypothesis class. Construct a separate error generator for each independently parameterized gate. Model copying and nice serialization retain the selected support and the factor parameterization.
+
+The weight-two case admits a perfect elimination order. All weight-one directions form a clique. For each two-subsystem support, its weight-two directions and the weight-one directions on those two subsystems form another clique. Eliminate all weight-two directions first, then the weight-one directions. Every eliminated vertex's remaining neighbors form a clique, so factorization adds no fill. On three qubits, this leaves 648 real S/C/A parameters rather than the 1296 of a full Hermitian matrix on the same 36 stochastic directions.
+
+By default, the constructor chooses a fill-free chart for a chordal graph with matching C/A masks, or C-only real factors. For S+C errors, pass `errorgen_types=('S', 'C')`; for S-only errors, pass `('S',)`. Nonchordal patterns, independent C/A limits, and A-only off-diagonals automatically use the contraction chart described below. Set `param_mode='cholesky'` to require the fill-free chart, or `param_mode='contraction'` to request the contraction chart on any mask.
+
+The default operator basis is the canonical PP/GM tensor product for the state space. Qudits are supported; supply a compatible matrix basis such as `mx_basis='gm'` for a qutrit. The fill-free chart starts at zero and includes singular PSD matrices. As with dense CPTPLND, its quadratic S/C/A derivatives vanish at zero factor parameters. `sample_errorgen_rates` remains available to draw physical initial rates, while this constructor supplies the parameterization that preserves zeros during optimization.
+
+### Higher weights and independent C/A limits
+
+When the fill-free chart does not apply, the default is the **contraction chart**. Write the Kossakowski matrix as
+
+$$K = C\,(I+H)\,C,$$
+
+with $C$ real diagonal, $C_{ii}^2$ the S coefficients, and $H$ zero-diagonal Hermitian, with real entries on the selected C components and imaginary entries on the selected A components. Then $K\succeq0$ exactly when $\lambda_{\min}(H)\ge-1$. The parameters are $C_{ii}$ and a free matrix $H_0$ on the same support, mapped to
+
+$$H=\frac{2}{1+t^2}\,H_0,\qquad t=-\lambda_{\min}(H_0),\qquad -\lambda_{\min}(H)=\frac{2t}{1+t^2}\le1 .$$
+
+Because $H_0$ has zero trace, $t\ge0$ with equality only at $H_0=0$. A scalar multiple keeps any C/A support, so no completion is needed, and the map reaches every positive-semidefinite matrix on the support, including zero noise and rank-deficient matrices such as amplitude damping or dephasing about a tilted axis. Each connected component of the C/A graph has its own $t$. For purely imaginary $H$ (S+A) the spectrum is symmetric and $t$ is the spectral norm; for real C entries it is not, which is why the chart uses $-\lambda_{\min}$. The zero-noise point is stationary, as for dense CPTPLND; the default initialization is zero. A C/A coefficient is $C_{ii}C_{jj}$ times a bounded coordinate, so near zero its derivative scales with the rate rather than with its square root. The derivative of $t$ does not exist where $\lambda_{\min}(H_0)$ is repeated; the implementation then differentiates along one eigenvector. Evaluation costs one dense Hermitian eigendecomposition per connected component.
+
+Raw parameter vectors have chart-specific meanings; switch charts by constructing a generator with the other `param_mode` and transferring its elementary coefficients with `set_coefficients`.
+
+Supply `initial_stochastic_rate` to start the S rates at a nonnegative value other than the default zero. For example, use different C and A limits on three qubits, which selects the contraction chart:
+
+```{code-cell} ipython3
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
+
+interior_errorgen = LindbladErrorgen.from_weight_limited(
+    QubitSpace(3), dict(H=1, S=2, C=2, A=3),
+    initial_stochastic_rate=1e-4
+)
+interior_block = interior_errorgen.coefficient_blocks[-1]
+assert interior_block.num_params == 972
+assert interior_errorgen.num_params == 981  # 9 H + 972 S/C/A
+error_channel = ExpErrorgenOp(interior_errorgen)
+
+interior_limits = dict(H=1, S=2, C=2, A=3)
+interior_model = ExplicitOpModel(space, basis='pp')
+interior_model.preps['rho0'] = ComposedState(
+    ComputationalBasisState([0, 0, 0], state_space=space), weight_limited_noise(interior_limits, 31)
+)
+interior_model.povms['Mdefault'] = ComposedPOVM(
+    weight_limited_noise(interior_limits, 32), ComputationalBasisPOVM(3, state_space=space), mx_basis='pp'
+)
+interior_model.operations['Gx'] = ComposedOp([ideal_gate.copy(), error_channel])
+assert interior_model.num_params == 3 * 981
+print(interior_model.probabilities(('Gx', 'Gx')))
+```
+
+Common S/C/A weight three on four or more qubits also selects the contraction chart automatically. Dense density-matrix simulation still constructs global superoperator data; coefficient sparsity does not remove that state-space cost. The full four-qubit weight-three coefficient block has 174 directions and 14562 real parameters.
+
+Contraction blocks provide analytic derivatives, Hessians, Torch reconstruction, and model persistence. Their parameter map is nonpolynomial, so polynomial term simulation raises `NotImplementedError`; use matrix simulation or Torch. For the fill-free chart, the resolved elimination ordering is serialized to preserve the meaning of the parameters across installations.
+
+## Correlated dephasing with phase-noise covariance graphs
+
+`LindbladErrorgen.from_correlated_dephasing` selects commuting diagonal directions and constrains their real phase-noise covariance matrix to a specified graph. By default it selects the one-body diagonal PP/GM directions in subsystem order: $Z_i$ for each qubit, or all $d-1$ diagonal generators for a dimension-$d$ qudit. The generator is
+
+$$\mathcal L(\rho)=-\tfrac12\sum_{ab}K_{ab}[F_a,[F_b,\rho]],\qquad K\succeq0.$$
+
+The constructor uses S coefficients and C-type correlation pair terms, with no H or A. The Kossakowski matrix is the real Gaussian Markovian phase-noise covariance per unit time, not a colored-noise spectrum or the entire quantum pure-dephasing family. The graph encodes covariance zeros; it does not encode zeros in an inverse covariance or follow automatically from device layout.
+
+For example, use a four-cycle with positive and negative off-diagonal phase-noise covariances:
+
+```{code-cell} ipython3
+from pygsti.baseobjs import QubitSpace
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
+import numpy as np
+
+phase_directions = ('ZIII', 'IZII', 'IIZI', 'IIIZ')
+phase_edges = [(phase_directions[i], phase_directions[(i + 1) % 4]) for i in range(4)]
+phase_covariance = np.diag([.028, .033, .025, .030])
+for (i, j), value in zip(((0, 1), (1, 2), (2, 3), (0, 3)), (.007, -.006, .005, .004)):
+    phase_covariance[i, j] = phase_covariance[j, i] = value
+phase_errorgen = LindbladErrorgen.from_correlated_dephasing(
+    QubitSpace(4), phase_edges, initial_covariance=phase_covariance
+)
+assert phase_errorgen.num_params == 8  # Four diagonal entries and four edges.
+phase_channel = ExpErrorgenOp(phase_errorgen)
+
+# This example also includes noisy SPAM in the same eight-parameter family.
+from pygsti.baseobjs import Basis
+from pygsti.modelmembers.states import StaticState
+from pygsti.modelmembers.povms import StaticPOVMEffect, UnconstrainedPOVM
+from pygsti.tools.basistools import stdmx_to_vec
+
+phase_space = QubitSpace(4)
+phase_prep = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
+    phase_space, phase_edges, initial_covariance=.3 * phase_covariance
+))
+phase_meas = ExpErrorgenOp(LindbladErrorgen.from_correlated_dephasing(
+    phase_space, phase_edges, initial_covariance=.2 * phase_covariance
+))
+plus = StaticState(stdmx_to_vec(np.ones((16, 16)) / 16, 'pp'), basis='pp', state_space=phase_space)
+xx = Basis.cast('PP', 256)['XXII']
+parity_povm = UnconstrainedPOVM([
+    (label, StaticPOVMEffect(stdmx_to_vec((np.eye(16) + sign * xx) / 2, 'pp'),
+                            basis='pp', state_space=phase_space))
+    for label, sign in (('+', 1), ('-', -1))
+])
+phase_model = ExplicitOpModel(phase_space, basis='pp')
+phase_model.preps['rho0'] = ComposedState(plus, phase_prep)
+phase_model.povms['Mdefault'] = ComposedPOVM(phase_meas, parity_povm, mx_basis='pp')
+phase_model.operations['Gi'] = phase_channel
+assert phase_model.num_params == 24
+print(phase_model.probabilities(('Gi',)))
+```
+
+The cycle is nonchordal and automatically uses the contraction chart. Pass `correlation_edges=()` for independent noise or omit it for a dense phase-noise covariance matrix. An explicit `basis_element_labels` selects other diagonal directions, including higher-body strings such as `('ZI', 'IZ', 'ZZ')`. With supplied covariance, its matrix order is the selected label order. Forbidden entries must be zero, and invalid covariances are rejected rather than projected.
+
+All parameter updates preserve the graph and positivity. Without `initial_covariance`, initialization and chart keywords behave as in `from_weight_limited`: zero by default, or a configurable `initial_stochastic_rate`. Both charts represent singular covariances exactly, including collective rank-one covariance.
+
+For unnormalized $Z_i$, each matrix unit $|x\rangle\langle y|$ decays at rate $(z(x)-z(y))^TK(z(x)-z(y))/2$. Thus individual Ramsey means depend only on $K_{ii}$; XX/YY pair measurements are needed to identify off-diagonal phase-noise covariance entries in this experiment. A graph with $n$ vertices and $|E|$ edges has $n+|E|$ real parameters per channel, versus $n(n+1)/2$ for a dense matrix on the same directions. These are different hypotheses even though all directions have support weight one. The [correlated-dephasing experiment](../examples/CorrelatedDephasing.md) jointly fits independent gate, preparation, and pre-measurement channels in each of these families, using composed Lindblad SPAM as above.

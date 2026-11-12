@@ -2,12 +2,14 @@ import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
+from scipy.sparse import csgraph as _csgraph
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools.graphs import sparsechol as _sparsechol
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -134,7 +136,7 @@ class _BlockParameterization:
     def param_labels(self, blk):
         raise NotImplementedError
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         """Second derivative of the term-superoperators w.r.t. params (rarely used)."""
         raise NotImplementedError
 
@@ -195,7 +197,7 @@ class _StaticParam(_BlockParameterization):
     def param_labels(self, blk):
         return []
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         if superops_are_flat or not blk._superops_matrix_structured:
             return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
         return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
@@ -232,7 +234,7 @@ class _RealVectorElements(_BlockParameterization):
     def block_data_jacobian(self, blk, v):
         return _np.identity(len(blk._bel_labels), 'd')
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         d1, d2 = superops.shape[1:3]
         nP = blk.num_params
         return _np.zeros((d1, d2, nP, nP), 'd')
@@ -276,9 +278,9 @@ class _EEGVectorElements(_RealVectorElements):
             if lbl.errorgen_type == 'S':
                 labels.append(f"{lbl} stochastic coefficient")
             elif lbl.errorgen_type == 'C':
-                labels.append(f"{lbl} pauli-correlation coefficient")
+                labels.append(f"{lbl} C-type correlation coefficient")
             else: #'A'
-                labels.append(f"{lbl} active coefficient")
+                labels.append(f"{lbl} A-type active coefficient")
         return labels
 
 
@@ -307,7 +309,7 @@ class _DiagCholesky(_BlockParameterization):
     def param_labels(self, blk):
         return [f"sqrt({lbl} stochastic coefficient)" for lbl in blk._bel_labels]
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         nP = blk.num_params
         trans = _np.transpose(superops, (1, 2, 0))      # shape (d,d,nP)
         I = _np.identity(nP, 'd')
@@ -350,7 +352,7 @@ class _Depol(_BlockParameterization):
     def param_labels(self, blk):
         return ["sqrt(common stochastic error coefficient for depolarization)"]
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         base = _np.sum(superops, axis=0)   # shape (d,d)
         return base[:, :, None, None] * 2.0
 
@@ -391,7 +393,7 @@ class _RelDepol(_BlockParameterization):
     def param_labels(self, blk):
         return ["common stochastic error coefficient for depolarization"]
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         d1, d2 = superops.shape[1:3]
         return _np.zeros((d1, d2, 1, 1), 'd')
 
@@ -470,7 +472,7 @@ class _OtherElements(_BlockParameterization):
                     labels.append(f"Im[({ilbl},{jlbl}) element of non-H coeff matrix]")
         return labels
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         num_bels = len(blk._bel_labels)
         if superops_are_flat:
             superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
@@ -614,7 +616,7 @@ class _OtherCholesky(_BlockParameterization):
                     labels.append(f"Im[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]")
         return labels
 
-    def superop_hessian(self, blk, superops, superops_are_flat):
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
         num_bels = len(blk._bel_labels)
         if superops_are_flat:
             superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
@@ -676,6 +678,277 @@ class _OtherCholesky(_BlockParameterization):
         return _Polynomial(polyTerms, mpv)
 
 
+class _SparseCholesky(_BlockParameterization):
+    """Exact quadratic map from a fill-free Cholesky factor to selected S/C/A rates."""
+    name = 'cholesky'
+
+    def num_params(self, blk):
+        return len(blk._factor_rows)
+
+    def params_to_block_data(self, blk, v):
+        if _np.shape(v) != (blk.num_params,):
+            raise ValueError("Expected %d sparse Cholesky parameters." % blk.num_params)
+        terms, left, right, scale = blk._quadratic_terms
+        blk.block_data[:] = _np.bincount(terms, weights=scale * v[left] * v[right],
+                                        minlength=len(blk._eeg_labels))
+
+    def block_data_to_params(self, blk, ttol):
+        K = blk.kossakowski_matrix()
+        n = len(K)
+        if n == 0:
+            return _np.empty(0, 'd')
+        # A diagonal shift, unlike spectral clipping, preserves the prescribed zeros.
+        emin = _np.linalg.eigvalsh(K)[0]
+        if emin < ttol:
+            raise ValueError("Sparse Lindblad coefficients are not positive semidefinite.")
+        if emin < 0:
+            K = K - emin * _np.eye(n)
+        K = K[_np.ix_(blk.cholesky_structure.perm, blk.cholesky_structure.perm)]
+        L = _np.zeros_like(K)
+        tol = 1e-12 * max(_np.linalg.norm(K, ord=_np.inf), _np.finfo(float).tiny)
+        for j in range(n):
+            pivot = (K[j, j] - L[j, :j] @ L[j, :j].conj()).real
+            residual = K[j + 1:, j] - L[j + 1:, :j] @ L[j, :j].conj()
+            if pivot < -tol:
+                raise ValueError("Sparse Lindblad coefficients are not positive semidefinite.")
+            if pivot <= tol and _np.all(_np.abs(residual) <= tol):
+                continue  # A zero pivot in a PSD matrix has a zero residual column.
+            if pivot <= 0:
+                raise ValueError("Cannot factor sparse Lindblad coefficients at a zero pivot.")
+            L[j, j] = _np.sqrt(pivot)
+            L[j + 1:, j] = residual / L[j, j]
+        entries = L[blk._factor_rows, blk._factor_cols]
+        v = _np.where(blk._factor_imag, entries.imag, entries.real)
+        # Check the sparse factor, including singular inputs, before returning parameters.
+        sparse_L = _np.zeros_like(L)
+        _np.add.at(sparse_L, (blk._factor_rows, blk._factor_cols), v * blk._factor_scales)
+        if _np.linalg.norm(sparse_L @ sparse_L.conj().T - K, ord=_np.inf) > 100 * tol:
+            raise ValueError("Sparse Cholesky reconstruction failed for these coefficients.")
+        return v
+
+    def block_data_jacobian(self, blk, v):
+        terms, left, right, scale = blk._quadratic_terms
+        J = _np.zeros((len(blk._eeg_labels), len(v)))
+        _np.add.at(J, (terms, left), scale * v[right])
+        _np.add.at(J, (terms, right), scale * v[left])
+        return J
+
+    def param_labels(self, blk):
+        perm = blk.cholesky_structure.perm
+        return ["%s[(%s,%s) sparse non-H Cholesky element]" %
+                ('Im' if imag else 'Re', blk._bel_labels[perm[r]], blk._bel_labels[perm[c]])
+                for r, c, imag in zip(blk._factor_rows, blk._factor_cols, blk._factor_imag)]
+
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
+        nP = blk.num_params
+        out = _np.zeros(superops.shape[1:] + (nP, nP), dtype=superops.dtype)
+        terms, left, right, scale = blk._quadratic_terms
+        for t, p, q, s in zip(terms, left, right, scale):
+            out[:, :, p, q] += s * superops[t]
+            out[:, :, q, p] += s * superops[t]
+        return out
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        torch = _import_torch()
+        terms, left, right, scale = blk._quadratic_terms
+        return (len(blk._eeg_labels),
+                *(torch.tensor(a, dtype=torch.long, device=device) for a in (terms, left, right)),
+                torch.tensor(scale, dtype=real_dtype, device=device))
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        n, terms, left, right, scale = sd
+        return t_param.new_zeros(n).scatter_add(0, terms, scale * t_param[left] * t_param[right])
+
+    def _coefficient_polynomial(self, blk, index, pio, mpv):
+        terms, left, right, scale = blk._quadratic_terms
+        selected = terms == index
+        return _Polynomial({(pio + int(p), pio + int(q)): s
+                            for p, q, s in zip(left[selected], right[selected], scale[selected])}, mpv)
+
+
+class _Contraction(_BlockParameterization):
+    """Sparse CPTP chart K = C (I + H) C that includes zero noise and the PSD boundary.
+
+    C is a real diagonal matrix with C_ii^2 the S coefficients, and H is zero-diagonal
+    Hermitian with entries only on the selected C/A components. K is positive semidefinite
+    exactly when lambda_min(H) >= -1, on each connected component of the C/A graph. The
+    parameters are C_ii and a free H0 with the same support, scaled per component by
+    ``H = g(t) H0``, where ``t = -lambda_min(H0)`` and ``g(t) = 2 / (1 + t^2)``. Since H0
+    has zero trace, t >= 0 with equality only at H0 = 0, and ``-lambda_min(H) = 2t / (1 + t^2)``
+    covers [0, 1]. A scalar scaling preserves every support, so no completion is needed.
+    The boundary ``t = 1`` is a fold. Derivatives of t do not exist where lambda_min(H0)
+    is repeated; there the code uses the derivative along one eigenvector.
+    """
+    name = 'contraction'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels) + len(blk._contraction_terms[0])
+
+    @staticmethod
+    def _component_spectrum(blk, w, component):
+        """Matrix H0 of one component, its lowest eigenpair, and all eigenpairs."""
+        local, terms, li, lj, z = component
+        H0 = _np.zeros((len(local), len(local)), complex)
+        _np.add.at(H0, (li, lj), z * w[terms])
+        _np.add.at(H0, (lj, li), z.conj() * w[terms])
+        evals, evecs = _np.linalg.eigh(H0)
+        return evals, evecs
+
+    @staticmethod
+    def _gauge_derivatives(evals, evecs, component, order):
+        """t = -lambda_min(H0) and its first (and second) derivatives in the component's terms."""
+        _, terms, li, lj, z = component
+        t = -evals[0]
+        if not order:
+            return t, None, None
+        if t <= 0:  # H0 = 0: g'(0) = 0, so the derivative of t never contributes
+            return 0., _np.zeros(len(terms)), _np.zeros((len(terms), len(terms))) if order == 2 else None
+        v0 = evecs[:, 0]
+        # d(lambda)/dw = v0^dag E v0 with E = z e_i e_j^T + conj(z) e_j e_i^T.
+        dt = -2 * (z * v0[li].conj() * v0[lj]).real
+        if order == 1:
+            return t, dt, None
+        # V^dag E v0 for each term, then the standard second-order eigenvalue perturbation.
+        P = evecs[li, :].conj().T * (z * v0[lj]) + evecs[lj, :].conj().T * (z.conj() * v0[li])
+        gaps = evals[0] - evals[1:]
+        keep = _np.abs(gaps) > 1e-12 * max(1., _np.abs(evals).max())  # within a repeated eigenvalue: no term
+        Q = P[1:][keep] / _np.sqrt(-gaps[keep])[:, None]
+        d2lambda = -2 * (Q.conj().T @ Q).real
+        return t, dt, -d2lambda
+
+    def _evaluate(self, blk, v, order=0):
+        n = len(blk._bel_labels)
+        if _np.shape(v) != (blk.num_params,) or not _np.all(_np.isfinite(v)):
+            raise ValueError("Expected %d finite contraction-chart parameters." % blk.num_params)
+        c, w = v[:n], v[n:]
+        k, i, j, _ = blk._contraction_terms
+        m, nd = len(w), len(blk._eeg_labels)
+        g = _np.ones(m)
+        data = _np.zeros(nd)
+        data[blk._contraction_diagonal] = c * c
+        J = _np.zeros((nd, len(v))) if order else None
+        Hs = _np.zeros((nd, len(v), len(v))) if order == 2 else None
+        if order:
+            J[blk._contraction_diagonal, _np.arange(n)] = 2 * c
+        if order == 2:
+            Hs[blk._contraction_diagonal, _np.arange(n), _np.arange(n)] = 2.
+        for component in blk._contraction_components:
+            terms = component[1]
+            evals, evecs = self._component_spectrum(blk, w, component)
+            t, dt, d2t = self._gauge_derivatives(evals, evecs, component, order)
+            q = 1 + t * t
+            g[terms] = 2 / q
+            if not order:
+                continue
+            g1 = -4 * t / q**2
+            cc = c[i[terms]] * c[j[terms]]
+            kk, pw = k[terms], n + terms
+            # d(g w_a)/dw_b = g delta_ab + g' w_a dt_b
+            dgw = g[terms][0] * _np.eye(len(terms)) + g1 * _np.outer(w[terms], dt)
+            J[_np.ix_(kk, pw)] = cc[:, None] * dgw
+            if order == 2:
+                g2 = (12 * t * t - 4) / q**3
+                gw = g[terms][0] * w[terms]
+                # d2(g w_a)/dw_b dw_c = g'(dt_c delta_ab + dt_b delta_ac) + w_a (g'' dt_b dt_c + g' d2t_bc)
+                second = w[terms][:, None, None] * (g2 * _np.outer(dt, dt) + g1 * d2t)[None]
+                eye = _np.eye(len(terms))
+                second += g1 * (eye[:, :, None] * dt[None, None, :] + eye[:, None, :] * dt[None, :, None])
+                Hs[_np.ix_(kk, pw, pw)] = cc[:, None, None] * second
+                # mixed c/w and c/c terms
+                for row, a, b, ia, jb in zip(kk, range(len(terms)), terms, i[terms], j[terms]):
+                    Hs[row, ia, pw] += c[jb] * dgw[a]
+                    Hs[row, jb, pw] += c[ia] * dgw[a]
+                    Hs[row, pw, ia] += c[jb] * dgw[a]
+                    Hs[row, pw, jb] += c[ia] * dgw[a]
+                    Hs[row, ia, jb] += gw[a]
+                    Hs[row, jb, ia] += gw[a]
+        data[k] = c[i] * c[j] * g * w
+        if order:
+            # derivatives with respect to the pivots c
+            _np.add.at(J, (k, i), c[j] * g * w)
+            _np.add.at(J, (k, j), c[i] * g * w)
+        return data, J, Hs
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = self._evaluate(blk, v)[0]
+
+    def block_data_jacobian(self, blk, v):
+        return self._evaluate(blk, v, order=1)[1]
+
+    def superop_hessian(self, blk, superops, superops_are_flat, v=None):
+        hessian = self._evaluate(blk, blk.to_vector() if v is None else v, order=2)[2]
+        return _np.einsum('cpq,cij->ijpq', hessian, superops)
+
+    def block_data_to_params(self, blk, ttol):
+        n = len(blk._bel_labels)
+        k, i, j, _ = blk._contraction_terms
+        if not _np.all(_np.isfinite(blk.block_data)):
+            raise ValueError("Contraction chart requires finite coefficients.")
+        rates = blk.block_data[blk._contraction_diagonal]
+        if _np.any(rates < ttol * max(1., _np.abs(rates).max())):
+            raise ValueError("Contraction chart requires nonnegative S coefficients.")
+        c = _np.sqrt(_np.clip(rates, 0, None))
+        scale = c[i] * c[j]
+        values = blk.block_data[k]
+        orphan = (scale == 0) & (values != 0)
+        if _np.any(orphan) and _np.isfinite(ttol):
+            raise ValueError("A C/A coefficient is nonzero where one of its S coefficients is zero; "
+                             "these coefficients are not positive semidefinite.")
+        h = _np.divide(values, scale, out=_np.zeros(len(k)), where=scale > 0)  # entries of H
+        tolerance = max(-ttol, 1e-9)
+        w = _np.zeros(len(k))
+        for component in blk._contraction_components:
+            terms = component[1]
+            evals, _ = self._component_spectrum(blk, h, component)
+            gamma = max(-evals[0], 0.)
+            if gamma > 1:
+                if gamma > 1 + tolerance:
+                    raise ValueError("Sparse S/C/A coefficients are not positive semidefinite "
+                                     "(lambda_min of the normalized matrix is %g)." % (1 - gamma))
+                h[terms] /= gamma
+                gamma = 1.
+            t = gamma / (1 + _np.sqrt(1 - gamma * gamma))  # root in [0, 1] of 2t / (1 + t^2) = gamma
+            w[terms] = h[terms] * (1 + t * t) / 2
+        return _np.r_[c, w]
+
+    def param_labels(self, blk):
+        k, i, j, active = blk._contraction_terms
+        return (["sqrt[S(%s) coefficient]" % b for b in blk._bel_labels]
+                + ["%s(%s,%s) contraction coordinate" % ('A' if a else 'C', blk._bel_labels[p], blk._bel_labels[q])
+                   for p, q, a in zip(i, j, active)])
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        torch = _import_torch()
+        index = lambda a: torch.tensor(_np.asarray(a), dtype=torch.long, device=device)
+        complex_dtype = torch.complex128 if real_dtype == torch.float64 else torch.complex64
+        k, i, j, _ = blk._contraction_terms
+        components = tuple((len(local), index(terms), index(li), index(lj),
+                            torch.tensor(z, dtype=complex_dtype, device=device))
+                           for local, terms, li, lj, z in blk._contraction_components)
+        return (len(blk._bel_labels), len(blk._eeg_labels), index(blk._contraction_diagonal),
+                index(k), index(i), index(j), components)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        torch = _import_torch()
+        n, nd, diagonal, k, i, j, components = sd
+        c, w = t_param[:n], t_param[n:]
+        g = t_param.new_ones(len(w))
+        for size, terms, li, lj, z in components:
+            entries = z * w[terms].to(z.dtype)
+            H0 = z.new_zeros((size, size)).index_put((li, lj), entries, accumulate=True)
+            H0 = H0.index_put((lj, li), entries.conj(), accumulate=True)
+            t = -torch.linalg.eigvalsh(H0)[0]
+            g = g.index_put((terms,), (2 / (1 + t * t)).to(g.dtype).expand(len(terms)))
+        data = t_param.new_zeros(nd).index_put((diagonal,), c * c)
+        return data.index_put((k,), c[i] * c[j] * g * w)
+
+    def _coefficient_polynomial(self, blk, index, pio, mpv):
+        raise NotImplementedError("The contraction chart is nonpolynomial; use matrix simulation or Torch, "
+                                  "rather than polynomial term simulation.")
+
+
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
     Class for storing and managing the parameters associated with particular subblocks of error-generator
@@ -701,14 +974,15 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return super().__new__(cls)
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
-                 truncate=False, *, error_generator_labels=None):
+                 truncate=False, *, error_generator_labels=None, cholesky_ordering=None):
         """
         Parameters
         ----------
         block_type : str
             String specifying the type of error generator parameters contained within this block. Allowed
             values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
-            and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
+            'other' (for S-type stochastic, C-type correlation, and A-type active error generators), and
+            'other_sparse' (selected S coefficients and C/A pair terms with sparse CPTP charts).
         
         basis : `Basis`
             `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
@@ -728,6 +1002,14 @@ class LindbladCoefficientBlock(_NicelySerializable):
             - For 'ham': 'elements'
             - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
             - For 'other': 'elements', 'cholesky'
+            - For 'other_sparse': 'elements', 'cholesky', 'contraction', 'auto'
+
+            The fill-free 'cholesky' chart includes zero noise and singular PSD matrices.
+            'contraction' writes K = C (I + H) C with C the square roots of the S
+            coefficients and H a scaled contraction on the selected C/A components. It
+            covers every PSD matrix on any support, including zero noise and the
+            boundary, and does not support polynomial term simulation. 'auto' chooses
+            the fill-free chart when possible and the contraction chart otherwise.
 
             Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
             which when used in the right combination are utilized in the construction of GLND and CPTPLND
@@ -745,9 +1027,15 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         error_generator_labels : list or tuple of `LocalElementaryErrorgenLabel`, optional (default None)
             Keyword-only.  Only supported by block types whose `block_data` is keyed directly by elementary
-            error generators (e.g. 'other_unconstrained'); mutually exclusive with `basis_element_labels`.
+            error generators ('other_unconstrained' and 'other_sparse'); mutually exclusive with `basis_element_labels`.
             When given, the block manages exactly the listed elementary error generators, enabling reduced /
             flexible parameterizations.  Must be `None` for the other (basis-element-keyed) block types.
+
+        cholesky_ordering : array_like, optional
+            Only for 'other_sparse' with the fill-free 'cholesky' chart: an elimination
+            permutation in S-direction order that introduces no fill. The resolved ordering
+            is saved with the block to preserve parameter meaning across machines with
+            different ordering backends.
         """
 
         super().__init__()
@@ -758,6 +1046,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(param_mode, block_type)
         self._parameterization = _pcls()  # composition: owns the param_mode-specific maps
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
+        if cholesky_ordering is not None and block_type != 'other_sparse':
+            raise ValueError("`cholesky_ordering` is only supported by 'other_sparse' blocks.")
+        self._cholesky_ordering = cholesky_ordering
         self._init_labels(basis, basis_element_labels, error_generator_labels)
         self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
             if self._uses_cache_mx else None
@@ -904,14 +1195,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         Returns
         -------
-        Ltermdict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
-            `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
-            label (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
-            to indicate a *diagonal* term and otherwise have 2 basis labels to
-            specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
-            are taken from `ham_basis` and `other_basis`.  Values are integer indices.
+        elem_errgen_indices : dict
+            Keys are `LocalElementaryErrorgenLabel` objects. H-type Hamiltonian and
+            S-type stochastic terms have one operator-basis label; C-type correlation
+            and A-type active pair terms have two distinct labels. Values are lists of
+            (multiplier, flattened block index) pairs that express each elementary
+            coefficient as a linear combination of the block's coefficients.
         """
         # Note: returned dictionary's value specify a linear combination of
         # this coefficient block's coefficients that product the given (by the key)
@@ -1154,7 +1443,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return _np.real(dOdp)
 
     def superop_hessian_wrt_params(self, superops, v=None, superops_are_flat=False):
-        # NOTE: `v` is here for consistency with superop_deriv_wrt_params.
+        # Completed Cholesky has parameter-dependent second derivatives.
 
         # static blocks always have zero Hessian
         if self._param_mode == 'static':
@@ -1164,7 +1453,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
         # dispatch to block‐type helper
-        d2 = self._parameterization.superop_hessian(self, superops, superops_are_flat)
+        d2 = self._parameterization.superop_hessian(self, superops, superops_are_flat, v=v)
 
         # sanity checks & real‐cast
         tr = d2.ndim
@@ -1211,6 +1500,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
             # this dict is read back below regardless of the concrete subclass.
             state['error_generator_labels'] = [[lbl.errorgen_type, list(lbl.basis_element_labels)]
                                                for lbl in self._eeg_labels]
+        if self._block_type == 'other_sparse' and hasattr(self, 'cholesky_structure'):
+            state['cholesky_ordering'] = self.cholesky_structure.perm.tolist()
         return state
 
     @classmethod
@@ -1220,7 +1511,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if state.get('error_generator_labels', None) is not None:
             eeg_labels = [_LEEL(etype, tuple(bels)) for etype, bels in state['error_generator_labels']]
             return cls(state['block_type'], basis, initial_block_data=block_data,
-                       param_mode=state['parameterization_mode'], error_generator_labels=eeg_labels)
+                       param_mode=state['parameterization_mode'], error_generator_labels=eeg_labels,
+                       cholesky_ordering=state.get('cholesky_ordering'))
         return cls(state['block_type'], basis, state['basis_element_labels'], block_data,
                    state['parameterization_mode'])
 
@@ -1370,8 +1662,8 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
 
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
-    """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
-    stochastic + correlation + active error generators).
+    """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block with
+    S-type stochastic, C-type correlation, and A-type active error generators.
 
     ``block_data`` is an n x n complex Hermitian coefficient matrix.
     Valid param modes: 'static', 'elements', 'cholesky'.
@@ -1639,11 +1931,201 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
         return labels
 
 
+class _OtherSparseCoeffBlock(_OtherUnconstrainedCoeffBlock):
+    """Selected S coefficients and C/A pair terms with sparse CPTP parameterizations.
+
+    C/A pair terms couple two distinct operator-basis directions. C-type correlation
+    coefficients give the real off-diagonal Kossakowski components; A-type active
+    coefficients give the negative imaginary components in their ordered label orientation.
+
+    The ``cholesky`` chart requires matching C/A edges, or no A (real factors). Every edge
+    endpoint needs an S coefficient. ``contraction`` supports any C/A mask, including zero
+    noise and the PSD boundary. ``auto`` selects ``cholesky`` when the mask allows
+    it and ``contraction`` otherwise. ``static`` and ``elements`` do not constrain positivity.
+    """
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _EEGVectorElements, 'cholesky': _SparseCholesky,
+                      'contraction': _Contraction, 'auto': _SparseCholesky}
+
+    def _init_labels(self, basis, basis_element_labels, error_generator_labels):
+        super()._init_labels(basis, basis_element_labels, error_generator_labels)
+        _lt._check_basis_factor(basis)
+        labels = self._eeg_labels
+        if len(set(labels)) != len(labels):
+            raise ValueError("Sparse Lindblad blocks require distinct elementary error generators.")
+        directions = [lbl.basis_element_labels[0] for lbl in labels if lbl.errorgen_type == 'S'
+                      and len(lbl.basis_element_labels) == 1]
+        self._bel_labels = tuple(directions)
+        pos = {bel: i for i, bel in enumerate(directions)}
+        if any(bel not in basis.labels[1:] for bel in directions):
+            raise ValueError("Sparse Lindblad directions must be nonidentity elements of the basis.")
+        edges = {'C': set(), 'A': set()}
+        self._coefficient_pairs = []
+        for lbl in labels:
+            bels = lbl.basis_element_labels
+            if len(bels) != (1 if lbl.errorgen_type == 'S' else 2) or any(b not in pos for b in bels):
+                raise ValueError("Every sparse C/A endpoint must have an S coefficient, with valid label arity.")
+            i, j = (pos[bels[0]], pos[bels[-1]])
+            self._coefficient_pairs.append((i, j))
+            if lbl.errorgen_type != 'S':
+                edge = tuple(sorted((i, j)))
+                if i == j or edge in edges[lbl.errorgen_type]:
+                    raise ValueError("Sparse C/A pair terms must have distinct endpoints and no reversed duplicates.")
+                edges[lbl.errorgen_type].add(edge)
+        n = len(directions)
+        pairs = list(edges['C'] | edges['A'])
+        rows, cols = _np.array(pairs, dtype=int).reshape(-1, 2).T
+        pattern = _sps.coo_array((_np.ones(len(pairs)), (rows, cols)), shape=(n, n))
+        if self._param_mode in ('static', 'elements'):
+            return
+        if self._param_mode == 'contraction':
+            self._init_contraction()
+            return
+        ordering = _sparsechol.perfect_elimination_ordering(pattern)
+        if self._param_mode == 'auto':
+            self._param_mode = ('cholesky' if ordering is not None and (not edges['A'] or edges['A'] == edges['C'])
+                                else 'contraction')
+            self._parameterization = self._PARAM_CLASSES[self._param_mode]()
+            if self._param_mode == 'contraction':
+                self._init_contraction()
+                return
+        if edges['A'] and edges['A'] != edges['C']:
+            raise ValueError("Sparse Cholesky requires matching C/A supports, or no A coefficients; "
+                             "use 'contraction' for other masks.")
+        if ordering is None:
+            raise ValueError("Sparse Cholesky requires chordal Kossakowski support; this pattern needs fill. "
+                             "Use 'contraction' instead.")
+        if self._cholesky_ordering is not None:
+            ordering = self._cholesky_ordering
+        self.cholesky_structure = st = _sparsechol.CholeskyStructure(pattern, ordering=ordering)
+        if st.factor_pattern.nnz != n + st.pattern.nnz // 2:
+            raise ValueError("The requested Cholesky ordering introduces fill; use 'contraction'.")
+
+        # One real diagonal parameter, then real (and optionally imaginary) strict-lower
+        # entries in CSC order. These arrays describe a linear map from parameters to L.
+        m = len(st.rows)
+        complex_factor = bool(edges['A'])
+        self._factor_rows = _np.concatenate((_np.arange(n), st.rows, st.rows if complex_factor else [])).astype(int)
+        self._factor_cols = _np.concatenate((_np.arange(n), st.cols, st.cols if complex_factor else [])).astype(int)
+        self._factor_imag = _np.arange(n + m * (2 if complex_factor else 1)) >= n + m
+        self._factor_scales = _np.where(self._factor_imag, 1j, 1.)
+
+        # Expand just the requested coefficients of L L^dag into quadratic monomials.
+        # Forward evaluation and derivatives then need neither dense K nor dense dL/dp.
+        factor = [{} for _ in range(n)]
+        for p, (r, c, scale) in enumerate(zip(self._factor_rows, self._factor_cols, self._factor_scales)):
+            factor[st.perm[r]].setdefault(c, []).append((p, scale))
+        terms, left, right, scales = [], [], [], []
+        for t, (lbl, (i, j)) in enumerate(zip(labels, self._coefficient_pairs)):
+            polynomial = {}
+            for c in factor[i].keys() & factor[j].keys():
+                for p, sp in factor[i][c]:
+                    for q, sq in factor[j][c]:
+                        z = sp * sq.conjugate()
+                        s = -z.imag if lbl.errorgen_type == 'A' else z.real
+                        key = tuple(sorted((p, q)))
+                        polynomial[key] = polynomial.get(key, 0.) + s
+            for (p, q), s in sorted(polynomial.items()):
+                if s:
+                    terms.append(t); left.append(p); right.append(q); scales.append(s)
+        self._quadratic_terms = (_np.array(terms, dtype=int), _np.array(left, dtype=int),
+                                 _np.array(right, dtype=int), _np.array(scales, dtype=float))
+
+    def _init_contraction(self):
+        n = len(self._bel_labels)
+        diagonal, terms = {}, []
+        for index, (lbl, (i, j)) in enumerate(zip(self._eeg_labels, self._coefficient_pairs)):
+            if lbl.errorgen_type == 'S':
+                diagonal[i] = index
+            else:
+                terms.append((index, i, j, lbl.errorgen_type == 'A'))
+        self._contraction_diagonal = _np.array([diagonal[i] for i in range(n)], int)
+        k, i, j, active = (_np.array(a, dtype=d) for a, d in zip(zip(*terms) if terms else ([], [], [], []),
+                                                                  (int, int, int, bool)))
+        self._contraction_terms = (k, i, j, active)
+        # One gauge per connected component of the C/A graph, so separate components stay independent.
+        graph = _sps.coo_array((_np.ones(len(k)), (i, j)), shape=(n, n))
+        count, labels = _csgraph.connected_components(graph, directed=False)
+        components = []
+        for comp in range(count):
+            members = _np.flatnonzero(labels[i] == comp) if len(k) else _np.empty(0, int)
+            if not len(members):
+                continue
+            local = _np.flatnonzero(labels == comp)
+            position = {int(d): a for a, d in enumerate(local)}
+            li = _np.array([position[int(d)] for d in i[members]], int)
+            lj = _np.array([position[int(d)] for d in j[members]], int)
+            z = _np.where(active[members], -1j, 1. + 0j)  # A label (i, j): K_ij = -1j * A
+            components.append((local, members, li, lj, z))
+        self._contraction_components = components
+
+    def _compute_term_generators(self, mxs, d2, sparse):
+        if not sparse:
+            return super()._compute_term_generators(mxs, d2, sparse)
+        # Row-vectorization: vec(A rho B) = (A kron B.T) vec(rho). Construct
+        # the sparse superoperators directly, avoiding a loop over all d^2 matrix units
+        # for every selected generator. The validated directions are Hermitian.
+        directions = {b: _sps.csr_matrix(self._basis[b]) for b in self._bel_labels}
+        d = next(iter(directions.values())).shape[0]
+        identity = _sps.eye(d, format='csr', dtype=complex)
+        kron = lambda a, b: _sps.kron(a, b, format='csr')
+        anti = lambda a: kron(a, identity) + kron(identity, a.T)
+        superops = []
+        last_pair = None
+        for label in self._eeg_labels:
+            bels = label.basis_element_labels
+            p = directions[bels[0]]
+            if label.errorgen_type == 'S':
+                result = kron(p, p.T) - .5 * anti(p @ p)
+            else:
+                if bels != last_pair:
+                    q = directions[bels[1]]
+                    pq, qp = p @ q, q @ p
+                    sandwich_pq, sandwich_qp = kron(p, q.T), kron(q, p.T)
+                    last_pair = bels
+                if label.errorgen_type == 'C':
+                    result = sandwich_pq + sandwich_qp - .5 * anti(pq + qp)
+                else:
+                    result = 1j * (sandwich_pq - sandwich_qp + .5 * anti(pq - qp))
+            result.eliminate_zeros()
+            superops.append(result.tocsr())
+        return superops
+
+    def convert(self, param_mode):
+        ordering = self.cholesky_structure.perm if hasattr(self, 'cholesky_structure') else None
+        return LindbladCoefficientBlock(self._block_type, self._basis, initial_block_data=self.block_data.copy(),
+                                        param_mode=param_mode, error_generator_labels=self._eeg_labels,
+                                        cholesky_ordering=ordering)
+
+    def is_similar(self, other_coeff_block):
+        if not super().is_similar(other_coeff_block):
+            return False
+        if self._param_mode == 'cholesky':
+            return _np.array_equal(self.cholesky_structure.perm, other_coeff_block.cholesky_structure.perm)
+        return True
+
+    def kossakowski_matrix(self):
+        """Return the Hermitian coefficient matrix in ``basis_element_labels`` order.
+
+        Its diagonal contains S coefficients. C-type correlation coefficients add
+        equally to the real entries of each labelled pair. For an A-type active
+        label (i, j), K[i, j] receives -1j * A and K[j, i] receives +1j * A.
+        This dense reconstruction is for inspection and inversion, not forward evaluation.
+        """
+        K = _np.zeros((len(self._bel_labels), len(self._bel_labels)), complex)
+        for lbl, (i, j), value in zip(self._eeg_labels, self._coefficient_pairs, self.block_data):
+            z = -1j * value if lbl.errorgen_type == 'A' else value
+            K[i, j] += z
+            if i != j:
+                K[j, i] += z.conjugate()
+        return K
+
+
 LindbladCoefficientBlock._BLOCK_TYPES = {
     'ham': _HamCoeffBlock,
     'other_diagonal': _OtherDiagonalCoeffBlock,
     'other': _OtherCoeffBlock,
     'other_unconstrained': _OtherUnconstrainedCoeffBlock,
+    'other_sparse': _OtherSparseCoeffBlock,
 }
 
 

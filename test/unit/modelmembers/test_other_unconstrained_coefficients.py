@@ -77,8 +77,8 @@ def test_coefficient_and_param_labels():
     labels = blk.param_labels
     assert len(labels) == blk.num_params
     assert any('stochastic' in s for s in labels)
-    assert any('pauli-correlation' in s for s in labels)
-    assert any('active' in s for s in labels)
+    assert any('C-type correlation' in s for s in labels)
+    assert any('A-type active' in s for s in labels)
     assert blk.param_labels == labels   # 'elements' => one parameter per coefficient
     assert LCB('other_unconstrained', pp, param_mode='static').param_labels == []
 
