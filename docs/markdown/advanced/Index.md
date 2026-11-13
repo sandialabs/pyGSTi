@@ -1,6 +1,6 @@
-# Do I need any of this?
+# Advanced capabilities
 
-Nothing in this part is required to run a characterization protocol and read the answer. If that is what you came for, [Start here](../start/Index) and the [characterization guides](../guides/Index) are the whole path, and you can leave this part unread. The machinery underneath that path has its own part, [Internals](../internals/Index); this part holds the corners of pyGSTi that only some readers need.
+Nothing in this part is required to run a characterization protocol and read the answer. If that is what you came for, [Start here](../start/Index) and the [characterization guides](../guides/Index) are the whole path, and you can leave this part unread. The machinery underneath that path has its own part, [Core objects](../internals/Index); this part holds the corners of pyGSTi that only some readers need.
 
 **[Specialist protocols](specialist/Index).** [Robust phase estimation](specialist/RobustPhaseEstimation) estimates a few rotation angles of a single-qubit gate set from a short list of circuits, and [parity benchmarking](specialist/ParityBenchmarking) scores a four-qubit parity check by the weight-$X$ disturbance between a reference and a test dataset. Each answers one narrow question far more cheaply than a full characterization would; both live in `pygsti.extras`.
 

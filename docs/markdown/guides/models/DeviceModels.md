@@ -11,9 +11,11 @@ kernelspec:
   name: python3
 ---
 
-# Modeling a noisy device
+# Defining models
 
 A `Model` maps circuits to outcome probabilities. GST fits one to data, model testing scores a fixed one against data, and simulated data is sampled from one. Each of those starts from a *target model*, whose operations are the perfect unitaries the device is supposed to implement. Two choices remain: the kind of model, and the noise to put on it.
+
+For the underlying ideas — superoperators, gauge freedom, elementary error generators, and parameterizations — read [Key concepts](../../start/KeyConcepts). Then choose [explicit models](../../internals/models/ExplicitModels) for small gate sets, [implicit models](MultiQubitModels) for devices built from local gates, or [model noise](ModelNoise) for noise construction.
 
 ## Choosing a model
 

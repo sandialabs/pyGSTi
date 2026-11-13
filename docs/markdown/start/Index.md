@@ -1,4 +1,4 @@
-# What should I read first?
+# Start here
 
 This part is a short guided path from a fresh install to a characterization result you can actually read. It is the whole of what most people need, and the pages are meant to be taken in order.
 

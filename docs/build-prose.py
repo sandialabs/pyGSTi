@@ -34,9 +34,16 @@ OUT = DOCS / "_build" / "prose"
 EXTRA_EXCLUDES = ["api.rst", "_autosummary/**"]
 
 toc = yaml.safe_load((DOCS / "_toc.yml").read_text())
-for part in toc["parts"]:
-    part["chapters"] = [ch for ch in part.get("chapters", []) if ch.get("file") != "api.rst"]
-toc["parts"] = [part for part in toc["parts"] if part["chapters"]]
+def remove_api(node):
+    """Filter the API entry at any depth in a Jupyter Book TOC."""
+    for key in ("parts", "chapters", "sections"):
+        if key in node:
+            node[key] = [child for child in node[key] if child.get("file") != "api.rst"]
+            for child in node[key]:
+                remove_api(child)
+
+
+remove_api(toc)
 
 config = yaml.safe_load((DOCS / "_config.yml").read_text())
 sphinx = config.setdefault("sphinx", {})

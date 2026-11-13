@@ -1,8 +1,8 @@
-# The machinery underneath
+# Core objects
 
 This part is the layer the [characterization guides](../guides/Index) stand on. Nothing in it is needed to run a protocol and read the answer; come here when something one level up did not behave the way you expected, or when you are extending pyGSTi.
 
-**Building models by hand.** The practitioner's route to a model is [device models](../guides/models/DeviceModels); come here when that route does not describe your device. [Operators](models/Operators) is the inventory of operator types and parameterizations a `Model` is built from. [Explicit models](models/ExplicitModels) builds an `ExplicitOpModel` element by element and shows the shorter routes to the same model. [Custom operators](models/CustomOperators) covers writing your own operator class, and factories for gates whose parameters ride on the circuit label; [custom POVMs](models/CustomPOVMs) swaps in a measurement of your own (a two-qubit parity check in the example). [Parameter labels, bounds, and tying](models/TyingParameters) reaches one parameter by its label, to bound it or tie it to another.
+**Model components.** For complete models and their noise, start with [Defining models](../guides/models/DeviceModels). [Operators](models/Operators) is the inventory of operator types and parameterizations a `Model` is built from. [Custom operators](models/CustomOperators) covers writing your own operator class, and factories for gates whose parameters ride on the circuit label; [custom POVMs](models/CustomPOVMs) swaps in a measurement of your own (a two-qubit parity check in the example). [Parameter labels, bounds, and tying](models/TyingParameters) reaches one parameter by its label, to bound it or tie it to another.
 
 **Conventions.** [Bases](conventions/Bases) and [state spaces](conventions/StateSpaces) pin down what everything else assumes: which matrix basis a dense operator is written in, and how a state space is labeled and factored.
 

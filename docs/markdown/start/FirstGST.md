@@ -72,6 +72,8 @@ simulate_taking_data("../../tutorial_files/test_gst_dir/data/dataset.txt")  # RE
 data = pygsti.io.read_data_from_dir('../../tutorial_files/test_gst_dir')
 ```
 
+For more sophisticated noise than uniform depolarization, see [Defining models](../guides/models/DeviceModels) and [Model noise](../guides/models/ModelNoise).
+
 ## Step 3: Run the GST protocol and create a report
 Now we just instantiate a `StandardGST` protocol and `.run` it on our data object.  This returns a results object that can be used to create a report.
 

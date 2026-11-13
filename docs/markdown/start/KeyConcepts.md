@@ -24,7 +24,7 @@ pyGSTi handles this by *gauge optimization*: after fitting, it searches the gaug
 
 Writing a noisy gate as $G = e^{L} G_{\text{target}}$ makes $L$ the *error generator*: the thing that vanishes when the gate is perfect. Error generators are more useful than the maps themselves for most purposes, because they compose additively to first order and their pieces have physical names.
 
-pyGSTi sorts those pieces into four types, labeled by their first tuple element:
+The H/S/C/A **elementary error generators** provide the basis used in pyGSTi’s error-generator taxonomy and coefficient labels. Other bases are possible. These elementary generators have four types, labeled by their first tuple element:
 
 - **H** — Hamiltonian (coherent) errors. A systematic over- or under-rotation is an H term.
 - **S** — stochastic errors. The diagonal of the non-Hamiltonian block; a depolarizing channel is all-S.

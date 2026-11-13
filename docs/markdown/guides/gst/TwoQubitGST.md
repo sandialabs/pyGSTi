@@ -68,6 +68,7 @@ Some notes about the options/arguments here that are particularly relevant to 2-
 
 import time
 start = time.time()
+# Looser tolerance keeps this demo quick; omit optimizer for a real analysis.
 protocol = pygsti.protocols.StandardGST("CPTPLND", optimizer={'tol': 1e-3}, verbosity=2)
 results = protocol.run(data, memlimit=5*(1024)**3)
 end = time.time()

@@ -65,7 +65,7 @@ on:
 jobs:
   execute:
     # One job -- Linux, Cython, no test suites. The notebook step is Linux-only
-    # (it compiles CHP into /usr/local/bin) and is the only thing being asked for.
+    # and is the only thing being asked for; CHP uses the pure-Python chp_sim backend.
     uses: ./.github/workflows/reuseable-main.yml
     name: Execute the docs notebooks
     with:

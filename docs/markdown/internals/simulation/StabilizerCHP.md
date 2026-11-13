@@ -84,7 +84,6 @@ for _ in range(4): # With seed 2021, pulls Z, I (no output), X, Y
 Gzx_composed = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gzpi', evotype='chp'), StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp')])
 print(Gzx_composed)
 print(Gzx_composed._rep._chp_ops())
-#print(Gzx_composed.get_chp_str([2]))
 ```
 
 ```{code-cell} ipython3
@@ -92,14 +91,12 @@ print(Gzx_composed._rep._chp_ops())
 Gxi_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'))
 print(Gxi_embedded)
 print(Gxi_embedded._rep._chp_ops())
-#print(Gxi_embedded.get_chp_str([5,7]))
 ```
 
 ```{code-cell} ipython3
 Gix_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'))
 print(Gix_embedded)
 print(Gix_embedded._rep._chp_ops())
-#print(Gix_embedded.get_chp_str([5,7]))
 ```
 
 ```{code-cell} ipython3
@@ -107,7 +104,6 @@ print(Gix_embedded._rep._chp_ops())
 Gzx_comp_embed = EmbeddedOp(['Q0', 'Q1', 'Q2', 'Q3'], ['Q1'], Gzx_composed)
 print(Gzx_comp_embed)
 print(Gzx_comp_embed._rep._chp_ops())
-#print(Gzx_comp_embed.get_chp_str([5, 6, 7, 8]))
 ```
 
 ## WeakForwardSimulator + Explicit Model
