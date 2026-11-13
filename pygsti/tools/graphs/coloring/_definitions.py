@@ -23,6 +23,16 @@ Color = int
 Coloring = Dict[Color, List[Edge]]
 
 
+def drop_empty_colors(coloring: Coloring) -> Coloring:
+    """`coloring` without its unused color classes, so that its length is the number of colors used.
+
+    Colorers that allocate a fixed palette up front (deg+1 colors for the Vizing family) can
+    leave some classes empty. A caller such as `make_simultaneous_gst_design` treats every
+    class as a patch, so an empty class costs as much as a used one.
+    """
+    return {c: v for c, v in coloring.items() if v}
+
+
 def _describe_invalid_patch(color: Color, patch: List[Edge]) -> str:
     """
     Explain why `patch` is not a matching, for `check_valid_edge_coloring`'s error message.

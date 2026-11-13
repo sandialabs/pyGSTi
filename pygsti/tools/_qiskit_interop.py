@@ -13,7 +13,10 @@ Internal helpers for qiskit interoperability.
 import warnings as _warnings
 
 from pygsti.tools.exceptions import (QiskitInteropWarning as _QiskitInteropWarning,
-                                     MissingDependencyWarning as _MissingDependencyWarning)
+                                     MissingDependencyWarning as _MissingDependencyWarning,
+                                     StaticTLSImportError as _StaticTLSImportError)
+from pygsti.tools._static_tls import (is_static_tls_error as _is_static_tls_error,
+                                      static_tls_explanation as _static_tls_explanation)
 
 # Half-open interval [min, max) of qiskit versions that pyGSTi's qiskit interop code is
 # tested against, compared as tuples of release components. Keep this consistent with
@@ -65,6 +68,9 @@ def check_qiskit_version(context, required=True):
     try:
         import qiskit
     except ImportError as err:
+        if _is_static_tls_error(err):
+            # Installed but unloadable: not a missing dependency, even when `required` is False.
+            raise _StaticTLSImportError(_static_tls_explanation('qiskit', err), name='qiskit') from err
         if required:
             raise RuntimeError(f"Qiskit is required for {context}, and does not appear "
                                "to be installed.") from err

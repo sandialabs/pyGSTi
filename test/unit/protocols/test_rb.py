@@ -692,6 +692,20 @@ class TestDirectRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+    def test_explicit_depths(self):
+        # An explicit list of every depth must give the same fit as depths='all'. Depth 16 has
+        # no data, so it is filtered out.
+        kwargs = dict(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI', seed=(0.8, 0.95),
+                      bootstrap_samples=0)
+        expected = pygsti.protocols.rb.RandomizedBenchmarking(depths='all', **kwargs).run(self.data_noisy)
+        for depths in ([0, 2, 8], [0, 2, 8, 16]):
+            result = pygsti.protocols.rb.RandomizedBenchmarking(depths=depths, **kwargs).run(self.data_noisy)
+            self.assertEqual(list(result.depths), [0, 2, 8])
+            for fitname in ('full', 'A-fixed'):
+                for key, value in expected.fits[fitname].estimates.items():
+                    self.assertLessEqual(abs(result.fits[fitname].estimates[key] - value), 1e-12,
+                                         msg=f"depths={depths}, fit {fitname!r}, estimate {key!r}")
+
 
 @pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestMirrorRBProtocol(BaseCase):

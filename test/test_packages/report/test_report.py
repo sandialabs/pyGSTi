@@ -10,7 +10,7 @@ import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning, UnnamedReportWarning, OverparameterizationWarning
+from pygsti.tools.exceptions import UnnamedReportWarning, OverparameterizationWarning
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files, run_notebook
@@ -44,22 +44,13 @@ class TestReport(ReportBaseCase):
         pygsti.report.create_offline_zip(temp_files + "/.")
 
     def test_failures(self):
-        # All three calls below exercise deprecated entry points by design;
-        # the test exists specifically to verify their failure-mode contracts
-        # remain stable. assertWarns already handles the deprecation warning
-        # for create_general_report; the create_standard_report calls need an
-        # explicit pytest.warns wrap because pytest -W error treats the
-        # warning as an exception that would mask the assertRaises target.
-        # The third call also fires UnnamedReportWarning because the default
-        # title="auto" path runs before ValueError; wrap accordingly.
-        self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
-        with pytest.warns(pyGSTiDeprecationWarning), self.assertRaises(ValueError):
+        with self.assertRaises(ValueError):
             # backward compat catch - when forget to specify title
-            pygsti.report.create_standard_report(self.results, temp_files + "/XXX", 95)
+            pygsti.report.construct_standard_report(self.results, 95)
 
-        with pytest.warns(pyGSTiDeprecationWarning), pytest.warns(UnnamedReportWarning), self.assertRaises(ValueError):
+        with pytest.warns(UnnamedReportWarning), self.assertRaises(ValueError):
             # PDF report with multiple gauge opts
-            pygsti.report.create_standard_report(self.results, temp_files + "/XXX.pdf")
+            pygsti.report.construct_standard_report(self.results).write_pdf(temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(), 3) is not None)

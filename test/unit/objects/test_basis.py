@@ -7,6 +7,21 @@ from ..util import BaseCase
 
 
 class BasisTester(BaseCase):
+    def test_GM_basis(self):
+        gm = basis.Basis.cast('gm', 9)
+        scaled_gm = basis.Basis.cast('GM', 9)
+        self.assertEqual(scaled_gm.labels, gm.labels)
+        self.assertTrue(scaled_gm.real)
+        self.assertTrue(scaled_gm.first_element_is_identity)
+        self.assertFalse(scaled_gm.is_normalized())
+        np.testing.assert_allclose(scaled_gm.create_transform_matrix(gm), np.sqrt(3) * np.eye(9), atol=1e-13)
+
+        sparse_gm = basis.Basis.cast('GM', 9, sparse=True)
+        np.testing.assert_allclose([mx.toarray() for mx in sparse_gm.elements], scaled_gm.elements)
+        restored = basis.Basis.from_nice_serialization(sparse_gm.to_nice_serialization())
+        self.assertEqual(restored, sparse_gm)
+        np.testing.assert_allclose([mx.toarray() for mx in restored.elements], scaled_gm.elements)
+
     def test_composite_basis(self):
         comp = basis.Basis.cast([('std', 4,), ('std', 1)])
         b4 = basis.Basis.cast('std', 4)

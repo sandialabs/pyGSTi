@@ -127,7 +127,7 @@ jobs:
         # Wall-clock-sensitive suites live under test/performance/ and so are not
         # collected here at all. The `-m "not slow"` filter is kept as a backstop
         # in case a benchmark-style test lands under test/unit again.
-        python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
+        python -m pytest -n auto --dist loadscope -m "not slow and not long_running" $COV_FLAG --durations=25 test/unit
     - name: Run workflow tests
       if: ${{ inputs.run-integration-tests == 'true' }}
       shell: bash
@@ -135,7 +135,7 @@ jobs:
         COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
+        python -m pytest -n auto --dist loadscope -m "not long_running" $COV_FLAG test/integration
     - name: Install ml extra (TensorFlow/Keras) for test_packages
       # test/test_packages/extras/ml exercises pygsti.extras.ml, which needs TensorFlow and
       # Keras. Those are deliberately not in the `testing` extra -- TensorFlow is a heavy,
@@ -171,10 +171,9 @@ jobs:
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
+        python -m pytest -v -n auto --dist loadscope -m "not long_running" --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Execute the docs notebooks
-      # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
-      # so it cannot run on the Windows/macOS runners even if a caller requests it.
+      # Notebook execution is supported on the Linux CI runner.
       #
       # This replaces a `pytest --nbval-lax` run. That run only ever asserted "no
       # cell raised": no notebook uses NBVAL_CHECK_OUTPUT or the nbval-check-output
@@ -184,6 +183,13 @@ jobs:
       # develop.yml's docs-notebooks job commits so the hosted docs render executed
       # results instead of bare source. See docs/execute-notebooks.py.
       if: ${{ inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      env:
+        # glibc serves the thread-local storage of libraries built for "initial-exec" TLS from a
+        # small fixed reserve (1664 bytes by default on x86_64) when they are loaded after startup.
+        # qiskit's _accelerate takes 1544 bytes as of qiskit 2.6, and qiskit-aer's bundled libgomp
+        # needs 120 more, so MCFE-Example's `import qiskit_aer` failed with "cannot allocate memory
+        # in static TLS block". Enlarging the reserve leaves room for both.
+        GLIBC_TUNABLES: glibc.rtld.optional_static_tls=4096
       run: |
         set -euo pipefail
 

@@ -554,6 +554,37 @@ class BaseProtocolData(object):
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
 
+class RecordingOptimizer(SimplerLMOptimizer):
+    """Appends its `label` to `RecordingOptimizer.calls`, a list shared by all copies, on each `run`."""
+    calls = []
+
+    def __init__(self, label=None, **kwargs):
+        super().__init__(**kwargs)
+        self.label = label
+
+    def run(self, objective, profiler, printer):
+        RecordingOptimizer.calls.append(self.label)
+        return super().run(objective, profiler, printer)
+
+
+def test_validate_and_extend_optimizers():
+    opt = RecordingOptimizer('a')
+    out = gst._validate_and_extend_optimizers(opt, 3)
+    assert len(out) == 3
+    assert all(isinstance(o, RecordingOptimizer) and o.label == 'a' and o is not opt for o in out)
+
+    out = gst._validate_and_extend_optimizers([{'maxiter': 7}], 2)
+    assert [type(o) for o in out] == [SimplerLMOptimizer] * 2 and [o.maxiter for o in out] == [7, 7]
+
+    out = gst._validate_and_extend_optimizers([{'maxiter': 1}, None], 2)
+    assert [o.maxiter for o in out] == [1, SimplerLMOptimizer().maxiter]
+
+    with pytest.raises(ValueError):
+        gst._validate_and_extend_optimizers([{}, {}], 3)
+    with pytest.raises(ValueError):
+        gst._validate_and_extend_optimizers('not an optimizer', 2)
+
+
 class MapForwardSimulatorWrapper(MapForwardSimulator):
 
     Message = """
@@ -608,6 +639,25 @@ class GateSetTomographyTester(BaseProtocolData):
         assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
         assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
         
+
+    def test_run_uses_given_optimizers(self):
+        self.setUpClass()
+        n = len(self.gst_data.edesign.circuit_lists)
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), None, name="testGST",
+                                      optimizer=RecordingOptimizer('constructor'))
+        calls = RecordingOptimizer.calls
+
+        calls.clear()
+        proto.run(self.gst_data, disable_checkpointing=True)
+        assert set(calls) == {'constructor'}
+
+        calls.clear()
+        proto.run(self.gst_data, disable_checkpointing=True, optimizers=RecordingOptimizer('single'))
+        assert set(calls) == {'single'}
+
+        calls.clear()
+        proto.run(self.gst_data, disable_checkpointing=True, optimizers=[RecordingOptimizer(i) for i in range(n)])
+        assert sorted(set(calls)) == list(range(n)) and calls == sorted(calls)  # one per iteration, in order
 
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
         self.setUpClass()
@@ -735,6 +785,14 @@ class StandardGSTTester(BaseProtocolData):
                 assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
     
+    def test_run_uses_given_optimizers(self):
+        self.setUpClass()
+        proto = gst.StandardGST(modes=["full TP", "CPTPLND"], gaugeopt_suite=None,
+                                optimizer=RecordingOptimizer('constructor'))
+        RecordingOptimizer.calls.clear()
+        proto.run(self.gst_data, disable_checkpointing=True, optimizers=RecordingOptimizer('single'))
+        assert set(RecordingOptimizer.calls) == {'single'}
+
     def test_optimizer_list_run(self):
         self.setUpClass()
     

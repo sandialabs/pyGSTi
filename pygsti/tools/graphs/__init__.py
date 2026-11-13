@@ -7,7 +7,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-"""Graph utilities: shared definitions, connectivity/representation coercion, and coloring algorithms."""
+"""Graph utilities: connectivity, coloring, and symbolic sparse Cholesky factorizations."""
 
 from ._common import order, canonical_edges, find_neighbors, max_degree
 from ._connectivity import (
@@ -19,7 +19,7 @@ from ._connectivity import (
     connected_supports,
     random_connected_subgraph,
 )
-from . import coloring
+from . import coloring, sparsechol
 
 __all__ = [
     "order",
@@ -34,4 +34,5 @@ __all__ = [
     "connected_supports",
     "random_connected_subgraph",
     "coloring",
+    "sparsechol",
 ]

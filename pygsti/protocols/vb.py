@@ -541,6 +541,57 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                                                                   self.descriptor)
 
 
+def _outcome_energy(outcome, measurement, sign):
+    """
+    Computes the result of a Pauli measurement from a computational basis outcome
+    Parameters
+    ----------
+    outcome: str
+        A string of '0's and '1's, representing a measurement outcome
+
+    measurement: str
+        A string of 'I's and 'Z's, representing the target Pauli measurement, 
+
+    sign: int
+        The sign of the target measurement (either 1 or -1)
+
+    Returns
+    -------
+    int
+        The Pauli measurement result
+    """
+    energy = 1
+    for i,j in zip(outcome,measurement):
+        if i == '1' and j == 'Z':
+            energy = -1*energy
+    return sign*energy
+
+
+def _avg_energy(dsrow, measurement, sign):
+    """Computes the result of a Pauli measurement from counts of computational basis measurements
+    Parameters
+    ----------
+    dsrow: DataSetRow
+        The data to operate on
+
+    measurement: str
+        A string of 'I's and 'Z's, representing the target Pauli measurement, 
+
+    sign: int
+        The sign of the target measurement (either 1 or -1)
+
+    Returns
+    -------
+    float
+        The Pauli measurement result
+    """
+    energy = 0
+    for i in dsrow.counts:
+        out_eng = _outcome_energy(i[0],measurement,sign)
+        energy += dsrow.counts[i] * out_eng    
+    return energy / dsrow.total
+
+
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.
@@ -582,55 +633,6 @@ class SummaryStatistics(_proto.Protocol):
         NamedDict
         """
         
-        def outcome_energy(outcome, measurement, sign):
-            """
-            Computes the result of a Pauli measurement from a computational basis outcome
-            Parameters
-            ----------
-            outcome: str
-                A string of '0's and '1's, representing a measurement outcome
-
-            measurement: str
-                A string of 'I's and 'Z's, representing the target Pauli measurement, 
-
-            sign: int
-                The sign of the target measurement (either 1 or -1)
-
-            Returns
-            -------
-            int
-                The Pauli measurement result
-            """
-            energy = 1
-            for i,j in zip(outcome,measurement):
-                if i == '1' and j == 'Z':
-                    energy = -1*energy
-            return sign*energy
-
-        def avg_energy(dsrow, measurement, sign):
-            """Computes the result of a Pauli measurement from counts of computational basis measurements
-            Parameters
-            ----------
-            dsrow: DataSetRow
-                The data to operate on
-
-            measurement: str
-                A string of 'I's and 'Z's, representing the target Pauli measurement, 
-
-            sign: int
-                The sign of the target measurement (either 1 or -1)
-
-            Returns
-            -------
-            float
-                The Pauli measurement result
-            """
-            energy = 0
-            for i in dsrow.counts:
-                out_eng = outcome_energy(i[0],measurement,sign)
-                energy += dsrow.counts[i] * out_eng    
-            return energy / dsrow.total
-        
         def success_counts(dsrow, circ, idealout):
             if dsrow.total == 0: return 0  # shortcut?
             return dsrow.get(tuple(idealout), 0.)
@@ -656,7 +658,7 @@ class SummaryStatistics(_proto.Protocol):
                 return adjSP
             
         def _get_energies(icirc, circ, dsrow, measurement, sign):
-            eng = avg_energy(dsrow, measurement, sign)
+            eng = _avg_energy(dsrow, measurement, sign)
             ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 

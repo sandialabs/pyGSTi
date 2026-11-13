@@ -22,6 +22,7 @@ import tensorflow as _tf
 import keras as _keras
 import numpy as _np
 import copy as _copy
+from typing import Callable
 from pygsti.extras.ml import customlayers as _cl
 
 
@@ -34,6 +35,16 @@ class QPANN(_keras.Model):
 
     The model maps circuit encodings (plus auxiliary propagation/alpha information) to
     predicted outcome probabilities using a first-order error model.
+
+    State-preparation and measurement (SPAM) errors are modelled as two extra error generator
+    layers, one right after the ideal state preparation and one right before the ideal
+    measurement, whose rates the network predicts like any other layer's. To use this, build the
+    circuit encoding with `encoding.StandardCircuitEncoder(pspec, include_spam=True)` and the
+    tensors with `encoding.error_generator_tensors(..., include_spam=True)`; their rows line up.
+    Include 'A'-type generators (e.g. `('A', ('X', 'Y'))` on each qubit) to capture non-unital
+    SPAM errors such as asymmetric readout error. Note that modelling SPAM errors enlarges the
+    gauge freedom of the learned error rates (as in GST), so compare learned rates only after
+    gauge fixing, or compare predictions.
 
     Attributes
     ----------
@@ -49,7 +60,8 @@ class QPANN(_keras.Model):
     """
 
     def __init__(self, encoding_length : int, modelled_error_generators: list,  snipper: list,
-                 dense_units: list[int] = [30, 20, 10, 5, 5], probability_computation: str = 'concise', **kwargs) -> None:
+                 dense_units: list[int] = [30, 20, 10, 5, 5], probability_computation: str = 'concise',
+                 activation: str | Callable = 'gelu', **kwargs) -> None:
         """
         Initialize a QPANN, with random weights and biases. An initialized QPANN should be trained
         on data, to create meaningful predictions and internal model parameters. The inputs for a
@@ -66,10 +78,13 @@ class QPANN(_keras.Model):
         modelled_error_generators : list
             A list of the "elementary error generators" that the QPANN models. Each element of this
             list is a tuple. The first element of the tuple is a string specifying the error
-            generator type: 'H' or 'S', for Hamiltonian and stochastic errors (currently active
-            and Pauli-correlation errors are not supported by QPANNs). The second element of
-            the tuple is a single-element tuple where that single element is a string for the
-            Pauli indexing the error (e.g., for 4 qubits, this could be 'XYZI').
+            generator type: 'H', 'S', 'C', or 'A' (Hamiltonian, stochastic Pauli, stochastic
+            Pauli-correlation, and active; see "A Taxonomy of Small Markovian Errors"). The second
+            element of the tuple is a tuple of Pauli strings indexing the error: a single Pauli
+            for 'H'/'S' (e.g., for 4 qubits, `('XYZI',)`), or two distinct Paulis for 'C'/'A'
+            (e.g., `('XIII', 'YIII')`). 'S' rates are constrained to be non-negative (the network
+            output is squared); 'H', 'C' and 'A' rates are unconstrained. 'C'/'A' generators
+            require `probability_computation='concise'`.
 
         snipper : list[list[int]]
              For each error generator, a list of encoding indices to extract as inputs
@@ -82,6 +97,13 @@ class QPANN(_keras.Model):
 
         probability_computation : {'concise','expanded'}, default 'concise'
             Selects the probability approximation implementation.
+
+        activation : str or callable, default 'gelu'
+            The activation function of the hidden layers of the neural network that predicts
+            error rates (anything accepted by `keras.activations.get`). The output layer is
+            always linear. With `activation='linear'` the network is an affine function of its
+            (snipped) inputs, i.e., each error rate is a sum of independent per-gate contributions
+            (squared, for 'S' error generators).
 
 
         Returns
@@ -96,6 +118,7 @@ class QPANN(_keras.Model):
         self.snipper = _copy.deepcopy(snipper)
         self.dense_units = dense_units.copy()
         self.probability_computation = probability_computation
+        self.activation = activation
         # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
         # NOTE: these are plain numpy arrays, not tf.constant(...). A tf.constant created here
         # (eagerly, at __init__ time) gets captured by reference into whatever FuncGraph happens
@@ -118,13 +141,15 @@ class QPANN(_keras.Model):
             'snipper': self.snipper,
             'dense_units': self.dense_units,
             'probability_computation': self.probability_computation,
+            'activation': self.activation,
             'stochastic_mask': self.stochastic_mask,
         })
         return config
 
     def build(self) -> None:
         """Instantiate sublayers used by this QPANN (rate predictor + probability layer)."""
-        self.dense_layer = CircuitToErrorRatesEinSum(self.snipper, self.modelled_error_generators, self.dense_units)
+        self.dense_layer = CircuitToErrorRatesEinSum(self.snipper, self.modelled_error_generators, self.dense_units,
+                                                     activation=self.activation)
         if self.probability_computation == 'expanded':
             self.probability_approximation_layer = ProbabilitiesLayer()
         elif self.probability_computation == 'concise':
@@ -192,7 +217,8 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
     Output is a tensor of shape `(depth, num_modelled_error_generators)` for each circuit.
     """
 
-    def __init__(self, snipper: list[list[int]], modelled_error_generators: list, dense_units: list[int] = [30, 20, 10, 5, 5], **kwargs) -> None:
+    def __init__(self, snipper: list[list[int]], modelled_error_generators: list, dense_units: list[int] = [30, 20, 10, 5, 5],
+                 activation: str | Callable = 'gelu', **kwargs) -> None:
         """
         # layer_snipper: func
         #     A function that takes a primitive error generator and maps it to a list that encodes which parts
@@ -209,6 +235,8 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             List of primitive error generators whose rates are  to be predicted.
         dense_units : list[int], default [30,20,10,5,5]
             Hidden layer widths; a final output unit is appended internally.
+        activation : str or callable, default 'gelu'
+            Activation function of the hidden layers (the output layer is always linear).
 
         """
         super().__init__()
@@ -217,6 +245,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         self.modelled_error_generators = modelled_error_generators
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
+        self.activation = activation
         # Mask that finds the 'S' (stochastic) error generators, so their rates can be squared
         # to enforce non-negativity (see EinsumSubNetwork's caller below).
         # NOTE: a plain numpy array, not tf.constant(...) -- see the identical note in
@@ -231,6 +260,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             'number_of_modelled_error_generators': self.number_of_modelled_error_generators,
             'modelled_error_generators': self.modelled_error_generators,
             'dense_units': self.dense_units,
+            'activation': self.activation,
             'layer_snipper': self.snipper,
             'stochastic_mask': self.stochastic_mask,
         })
@@ -243,7 +273,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
 
     def build(self, input_shape: tuple | list) -> None:
         """Instantiate the internal subnetwork used to predict per-generator rates."""
-        self.dense = EinsumSubNetwork(self.dense_units, self.snipper)
+        self.dense = EinsumSubNetwork(self.dense_units, self.snipper, activation=self.activation)
         super().build(input_shape)
 
     def call(self, inputs: _tf.Tensor) -> _tf.Tensor:
@@ -308,7 +338,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
     per-generator predictions.
     """
 
-    def __init__(self, units: list[int], snipper: list[list[int]]) -> None:
+    def __init__(self, units: list[int], snipper: list[list[int]], activation: str | Callable = 'gelu') -> None:
         """Initialize the subnetwork.
 
         Parameters
@@ -317,9 +347,12 @@ class EinsumSubNetwork(_keras.layers.Layer):
             Layer widths; last element is output dimension per generator.
         snipper : list[list[int]]
             Snipper specification; used here to determine number of modelled error generators.
+        activation : str or callable, default 'gelu'
+            Activation function of the hidden layers (the output layer is always linear).
         """
         super().__init__()
         self.units = units
+        self.activation = activation
         self.outdim = units[-1]
         self.number_of_modelled_error_generators = len(snipper)
         self.snipper = snipper
@@ -330,7 +363,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
 
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential(
-            [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='linear') for i in self.units[:-1]] +
+            [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation=self.activation) for i in self.units[:-1]] +
             [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation='linear', kernel_initializer=init, bias_initializer=init)])
 
     def get_config(self) -> dict:
@@ -338,7 +371,8 @@ class EinsumSubNetwork(_keras.layers.Layer):
         config = super().get_config()
         config.update({
             'outdim': self.outdim,
-            'units': self.units
+            'units': self.units,
+            'activation': self.activation,
         })
         return config
 

@@ -125,3 +125,84 @@ class GlobalElementaryErrorgenLabelTester(BaseCase):
         assert sorted_sslbl_geel.basis_element_labels[0] == 'IX' and sorted_sslbl_geel.basis_element_labels[1] == 'XI'
 
     
+
+class MultiCharacterBasisElementLabelTester(BaseCase):
+    """Labels whose per-subsystem tokens are Gell-Mann labels such as 'X_{0,1}'."""
+
+    # (state space labels, subsystem dimensions)
+    CASES = [(('T0',), (3,)),
+             (('Q0', 'T1'), (2, 3)),
+             (('T0', 'Q1'), (3, 2)),
+             (('T0', 'T1'), (3, 3)),
+             (('D0',), (5,))]
+
+    @staticmethod
+    def _tokenized_labels(dims):
+        """ All joined GM tensor-product labels, paired with their per-subsystem tokens (built independently). """
+        from itertools import product
+        from pygsti.baseobjs import Basis
+        factor_labels = [Basis.cast('GM', d**2).labels for d in dims]
+        return [(''.join(toks), toks) for toks in product(*factor_labels)]
+
+    def test_labels_match_tensor_product_basis(self):
+        from pygsti.baseobjs import Basis, ExplicitStateSpace
+        for sslbls, dims in self.CASES:
+            tpb = Basis.cast('GM', ExplicitStateSpace([sslbls], [dims]))
+            self.assertEqual([lbl for lbl, _ in self._tokenized_labels(dims)], list(tpb.labels))
+
+    def test_local_global_round_trip(self):
+        for sslbls, dims in self.CASES:
+            for lbl, toks in self._tokenized_labels(dims)[1:]:
+                support = tuple(i for i, t in enumerate(toks) if t != 'I')
+                leel = LEEL('H', (lbl,))
+                self.assertEqual(leel.support_indices(), support)
+
+                geel = GEEL.cast(leel, sslbls=sslbls)
+                sorted_support = sorted(support, key=lambda i: sslbls[i])  # global labels sort their sslbls
+                self.assertEqual(geel.sslbls, tuple(sslbls[i] for i in sorted_support))
+                self.assertEqual(geel.basis_element_labels, (''.join(toks[i] for i in sorted_support),))
+                self.assertEqual(geel.padded_basis_element_labels(sslbls), (lbl,))
+                self.assertEqual(LEEL.cast(geel, sslbls=sslbls), leel)
+
+    def test_two_label_support(self):
+        leel = LEEL('C', ('X_{0,1}I', 'Z_{1}Z'))
+        self.assertEqual(leel.support_indices(), (0, 1))
+
+        geel = GEEL.cast(leel, sslbls=('T0', 'Q1'))
+        self.assertEqual(geel.sslbls, ('Q1', 'T0'))  # sorted, with tokens permuted to match
+        self.assertEqual(geel.basis_element_labels, ('IX_{0,1}', 'ZZ_{1}'))
+        self.assertEqual(LEEL.cast(geel, sslbls=('T0', 'Q1')), leel)
+
+    def test_sorting_permutes_tokens(self):
+        geel = GEEL('A', ('X_{0,2}Y', 'IZ'), ('T1', 'Q0'), sort=False)
+        sorted_geel = geel.sort_sslbls()
+        self.assertEqual(sorted_geel.sslbls, ('Q0', 'T1'))
+        self.assertEqual(sorted_geel.basis_element_labels, ('YX_{0,2}', 'ZI'))
+        self.assertEqual(GEEL('A', ('X_{0,2}Y', 'IZ'), ('T1', 'Q0')), sorted_geel)
+
+    def test_global_style_tuple(self):
+        leel = LEEL.cast(('S', ('X_{1,2}',), ('T1',)), sslbls=('Q0', 'T1'))
+        self.assertEqual(leel.basis_element_labels, ('IX_{1,2}',))
+
+    def test_map_state_space_labels(self):
+        geel = GEEL('H', ('XZ_{2}',), ('Q0', 'T1'))
+        mapped = geel.map_state_space_labels({'Q0': 'Q9', 'T1': 'T3'})
+        self.assertEqual(mapped.sslbls, ('Q9', 'T3'))
+        self.assertEqual(mapped.basis_element_labels, ('XZ_{2}',))
+        self.assertEqual(mapped.padded_basis_element_labels(('T3', 'Q9')), ('Z_{2}X',))
+
+    def test_text_round_trip(self):
+        for leel in [LEEL('H', ('X_{0,1}',)), LEEL('C', ('IX_{0,1}', 'ZZ_{1}')),
+                     LEEL('A', ('X_{0,4}', 'Y_{2,3}'))]:
+            self.assertEqual(LEEL.cast(str(leel)), leel)
+        for geel in [GEEL('S', ('X_{0,1}',), ('T1',)), GEEL('C', ('XZ_{2}', 'YY_{0,1}'), ('Q0', 'T1')),
+                     GEEL('A', ('X_{0,1}X_{0,2}', 'Z_{1}I'), (0, 1))]:
+            self.assertEqual(GEEL.cast(str(geel)), geel)
+
+    def test_pickle(self):
+        import pickle
+        leel = LEEL('C', ('IX_{0,1}', 'ZZ_{1}'))
+        geel = GEEL.cast(leel, sslbls=('Q0', 'T1'))
+        self.assertEqual(pickle.loads(pickle.dumps(leel)), leel)
+        self.assertEqual(pickle.loads(pickle.dumps(geel)), geel)
+        self.assertEqual(hash(pickle.loads(pickle.dumps(geel))), hash(geel))

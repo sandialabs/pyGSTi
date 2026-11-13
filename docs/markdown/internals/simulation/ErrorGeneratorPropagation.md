@@ -28,7 +28,8 @@ import pygsti
 import stim
 from pygsti.tools import errgenproptools as eprop
 from pygsti.tools import errgenpolytools as epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
@@ -59,7 +60,7 @@ for gate, availability in pspec.availability.items():
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
         # Sample error rates.
-        error_rates_dict[label] = random_CPTP_error_generator_rates(num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234)
+        error_rates_dict[label] = random_cptp_errorgen_rates(QubitSpace(n), errorgen_types=('H', 'S'), label_type='local', seed=1234)
 ```
 
 ```{code-cell} ipython3
@@ -258,6 +259,28 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 
 In this case even with the first-order taylor approximation together with the second-order BCH approximation the relative error to the exact expecation value is roughly half a percent, dropping to below a tenth of a percent when we go up to the second order taylor approximation. As before, by going out to higher-order in either approximation one can achieve even higher levels of accuracy.
 
+### Bulk Evaluations
+
+When evaluating outcome probabilities or Pauli expectation values across multiple targets, passing observables in bulk allows pyGSTi to compute the error generator Taylor series expansion once and evaluate the sensitivity across all requested targets:
+
+- `approximate_stabilizer_probabilities(..., bitstrings=...)`: Rather than calling `approximate_stabilizer_probability` in a Python loop, pass a sequence of bitstrings to evaluate. If `bitstrings` is omitted, the exhaustive distribution over all $2^n$ computational basis states is computed (a warning is issued if $n > 10$ due to exponential scaling).
+- `approximate_stabilizer_pauli_expectations(..., paulis=...)`: Accepts a sequence of Pauli observables (as strings or `stim.PauliString` objects) and computes all expectation values in a single vectorized pass.
+
+```{code-cell} ipython3
+# Vectorized evaluation of multiple Pauli expectations
+pauli_list = ["XXXX", "YYYY", "ZZZZ", "ZIII"]
+bulk_expectations = eprop.approximate_stabilizer_pauli_expectations(
+    propagated_errorgen_layer_second_order, c, paulis=pauli_list, order=2, num_workers=2
+)
+for p, val in zip(pauli_list, bulk_expectations):
+    print(f"< {p} > = {val:.6f}")
+```
+
+## Multiprocessing and Parallelization Options
+As circuit depth, qubit count, or noise model density grows—particularly when evaluating higher-order BCH/Magnus expansions or computing sensitivities across many observables—the computational workload of error generator propagation increases significantly. pyGSTi provides comprehensive multicore multiprocessing parallelization across the core propagation and sensitivity routines, supporting automatic physical CPU core detection, worker pool reuse via `SharedWorkerPool`, vectorized bulk evaluations, and dynamic machine-specific optimizations.
+
+For a dedicated, in-depth tutorial and examples covering all parallelization features, see the companion tutorial {doc}`ErrorGeneratorPropagation-Parallelization`.
+
 ## Using a Fixed Per-Layer Error Generator
 Up to this point we have constructed an `ErrorGeneratorPropagator` from a full pyGSTi noise model. In many situations, however, it is useful to work with a simpler setup in which the *same* error generator layer is assumed to occur after every circuit layer, independent of the gate actually appearing there.
 
@@ -266,8 +289,8 @@ This can be done using the `fixed_errorgen_layer` argument of the `ErrorGenerato
 For example, we can construct a random 4-qubit error generator layer directly:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,
@@ -306,8 +329,8 @@ If the fixed error generator layer is specified using `GlobalElementaryErrorgenL
 For example:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer_global = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer_global = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,

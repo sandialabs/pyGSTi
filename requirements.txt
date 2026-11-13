@@ -1,6 +1,6 @@
 ####### Requirements #######
 numpy
-scipy
+scipy>=1.11
 plotly
 pandas
 networkx

@@ -130,6 +130,16 @@ class UnnamedReportWarning(UserWarning):
     pass
 
 
+class InsufficientMemoryWarning(UserWarning):
+    """
+    Alert the user that the estimated peak memory footprint of an operation exceeds the
+    currently available system memory (or that available memory could not be determined),
+    so the operation risks swapping or memory exhaustion. Deliberately not a subclass of
+    `ResourceWarning`, which Python's default warning filters ignore.
+    """
+    pass
+
+
 class StolenResourceWarning(UserWarning):
     """
     Suppose we have two types with a parent-child relationship, Foo and Bar.
@@ -211,5 +221,27 @@ class RBFitFailureWarning(UserWarning):
     derived from a shared fit (such as per-irrep rates recovered from a
     common recoupling matrix) may consequently be entirely NaN rather
     than just the failed piece.
+    """
+    pass
+
+
+class StaticTLSImportError(ImportError):
+    """
+    Raised when an installed dependency (such as torch or qiskit) cannot be
+    imported because the process has run out of glibc's reserve of static
+    thread-local storage, which libraries loaded after the interpreter starts
+    share. The message explains how to enlarge the reserve with
+    GLIBC_TUNABLES.
+    """
+    pass
+
+
+class StaticTLSWarning(UserWarning):
+    """
+    Inform the user that an installed optional dependency could not be
+    imported because the process has run out of glibc's reserve of static
+    thread-local storage, and that pyGSTi is continuing without it. Raised
+    instead of StaticTLSImportError where pyGSTi only probes for the
+    dependency at import time.
     """
     pass
