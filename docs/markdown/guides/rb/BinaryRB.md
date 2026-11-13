@@ -13,7 +13,7 @@ kernelspec:
 
 # Binary RB
 
-This tutorial contains a few details on how to run *Binary randomized benchmarking (BiRB)* that are not covered in the [RB overview tutorial](HowRBWorks).
+This tutorial contains a few details on how to run *Binary randomized benchmarking (BiRB)* that are not covered in the [RB overview tutorial](RBWorkflow).
 
 ## What is Binary RB? 
 
@@ -41,7 +41,7 @@ Generating a Binary RB experiment design is very similar to creating a Direct RB
 
 ### 1. Generic RB inputs
 
-`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](HowRBWorks) introduces them. What is protocol-specific is `depths`. For Binary RB the depths must be non-negative integers, counting the randomly sampled core layers in a circuit.
+`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](RBWorkflow) introduces them. What is protocol-specific is `depths`. For Binary RB the depths must be non-negative integers, counting the randomly sampled core layers in a circuit.
 
 ```{code-cell} ipython3
 # BiRB can be run on many many more qubit than this, but this notebook creates simulated data. As 

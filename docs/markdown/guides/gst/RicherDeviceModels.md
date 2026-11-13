@@ -1,16 +1,3 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.19.3
-kernelspec:
-  display_name: Python 3 (ipykernel)
-  language: python
-  name: python3
----
-
 # GST with richer device models
 
 Standard GST assumes your device is a fixed set of gates acting on some qubits, with one state preparation and one measurement at the ends. That assumption is doing a lot of work, and real devices break it in several distinct ways. This chapter is about what to do when yours does.

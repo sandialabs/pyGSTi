@@ -76,7 +76,7 @@ print("Total time=%.1f seconds" % (end - start))
 ```
 
 ## Step 5: create reports
-The returned `ModelEstimateResults` object (see the [Results tutorial](../analysis/Results)) generates an HTML report just as in the 1-qubit case.  Building and writing the report costs about as much as the fit itself — both finish in well under a minute here — and prints little while it runs:
+The returned `ModelEstimateResults` object (see the [Results tutorial](../analysis/InspectingResults)) generates an HTML report just as in the 1-qubit case.  Building and writing the report costs about as much as the fit itself — both finish in well under a minute here — and prints little while it runs:
 
 ```{code-cell} ipython3
 report = pygsti.report.construct_standard_report(

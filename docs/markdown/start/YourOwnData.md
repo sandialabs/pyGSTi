@@ -131,7 +131,7 @@ results = pygsti.protocols.ModelTest(smq1Q_XYI.target_model()).run(data)
 print(type(results).__name__)
 ```
 
-See [model testing](../guides/analysis/ModelTesting) for what to do with that result, and [judging the fit](../guides/gst/JudgingTheFit) for how to read the statistics it reports.
+See [model testing](../guides/analysis/ModelTesting) for what to do with that result, and [judging the fit](../guides/gst/FitStatistics) for how to read the statistics it reports.
 
 ## Where to go next
 

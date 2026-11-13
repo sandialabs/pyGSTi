@@ -129,6 +129,6 @@ Infidelity and diamond distance are gauge-variant, which means they are not dete
 
 ## Where to go next
 
-The [results object guide](../guides/analysis/Results) covers the parts of `ModelEstimateResults` this page skipped: adding your own gauge optimizations after the fact, combining estimates from separate runs into one results object, and confidence region factories. The [report generation guide](../guides/analysis/Reports) covers multi-estimate and multi-dataset reports, PDF and notebook output, and reusing a `Workspace` across reports. [Error bars](../guides/analysis/ErrorBars) covers the Hessian machinery.
+The [results object guide](../guides/analysis/InspectingResults) covers the parts of `ModelEstimateResults` this page skipped: adding your own gauge optimizations after the fact, combining estimates from separate runs into one results object, and confidence region factories. The [report generation guide](../guides/analysis/Reports) covers multi-estimate and multi-dataset reports, PDF and notebook output, and reusing a `Workspace` across reports. [Error bars](../guides/analysis/ErrorBars) covers the Hessian machinery.
 
 If your $N_\sigma$ came back large, that is the thread to pull on next, and the per-sequence color box plot is where to pull it: the pattern of which germs and which circuit lengths misfit usually names the physical cause.

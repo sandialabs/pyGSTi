@@ -13,7 +13,7 @@ kernelspec:
 
 # Explicit models
 
-An `ExplicitOpModel` is the simplest kind of `Model` in pyGSTi: a dictionary-like container holding $d^2 \times d^2$ operation matrices, length-$d^2$ state preparation vectors, and sets of length-$d^2$ effect vectors that encode positive operator-valued measures (POVMs). State preparation and POVM effect vectors are collectively called "SPAM" (state preparation and measurement) vectors. If you're deciding which kind of model to use, or putting noise on one, start from [modeling a noisy device](../../guides/models/DeviceModels) instead; what follows builds one by hand.
+An `ExplicitOpModel` is the simplest kind of `Model` in pyGSTi: a dictionary-like container holding $d^2 \times d^2$ operation matrices, length-$d^2$ state preparation vectors, and sets of length-$d^2$ effect vectors that encode positive operator-valued measures (POVMs). State preparation and POVM effect vectors are collectively called "SPAM" (state preparation and measurement) vectors. If you're deciding which kind of model to use, or putting noise on one, start from [modeling a noisy device](../../guides/models/BuildingModels) instead; what follows builds one by hand.
 
 A word on conventions before the mechanics. A "state space" is a Hilbert space of *pure* quantum states, often thought of as length-$d$ vectors with $d = 2^N$ for $N$ qubits. A "density matrix space" is a Hilbert space of density matrices, which you can think of as $d \times d$ matrices or, equivalently, as length-$d^2$ vectors. Those vectors live in Hilbert-Schmidt space, the space of linear operators on the $d \times d$ density matrix space. pyGSTi uses this "Liouville" vector representation for density matrices and POVM effects, which lets quantum gates be represented by $d^2 \times d^2$ matrices acting on Hilbert-Schmidt vectors.
 
@@ -39,7 +39,7 @@ Two quantities belong to *every* `Model`, not just explicit ones.
 
 A model's `.state_space` member (a `StateSpace` object) describes the state space as a direct sum and tensor product of labelled *factors*. Usually this is a tensor product of one or more 2-dimensional qubit spaces labelled by the integers 0 through $N_{qubits}-1$, or by `"Q0"`, `"Q1"`, and so on. Below we specify a 1-qubit state space with `["Q0"]`; the leading "Q" tells pyGSTi the factor is a 2-dimensional *qubit* space. For two qubits use `["Q0","Q1"]` or `[0,1]`, since integer labels also stand for qubit spaces. See the [state space tutorial](../conventions/StateSpaces) for more.
 
-A model's `.basis` member (a `Basis` object) says how dense representations (matrices and vectors) of the model's operations should be interpreted. We use the "Pauli product" basis throughout, named `"pp"` in pyGSTi, whose elements are tensor products of Pauli matrices. For a 1-qubit state space that is just $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$. See the [Basis object tutorial](../conventions/Bases) for more.
+A model's `.basis` member (a `Basis` object) says how dense representations (matrices and vectors) of the model's operations should be interpreted. We use the "Pauli product" basis throughout, named `"pp"` in pyGSTi, whose elements are tensor products of Pauli matrices. For a 1-qubit state space that is just $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$. See the [Basis object tutorial](../conventions/UsingBases) for more.
 
 ## Four ways to build one
 
@@ -238,7 +238,7 @@ print("Probabilities of outcomes of the \"complete\" gate\n sequence rho0+GxGx+M
       depol_model3.probabilities( ("rho0", "Gx", "Gx", "Mdefault")))
 ```
 
-You can also reach the underlying operations through the model's forward simulator. With the `matrix` simulator type, for instance, you can compute the product of two gate operations. See the [forward simulators tutorial](../simulation/ForwardSimulators) for details.
+You can also reach the underlying operations through the model's forward simulator. With the `matrix` simulator type, for instance, you can compute the product of two gate operations. See the [forward simulators tutorial](../simulation/ChoosingForwardSimulators) for details.
 
 ```{code-cell} ipython3
 # Computing the product of operation matrices (only allowed with the matrix simulator type)
@@ -351,4 +351,4 @@ To run 2-qubit GST against a custom model you would ideally generate fiducials a
 
 ## Next steps
 
-The [operators](Operators) page covers the objects you've been assigning into these models, their parameterizations, and how to compose and embed them. For models that scale past two or three qubits, and for the noise arguments the construction functions accept, see the characterization guides: [modeling a noisy device](../../guides/models/DeviceModels), then [implicit models](../../guides/models/MultiQubitModels) and [model noise](../../guides/models/ModelNoise).
+The [operators](OperatorTypes) page covers the objects you've been assigning into these models, their parameterizations, and how to compose and embed them. For models that scale past two or three qubits, and for the noise arguments the construction functions accept, see the characterization guides: [modeling a noisy device](../../guides/models/BuildingModels), then [implicit models](../../guides/models/MultiQubitModels) and [model noise](../../guides/models/ModelNoise).

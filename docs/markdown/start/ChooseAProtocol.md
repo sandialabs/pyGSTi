@@ -6,11 +6,11 @@ Start from what you want to learn.
 
 **I want to know what my gates actually do.** You want gate set tomography. GST estimates a full description of every gate, state preparation and measurement in your gate set, self-consistently, without assuming any of them are already good. That completeness is what makes it expensive: it is practical on one or two qubits, and the circuit count and fit cost climb steeply past that. See [your first GST run](FirstGST).
 
-**I want one number for how good my gates are.** You want randomized benchmarking. RB reports an error rate per operation, averaged over a random ensemble, and it is robust to state-preparation and measurement error in a way that tomography is not. It tells you much less than GST, and it tells you that much for far more qubits. See [how RB works](../guides/rb/HowRBWorks).
+**I want one number for how good my gates are.** You want randomized benchmarking. RB reports an error rate per operation, averaged over a random ensemble, and it is robust to state-preparation and measurement error in a way that tomography is not. It tells you much less than GST, and it tells you that much for far more qubits. See [how RB works](../guides/rb/RBWorkflow).
 
-**I want to know how large a circuit my device can run.** You want volumetric benchmarks, which sweep circuit width against circuit depth and report where the device stops producing usable output. This is the closest thing to a capability map. See [volumetric benchmarks](../guides/benchmarks/VolumetricBenchmarks).
+**I want to know how large a circuit my device can run.** You want volumetric benchmarks, which sweep circuit width against circuit depth and report where the device stops producing usable output. This is the closest thing to a capability map. See [volumetric benchmarks](../guides/benchmarks/VolumetricBenchmarkExamples).
 
-**I want to know whether my device is stable.** You want drift characterization, which looks for time-dependence in data you have already taken. It needs timestamped data, and around 100 or more time-stamps per circuit. See [drift characterization](../guides/drift/DriftCharacterization).
+**I want to know whether my device is stable.** You want drift characterization, which looks for time-dependence in data you have already taken. It needs timestamped data, and around 100 or more time-stamps per circuit. See [drift characterization](../guides/drift/DriftAnalysis).
 
 **I want a very precise value for a rotation angle.** You want robust phase estimation, which spends its circuits on precision for a small number of angles rather than on breadth. See [robust phase estimation](../advanced/specialist/RobustPhaseEstimation).
 

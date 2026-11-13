@@ -13,7 +13,7 @@ kernelspec:
 
 # MRB with universal gate sets
 
-This tutorial contains a few details on how to run *Mirror randomized benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](HowRBWorks) or the [Clifford MRB tutorial](MirrorRB).
+This tutorial contains a few details on how to run *Mirror randomized benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](RBWorkflow) or the [Clifford MRB tutorial](MirrorRB).
 
 ## What is Mirror RB? 
 
@@ -38,7 +38,7 @@ Generating a Mirror RB experiment design for universal gate sets is very similar
 
 ### 1. Generic RB inputs
 
-`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](HowRBWorks) introduces them. What is protocol-specific is `depths`. For Mirror RB the depths must be *even* integers: they count the total layers in the "compute" and "uncompute" sub-circuits. One extra constraint applies to `pspec` here — universal-gate-set MRB currently requires `Gzr` and `Gxpi2` to be among the gate names.
+`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](RBWorkflow) introduces them. What is protocol-specific is `depths`. For Mirror RB the depths must be *even* integers: they count the total layers in the "compute" and "uncompute" sub-circuits. One extra constraint applies to `pspec` here — universal-gate-set MRB currently requires `Gzr` and `Gxpi2` to be among the gate names.
 
 ```{code-cell} ipython3
 # Mirror RB can be run on many many more qubit than this, but this notebook creates simulated data. As 

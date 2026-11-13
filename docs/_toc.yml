@@ -1,4 +1,4 @@
-# Clickable section landing pages; at most three levels of tutorial pages.
+# Section pages route readers to notebooks; examples are leaf pages.
 # Paths are kept stable when a page changes its navigation placement.
 format: jb-book
 root: markdown/start/intro
@@ -17,6 +17,7 @@ chapters:
   sections:
   - file: markdown/guides/workflow/Workflow
     sections:
+    - file: markdown/guides/workflow/ProtocolExamples
     - file: markdown/guides/workflow/DescribeYourDevice
     - file: markdown/guides/workflow/Circuits
     - file: markdown/guides/workflow/ExperimentDesigns
@@ -25,16 +26,19 @@ chapters:
     - file: markdown/guides/workflow/FilesAndDirectories
   - file: markdown/guides/gst/GSTDesigns
     sections:
+    - file: markdown/guides/gst/ModelpackDesigns
     - file: markdown/guides/gst/GSTCircuits
     - file: markdown/guides/gst/FiducialsAndGerms
     - file: markdown/guides/gst/FewerCircuits
     - file: markdown/guides/gst/CheckYourDesign
   - file: markdown/guides/gst/RunningGST
     sections:
+    - file: markdown/guides/gst/GSTProtocols
     - file: markdown/guides/gst/TwoQubitGST
     - file: markdown/guides/gst/Parallelism
   - file: markdown/guides/gst/JudgingTheFit
     sections:
+    - file: markdown/guides/gst/FitStatistics
     - file: markdown/guides/gst/BadFits
     - file: markdown/guides/gst/RobustGST-TVD
   - file: markdown/guides/gst/RicherDeviceModels
@@ -45,6 +49,7 @@ chapters:
     - file: markdown/guides/gst/TimeDependentGST
   - file: markdown/guides/rb/HowRBWorks
     sections:
+    - file: markdown/guides/rb/RBWorkflow
     - file: markdown/guides/rb/CliffordRB
     - file: markdown/guides/rb/InterleavedRB
     - file: markdown/guides/rb/DirectRB
@@ -57,13 +62,16 @@ chapters:
     - file: markdown/guides/rb/SU2QuditRB
   - file: markdown/guides/benchmarks/VolumetricBenchmarks
     sections:
+    - file: markdown/guides/benchmarks/VolumetricBenchmarkExamples
     - file: markdown/guides/benchmarks/MirrorFidelityEstimation
   - file: markdown/guides/drift/DriftCharacterization
     sections:
+    - file: markdown/guides/drift/DriftAnalysis
     - file: markdown/guides/drift/TimestampedData
   - file: markdown/guides/drift/ComparingDataSets
   - file: markdown/guides/analysis/Results
     sections:
+    - file: markdown/guides/analysis/InspectingResults
     - file: markdown/guides/analysis/Reports
     - file: markdown/guides/analysis/Metrics
     - file: markdown/guides/analysis/GaugeFreedom
@@ -71,6 +79,7 @@ chapters:
     - file: markdown/guides/analysis/ModelTesting
 - file: markdown/guides/models/DeviceModels
   sections:
+  - file: markdown/guides/models/BuildingModels
   - file: markdown/internals/models/ExplicitModels
   - file: markdown/guides/models/MultiQubitModels
   - file: markdown/guides/models/ModelNoise
@@ -87,23 +96,28 @@ chapters:
   sections:
   - file: markdown/internals/models/Operators
     sections:
+    - file: markdown/internals/models/OperatorTypes
     - file: markdown/internals/models/CustomOperators
     - file: markdown/internals/models/CustomPOVMs
     - file: markdown/internals/models/TyingParameters
   - file: markdown/internals/conventions/Bases
     sections:
+    - file: markdown/internals/conventions/UsingBases
     - file: markdown/internals/conventions/StateSpaces
   - file: markdown/internals/simulation/ForwardSimulators
     sections:
+    - file: markdown/internals/simulation/ChoosingForwardSimulators
     - file: markdown/internals/simulation/StabilizerCHP
     - file: markdown/internals/simulation/ErrorGeneratorPropagation
     - file: markdown/internals/simulation/ErrorGeneratorPropagation-Parallelization
     - file: markdown/internals/simulation/ErrorGeneratorPolynomials
   - file: markdown/internals/extending/LowLevelGST
     sections:
+    - file: markdown/internals/extending/LowLevelGSTAlgorithms
     - file: markdown/internals/extending/GaugeOptReference
   - file: markdown/internals/figures/WorkspaceFigures
     sections:
+    - file: markdown/internals/figures/WorkspaceFigureExamples
     - file: markdown/internals/figures/Switchboards
 - file: markdown/reference/Index
   sections:

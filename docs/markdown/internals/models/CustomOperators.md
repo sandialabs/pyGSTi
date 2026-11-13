@@ -13,7 +13,7 @@ kernelspec:
 
 # Custom operators and factories
 
-A gate (or layer) operation in pyGSTi is just a parameterized process matrix: a mapping that sends a vector of parameter values to a process matrix. That mapping lives in a `LinearOperator`-derived class. pyGSTi ships a lot of these (`FullArbitraryOp` and friends, catalogued in the [operators tutorial](Operators)), but nothing stops you from writing your own, and there are good reasons to.
+A gate (or layer) operation in pyGSTi is just a parameterized process matrix: a mapping that sends a vector of parameter values to a process matrix. That mapping lives in a `LinearOperator`-derived class. pyGSTi ships a lot of these (`FullArbitraryOp` and friends, catalogued in the [operators tutorial](OperatorTypes)), but nothing stops you from writing your own, and there are good reasons to.
 
 The usual reason is physics. You have a specific model of how a gate misbehaves on your device, and none of the generic built-in classes captures it. A close second is instrumentation: you want the operator's parameters to be exactly the knobs you can turn in the lab, so that a GST fit hands back numbers you can act on.
 
@@ -474,6 +474,6 @@ factory_op.aux_info
 
 ## Where to go next
 
-- The [operators tutorial](Operators) covers pyGSTi's existing operations, which are worth exhausting before you write your own.
+- The [operators tutorial](OperatorTypes) covers pyGSTi's existing operations, which are worth exhausting before you write your own.
 - The [POVM tutorial](CustomPOVMs) does the same job as this page for terminating measurements.
 - The [instrument tutorial](../../guides/gst/MidCircuitMeasurement) covers mid-circuit measurements.

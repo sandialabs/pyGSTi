@@ -13,7 +13,7 @@ kernelspec:
 
 # Your first benchmark
 
-Randomized benchmarking turns a device into a number. You describe your qubits and their native gates, pyGSTi samples random circuits that should return you to a known bitstring, and the rate at which they stop doing so is the error rate $r$. This page is the shortest honest path from a device description to that number, using Clifford RB on two qubits. It runs in a few seconds and it cuts every option you can live without. When you want the options back, read [how RB works](../guides/rb/HowRBWorks), which covers the same three steps at full width, and [choosing a protocol](ChooseAProtocol) if you are not sure Clifford RB is the flavour you want.
+Randomized benchmarking turns a device into a number. You describe your qubits and their native gates, pyGSTi samples random circuits that should return you to a known bitstring, and the rate at which they stop doing so is the error rate $r$. This page is the shortest honest path from a device description to that number, using Clifford RB on two qubits. It runs in a few seconds and it cuts every option you can live without. When you want the options back, read [how RB works](../guides/rb/RBWorkflow), which covers the same three steps at full width, and [choosing a protocol](ChooseAProtocol) if you are not sure Clifford RB is the flavour you want.
 
 ```{code-cell} ipython3
 import pygsti

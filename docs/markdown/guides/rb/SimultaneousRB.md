@@ -132,4 +132,4 @@ for i in ['1Q-RB', '2Q-RB', '3Q-RB' , '4Q-RB']:
     results[i].for_protocol['RB'].plot(title=i)
 ```
 
-**For more information** and examples on running multiple benchmarking protocols on a processor, check out the [volumetric benchmarking tutorial](../benchmarks/VolumetricBenchmarks).
+**For more information** and examples on running multiple benchmarking protocols on a processor, check out the [volumetric benchmarking tutorial](../benchmarks/VolumetricBenchmarkExamples).

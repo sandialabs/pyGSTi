@@ -2,6 +2,10 @@
 
 Use an environment with pyGSTi's documentation dependencies (the `docs` extra). From a source checkout, build the extensions in place and set `PYTHONPATH` to that checkout so notebook kernels and Sphinx import the code you are reviewing.
 
+## Routing pages and notebooks
+
+Pages with children help readers choose a notebook: explain what each child covers and when to use it. Put worked code and output in leaf notebooks, keeping Jupytext metadata on the notebooks and off the routing pages. When moving an example, update its incoming tutorial links and any entry in `execute-notebooks.py`'s shared-file execution order. Keep it in the same directory when possible so relative data and report paths remain valid.
+
 ## Fast preview
 
 From the repository root:

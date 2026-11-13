@@ -1,16 +1,3 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.19.3
-kernelspec:
-  display_name: Python 3 (ipykernel)
-  language: python
-  name: python3
----
-
 # pyGSTi
 
 ```{note}
@@ -19,38 +6,19 @@ You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. U
 
 pyGSTi is a Python framework for modeling and characterizing quantum information processors, from single qubits to devices with tens or hundreds of them. It was built to perform gate set tomography, which is where the name comes from, and GST is still its most detailed capability. It now also runs randomized benchmarking, volumetric and mirror-circuit benchmarks, drift detection, idle tomography and robust phase estimation, and it will build noise models, simulate circuits and generate interactive reports along the way.
 
-## Install and check it works
+## Getting started
 
-```bash
-pip install pygsti
-```
-
-See [installation](Install) for conda, optional dependencies and building from source. To track the development branch these docs are built from:
-
-```bash
-pip install git+https://github.com/sandialabs/pyGSTi.git@develop
-```
-
-Then build an ideal one-qubit model and ask it for a circuit's outcome probabilities:
-
-```python
-import pygsti
-from pygsti.modelpacks import smq1Q_XYI
-
-model = smq1Q_XYI.target_model()                    # ideal 1-qubit model
-circuit = pygsti.circuits.Circuit([('Gxpi2', 0)])   # a single X(pi/2) gate
-model.probabilities(circuit)                        # ~ {('0',): 0.5, ('1',): 0.5}
-```
+[Installing pyGSTi](Install) covers installation, optional dependencies, and building from source. Then choose [Your first GST run](FirstGST) for a fitted gate model or [Your first benchmark](FirstBenchmark) for a benchmarking example.
 
 ## Where to go next
 
 This documentation is arranged in six sections, and which one you want depends on what you are doing rather than on how much you already know.
 
-- **[Start here](Index)** is a short guided path from a fresh install to a characterization result you can read. It is the whole of what most people need.
+- **[Start here](Index)** is a short guided path from a fresh install to a characterization result you can read.
 - **[Characterization guides](../guides/Index)** is the practitioner layer: one chapter per protocol, plus the workflow and analysis chapters that all of them draw on.
 - **[Defining models](../guides/models/DeviceModels)** covers explicit and implicit models, their parameterizations, and adding noise to describe your device.
-- **[Advanced capabilities](../advanced/Index)** is what only some readers need: specialist protocols, machine-learned error models, and circuits and data exchanged with Cirq or IBM Q.
-- **[Core objects](../internals/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. If you are characterizing a device with one of the protocols above, you need neither this part nor the one before it.
+- **[Advanced capabilities](../advanced/Index)** covers specialist protocols, machine-learned error models, and circuits and data exchanged with Cirq or IBM Q.
+- **[Core objects](../internals/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. Use it when you need to inspect or extend those components.
 - **[Reference](../reference/Index)** holds the [FAQ](../reference/Troubleshooting), [citing pyGSTi](../reference/Citing), [migrating from the function-based API](../reference/FromFunctionAPI) and the API reference.
 
 If you have a specific problem and want to know which few lines of Python solve it, try the [FAQ](../reference/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).

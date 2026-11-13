@@ -13,7 +13,7 @@ kernelspec:
 
 # Direct RB
 
-This tutorial contains a few details on how to run [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](HowRBWorks).
+This tutorial contains a few details on how to run [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](RBWorkflow).
 
 ## What is Direct RB? 
 
@@ -37,11 +37,11 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Creating a Direct RB experiment design
 
-The data analysis in Direct RB is exactly as in Clifford RB, and how to do this analysis is covered in the [RB overview tutorial](HowRBWorks). The differences and flexibility in Direct RB are all at the experiment design stage, and so this is what is covered in this tutorial. 
+The data analysis in Direct RB is exactly as in Clifford RB, and how to do this analysis is covered in the [RB overview tutorial](RBWorkflow). The differences and flexibility in Direct RB are all at the experiment design stage, and so this is what is covered in this tutorial.
 
 ### 1. Generic RB inputs
 
-`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](HowRBWorks) introduces them. What is protocol-specific is `depths`. For Direct RB, the depths are the number of layers in the "core" circuit outlined in step (2) above, and can be any non-negative integers.
+`pspec` (the device to benchmark), `k` (how many circuits to sample at each depth) and `qubits` (which qubits to benchmark) mean the same thing here as in every RB protocol; [how RB works](RBWorkflow) introduces them. What is protocol-specific is `depths`. For Direct RB, the depths are the number of layers in the "core" circuit outlined in step (2) above, and can be any non-negative integers.
 
 ```{code-cell} ipython3
 n_qubits = 4

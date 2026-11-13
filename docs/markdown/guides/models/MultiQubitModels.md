@@ -96,7 +96,7 @@ The types of individual operators can be accessed straightforwardly.  For exampl
 print(mdl_locnoise.operation_blks['gates']['Gxpi']) # Static!
 ```
 
-Notice that is a `StaticUnitaryOp` object, just as the output from `print_modelmembers` indicates.  The gate operations in `.operation_blks["gates"]` are all *static* operators (they have no adjustable parameters - see the [Operators tutorial](../../internals/models/Operators) for an explanation of the different kinds of operators).  This is because the default value of the `ideal_gate_type` argument of `"auto"` is equivalent to attempting a number of static types. The operators page's section on choosing types when you build a model has a more complete description of parameterization types.
+Notice that is a `StaticUnitaryOp` object, just as the output from `print_modelmembers` indicates.  The gate operations in `.operation_blks["gates"]` are all *static* operators (they have no adjustable parameters - see the [Operators tutorial](../../internals/models/OperatorTypes) for an explanation of the different kinds of operators).  This is because the default value of the `ideal_gate_type` argument of `"auto"` is equivalent to attempting a number of static types. The operators page's section on choosing types when you build a model has a more complete description of parameterization types.
 
 ### Creating a `LocalNoiseModel` with independent gates
 As we've just seen, by default `create_crosstalk_free_model` creates a `LocalNoiseModel` that contains just a single gate operation for each gate name (e.g. `"Gxpi"`).  This is convenient when we expect the same gate acting on different qubits will have identical (or very similar) noise properties.  What if, however, we expect that the $X(\pi)$ gate on qubit $0$ has a different type of noise than the $X(\pi)$ gate on qubit $1$?  In this case, we want gates on different qubits to have *independent* noise, so we set `independent_gates=True`.  We'll also set a `ideal_gate_type='full'` to demonstrate how to change the type of the created gate objects.
@@ -312,4 +312,4 @@ print(known_gate_names)
 ```
 
 ## Next steps
-To learn more about using implicit models, you may want to check out the [operators tutorial](../../internals/models/Operators) (its section on implicit models), which covers parameterization material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise.md), which describes how to add noise to implicit (and explicit) models.
+To learn more about using implicit models, you may want to check out the [operators tutorial](../../internals/models/OperatorTypes) (its section on implicit models), which covers parameterization material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise.md), which describes how to add noise to implicit (and explicit) models.

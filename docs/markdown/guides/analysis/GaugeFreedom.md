@@ -132,7 +132,7 @@ std_results = pygsti.run_stdpractice_gst(
                   } )
 ```
 
-We can see that the `"TP"` estimate constains the expected gauge-optimized models (see the [Results object tutorial](Results) on how to access the elements of a `ModelEstimateResults` object):
+We can see that the `"TP"` estimate constains the expected gauge-optimized models (see the [Results object tutorial](InspectingResults) on how to access the elements of a `ModelEstimateResults` object):
 
 ```{code-cell} ipython3
 print("\n".join(std_results.estimates['full TP'].models.keys()))

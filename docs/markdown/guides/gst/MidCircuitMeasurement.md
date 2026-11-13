@@ -202,7 +202,7 @@ Notice the format of [intermediate_meas_dataset.txt](../../../tutorial_files/int
 
 ### Running GST under two parameterizations
 
-We fit the data under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  The `"full TP"` fit runs through `StandardGST` (the protocol and its modes are covered in [running GST](RunningGST)), with the ideal model as the target:
+We fit the data under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  The `"full TP"` fit runs through `StandardGST` (the protocol and its modes are covered in [running GST](GSTProtocols)), with the ideal model as the target:
 
 ```{code-cell} ipython3
 from pygsti.protocols import StandardGST, ProtocolData
@@ -282,7 +282,7 @@ def refit_instruments_cptplnd(results, base_estimate_label='full TP',
 refit_instruments_cptplnd(results, verbosity=3)
 ```
 
-Both fits recover the data-generating model fairly well; [judging GST fits](JudgingTheFit) covers assessing fit quality quantitatively. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
+Both fits recover the data-generating model fairly well; [judging GST fits](FitStatistics) covers assessing fit quality quantitatively. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
 
 ```{code-cell} ipython3
 for mode in ('full TP', 'CPTPLND'):

@@ -39,7 +39,7 @@ F_{\text{tvd}}(M; \text{data}) = \sum_{\text{circuits } c} \lVert ~ p_{\text{obs
 $$
 
 This objective can be less sensitive to extreme outliers because it directly penalizes distribution mismatch rather than log-probability of rare events.
-The mechanics of swapping objectives — the `objfn_builders` argument and its spellings — are covered in [judging GST fits](JudgingTheFit).
+The mechanics of swapping objectives — the `objfn_builders` argument and its spellings — are covered in [judging GST fits](FitStatistics).
 
 We will:
 1. Simulate a “clean” dataset from a slightly depolarized 1-qubit gate set.

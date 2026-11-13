@@ -86,6 +86,6 @@ print(estimate.models['final iteration estimate'].num_params, "parameters")
 
 ## Where to go next
 
-- [Running GST](../guides/gst/RunningGST) — the protocol API in full, including parameterization choices, gauge optimization and bad-fit handling.
+- [Running GST](../guides/gst/GSTProtocols) — the protocol API in full, including parameterization choices, gauge optimization and bad-fit handling.
 - [GST overview](../start/FirstGST) — start here if you are new to GST rather than porting existing code.
 - [Model testing](../guides/analysis/ModelTesting) — the `ModelTest` protocol, which replaces `run_model_test`.

@@ -116,7 +116,7 @@ Served with these docs: <a href="../../../reports/gstwithtest_report2/main.html"
 
 ## Checkpointing/Warmstarting
 
-Just like the GST protocols discussed in [GST-Protocols](../gst/RunningGST), `ModelTest` protocols also support checkpointing/warmstarting in the event of unexpected failure or termination using `ModelTestCheckpoint` objects which are serialized and written to disk over the course of running an iterative `ModelTest`. We direct you to the linked tutorial for more on the basic syntax and usage, which essentially identical for `ModelTestCheckpoints` objects.
+Just like the GST protocols discussed in [GST-Protocols](../gst/GSTProtocols), `ModelTest` protocols also support checkpointing/warmstarting in the event of unexpected failure or termination using `ModelTestCheckpoint` objects which are serialized and written to disk over the course of running an iterative `ModelTest`. We direct you to the linked tutorial for more on the basic syntax and usage, which essentially identical for `ModelTestCheckpoints` objects.
 
 ```{code-cell} ipython3
 # creates a Results object with a "model1" estimate
@@ -147,4 +147,4 @@ print(results.estimates['model1'].parameters['model_test_values'] == \
 results_warmstarted.estimates['model1'].parameters['model_test_values'])
 ```
 
-Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGSTi protocols](../workflow/Workflow).
+Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGSTi protocols](../workflow/ProtocolExamples).

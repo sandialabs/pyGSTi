@@ -13,7 +13,7 @@ kernelspec:
 
 # Workspace `Switchboards`
 
-Stacking workspace figures runs out of screen fast, as the [previous tutorial](WorkspaceFigures) will have made clear. A `Switchboard` puts buttons, dropdowns and sliders in front of a set of figures so you can flip between them in place instead of scrolling past all of them. This tutorial introduces the object and demonstrates its use.
+Stacking workspace figures runs out of screen fast, as the [previous tutorial](WorkspaceFigureExamples) will have made clear. A `Switchboard` puts buttons, dropdowns and sliders in front of a set of figures so you can flip between them in place instead of scrolling past all of them. This tutorial introduces the object and demonstrates its use.
 
 First though, let's run GST on the standard 1Q model to get some results (the same ones as the first tutorial).
 
