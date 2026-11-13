@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import pygsti.circuits as pc
 import pygsti.data as pdata
@@ -9,6 +10,43 @@ from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
     PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from . import fixtures
 from ..util import BaseCase
+
+
+@pytest.mark.parametrize('simulator', ['map', 'matrix'])
+@pytest.mark.parametrize('with_instrument', [False, True])
+def test_iterative_gst_sparse_objective_matches_rebuilt(simulator, with_instrument):
+    from pygsti.modelpacks import smq1Q_XYI
+    from pygsti.modelmembers.operations import DepolarizeOp, StaticArbitraryOp
+    from pygsti.modelmembers.instruments import Instrument
+
+    model = smq1Q_XYI.target_model().depolarize(spam_noise=0.1)
+    model.set_all_parameterizations('static')
+    model.operations[('Gdep', 0)] = DepolarizeOp(model.state_space, initial_rate=0.1)
+    model.sim = simulator
+    prefix = []
+    if with_instrument:
+        model.instruments[('Iz', 0)] = Instrument([
+            (label, StaticArbitraryOp(0.5 * np.eye(4), state_space=model.state_space))
+            for label in ('a', 'b')])
+        prefix = [('Iz', 0)]
+    circuits = [Circuit(prefix + [('Gdep', 0)] * n, line_labels=(0,)) for n in (0, 1, 2)]
+    outcomes = model.circuit_outcomes(circuits[0])
+    dataset = pdata.DataSet(outcome_labels=outcomes)
+    for circuit in circuits:
+        observed = [outcome for outcome in outcomes if outcome[-1] == '0']
+        dataset.add_count_dict(circuit, {outcome: 100 // len(observed) for outcome in observed})
+    dataset.done_adding_data()
+    builder = ObjectiveFunctionBuilder.create_from('logl')
+    results = core.iterative_gst_generator(
+        dataset, model, [circuits[:2], circuits], optimizer={'maxiter': 20},
+        iteration_objfn_builders=[builder], final_objfn_builders=[builder], resource_alloc=None)
+    for result, circuit_list in zip(results, [circuits[:2], circuits]):
+        fitted_model, _, objective = result[:3]
+        rebuilt = builder.build(fitted_model, dataset, circuit_list)
+        # Fixed noisy SPAM leaves positive probability on unobserved outcomes even after fitting.
+        assert rebuilt.fn() > 1
+        np.testing.assert_allclose(objective.fn(), rebuilt.fn(), rtol=1e-10, atol=1e-10)
+        assert all(objective.outcome_count_by_circuit_cache[c] == len(outcomes) for c in circuit_list)
 
 
 class CoreStdData(object):
