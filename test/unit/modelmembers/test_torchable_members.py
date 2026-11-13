@@ -21,7 +21,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from pygsti.baseobjs import Basis
-from pygsti.baseobjs.statespace import QubitSpace
+from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelmembers.operations.fullarbitraryop import FullArbitraryOp
 from pygsti.modelmembers.operations.fulltpop import FullTPOp
@@ -96,6 +96,33 @@ def test_embeddederrorgen_torch_base():
         warnings.simplefilter('ignore')
         dref = emb.deriv_wrt_params()
     assert np.allclose(torch_base_jacobian(emb), dref, atol=1e-7)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_embeddedop_torch(targets):
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    mx = np.random.default_rng(25).normal(size=(36, 36))
+    emb = EmbeddedOp(ss, targets, FullArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
+    sd = emb.stateless_data(torch.float64, 'cpu')
+    params = torch.tensor(emb.to_vector())
+    direction = torch.zeros_like(params)
+    direction[37] = 1
+    value, tangent = torch.func.jvp(lambda p: EmbeddedOp.torch_base(sd, p), (params,), (direction,))
+
+    def reference(local, derivative=False):
+        if targets[0] == 'Q2':
+            local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
+        result = np.zeros((ss.dim, ss.dim))
+        if not derivative:
+            result[:4, :4] = np.eye(4)
+        result[4:, 4:] = np.kron(np.eye(4), local)
+        return result
+
+    perturbation = np.zeros((36, 36))
+    perturbation.flat[37] = 1
+    np.testing.assert_allclose(value.numpy(), reference(mx))
+    np.testing.assert_allclose(tangent.numpy(), reference(perturbation, derivative=True))
 
 
 # --------------------------------------------------------------------------------------------------

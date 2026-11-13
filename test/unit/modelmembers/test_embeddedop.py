@@ -13,10 +13,88 @@ matrix simulator.
 """
 import numpy as np
 import pytest
+from scipy.linalg import block_diag
 
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace
 from pygsti.modelmembers.operations import EmbeddedErrorgen, EmbeddedOp, ExpErrorgenOp, LindbladErrorgen
+
+
+@pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.parametrize('direct_sum', [False, True])
+def test_mixed_qudit_embedding(on_space, targets, direct_sum):
+    from pygsti.modelmembers.operations import StaticArbitraryOp, StaticUnitaryOp
+
+    labels, dims = [('Q0', 'T1', 'Q2')], [(2, 3, 2)]
+    if direct_sum:
+        labels = [('Qleft',)] + labels + [('Qright',)]
+        dims = [(2,)] + dims + [(2,)]
+    ss = ExplicitStateSpace(labels, dims)
+    sub = ss.create_subspace(targets)
+    hilbert = on_space == 'Hilbert'
+    d = sub.udim if hilbert else sub.dim
+    rng = np.random.default_rng(123)
+    mx = rng.normal(size=(d, d))
+    if hilbert:
+        mx = np.linalg.qr(mx + 1j * rng.normal(size=(d, d)))[0]
+        op = StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub)
+    else:
+        op = StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub)
+    embedded = EmbeddedOp(ss, targets, op)
+    qdim, tdim = (2, 3) if hilbert else (4, 9)
+    local = mx if targets[0] == 'T1' else mx.reshape(qdim, tdim, qdim, tdim).transpose(
+        1, 0, 3, 2).reshape(d, d)
+    ref = np.kron(np.eye(qdim), local)
+    if direct_sum:
+        ref = block_diag(np.eye(qdim), ref, np.eye(qdim))
+    np.testing.assert_allclose(embedded.to_dense(on_space), ref)
+    if not hilbert:  # StaticUnitaryOp does not implement to_sparse.
+        np.testing.assert_allclose(embedded.to_sparse(on_space).toarray(), ref)
+
+    if not hilbert:
+        from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
+        state = StateRepDense(rng.normal(size=ss.dim), ss, None)
+        np.testing.assert_allclose(embedded._rep.acton(state).data, ref @ state.data, atol=1e-12)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_embedding_derivatives(targets):
+    from pygsti.modelmembers.operations import FullArbitraryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    op = FullArbitraryOp(np.eye(sub.dim), evotype='densitymx_slow', state_space=sub)
+    embedded = EmbeddedOp(ss, targets, op)
+    params = [0, 37, sub.dim**2 - 1]
+    deriv = embedded.deriv_wrt_params(params)
+    for column, param in enumerate(params):
+        local = np.zeros((sub.dim, sub.dim))
+        local.flat[param] = 1
+        if targets[0] == 'Q2':
+            local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(sub.dim, sub.dim)
+        np.testing.assert_array_equal(deriv[:, column], np.kron(np.eye(4), local).ravel())
+
+
+@pytest.mark.parametrize('relative_first', [False, True])
+@pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
+def test_embedding_indices_relative_and_absolute(relative_first, on_space):
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])
+    targets = ['Q2', 'T1']
+    op = EmbeddedOp(ss, targets, StaticUnitaryOp(
+        np.eye(6), evotype='statevec_slow', state_space=ss.create_subspace(targets)))
+    # Partly consume the legacy iterator before requesting the other convention.
+    next(op._iter_matrix_elements(on_space, relative_first))
+    relative = np.array(list(op._iter_matrix_elements(on_space, True)))
+    absolute = np.array(list(op._iter_matrix_elements(on_space, False)))
+    offset = 2 if on_space == 'Hilbert' else 4
+    np.testing.assert_array_equal(absolute[:, :2], relative[:, :2] + offset)
+    np.testing.assert_array_equal(absolute[:, 2:], relative[:, 2:])
+    d = 6 if on_space == 'Hilbert' else 36
+    assert len(relative) == d**2 * offset
+    assert len(set(map(tuple, relative[:, :2]))) == len(relative)
 
 
 def _h_errorgen_op(pauli, rate=0.15, num_qubits=1):
