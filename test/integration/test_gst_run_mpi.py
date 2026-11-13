@@ -14,6 +14,7 @@ from pygsti.forwardsims import MatrixForwardSimulator
 from pygsti.modelpacks import smq1Q_XY as smq1Q_XY
 from pygsti.modelpacks import smq1Q_XYI as std
 from pygsti.protocols.protocol import SlurmSettings
+from test.helpers.mpi_launch import openmpi_extra_args
 
 
 @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
@@ -23,25 +24,6 @@ class RunMpiTester:
     def check_mpiexec(self):
         if shutil.which('mpiexec') is None and shutil.which('mpirun') is None:
             pytest.skip("No MPI launcher (mpiexec/mpirun) found on PATH")
-
-    def _extra_mpi_args(self):
-        # CI runners tend to have fewer than four cores.
-        # --oversubscribe is an Open MPI flag; Intel MPI (Hydra) and MPICH
-        # don't recognise it, so only add it when Open MPI is detected.
-        import subprocess, shutil
-        launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-        if launcher is not None:
-            try:
-                result = subprocess.run(
-                    [launcher, '--version'],
-                    capture_output=True, text=True, timeout=10,
-                )
-                output = result.stdout + result.stderr
-                if 'Open MPI' in output or 'OpenRTE' in output:
-                    return ['--oversubscribe']
-            except Exception:
-                pass
-        return []
 
     def test_run_mpi_matches_serial(self):
         """run_mpi with num_workers>1 should produce the same model as serial run."""
@@ -59,7 +41,7 @@ class RunMpiTester:
         results_serial = proto.run(data)
         results_parallel = proto.run_mpi(
             data, num_ranks=4, mpiexec='auto',
-            extra_mpi_args=self._extra_mpi_args(),
+            extra_mpi_args=openmpi_extra_args(),
         )
 
         serial_params = results_serial.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
@@ -89,7 +71,7 @@ class RunMpiTester:
         )
         results_parallel = proto_mpi.run_mpi(
             data, num_ranks=4, blas_threads_per_rank=1, mpiexec='auto',
-            extra_mpi_args=self._extra_mpi_args(),
+            extra_mpi_args=openmpi_extra_args(),
         )
 
         fit_ser = results_serial.estimates["GateSetTomography"].models['final iteration estimate']
@@ -134,7 +116,7 @@ class RunMpiTester:
             optimizer={'maxiter': 10},
         )
 
-        extra = self._extra_mpi_args()
+        extra = openmpi_extra_args()
         results1 = proto.run_mpi(data, num_ranks=2, mpiexec='auto', extra_mpi_args=extra)
         results2 = proto.run_mpi(data, num_ranks=2, mpiexec='auto', extra_mpi_args=extra)
         assert "GateSetTomography" in results1.estimates
@@ -155,7 +137,7 @@ class RunMpiTester:
 
         results = proto.run_mpi(
             data, num_ranks=2, mpiexec='auto',
-            extra_mpi_args=self._extra_mpi_args(),
+            extra_mpi_args=openmpi_extra_args(),
             persistent_dir=str(tmp_path),
         )
         assert "GateSetTomography" in results.estimates

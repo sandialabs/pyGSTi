@@ -185,6 +185,18 @@ class ComposedPovmBase(object):
         for k,v in composed_probs.items():
             self.assertAlmostEqual(self.expected_out[k], v)
 
+    def test_convert_to_full_tp(self):
+        # Regression test for #544: converting a ComposedPOVM to "full TP" (without
+        # flatten_structure) used to give a TPPOVM of ComposedPOVMEffects, which
+        # failed in TPPOVM.to_vector().
+        tp_povm = pv.convert(self.povm, 'full TP', 'pp')
+        self.assertIsInstance(tp_povm, pv.TPPOVM)
+        for lbl, effect in tp_povm.items():
+            if lbl != tp_povm.complement_label:
+                self.assertIsInstance(effect, pv.FullPOVMEffect)
+            self.assertArraysAlmostEqual(effect.to_dense(), self.povm[lbl].to_dense())
+        self.assertEqual(len(tp_povm.to_vector()), tp_povm.num_params)
+
 # For ComposedPOVM, the noise op could be mutable
 class MutableComposedPovmBase(ComposedPovmBase):
     def test_vector_conversion(self):

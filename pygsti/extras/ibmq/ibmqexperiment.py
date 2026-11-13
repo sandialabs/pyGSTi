@@ -28,6 +28,8 @@ import tqdm as _tqdm
 import warnings as _warnings
 from collections import defaultdict as _defaultdict
 
+from pygsti.tools._static_tls import warn_if_static_tls as _warn_if_static_tls
+
 
 # Try to load Qiskit
 try:
@@ -36,13 +38,20 @@ try:
     from qiskit.providers.fake_provider import GenericBackendV2 as _GenericBackendV2
     from qiskit.transpiler import PassManager as _PassManager
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
-except:
+except Exception as err:
+    _warn_if_static_tls(err, 'qiskit')
     _qiskit = None
     _GenericBackendV2 = None
 
 # Try to load IBM Runtime
 try:
-    from qiskit_ibm_runtime import SamplerV2 as _Sampler
+    try:
+        # qiskit-ibm-runtime 0.52 repointed the top-level SamplerV2 at the new client-side
+        # sampler, which needs qiskit-aer to run on fake backends and hasn't been validated
+        # with this module. The server-side primitive that this module targets moved here.
+        from qiskit_ibm_runtime.server_side import SamplerV2 as _Sampler
+    except ImportError:
+        from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import Batch as _Batch
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
@@ -60,7 +69,8 @@ except ImportError:
 
 try:
     from qiskit_aer import AerSimulator as _AerSimulator
-except ImportError:
+except ImportError as err:
+    _warn_if_static_tls(err, 'qiskit_aer')
     _AerSimulator = None
 
 try:

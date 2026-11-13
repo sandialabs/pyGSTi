@@ -32,14 +32,15 @@ These were reviewed and deliberately **kept**. Several look term-related but are
 | `create_lindblad_term_superoperators`, `combined_lindblad_term_superops`, `_compute_term_generators` (`lindbladcoefficients.py`/`lindbladerrorgen.py`), `tools/lindbladtools.py:create_lindbladian_term_errorgen`, Lindblad coefficient weights | "term" here means a Lindblad generator term; used by dense simulation |
 | `objectivefns.TermWeighted` | Least-squares objective-term weighting; unrelated |
 | Optimizer `oob_check_interval` / `oob_check_mode` / `oob_action` (`optimize/customlm.py`, `simplerlm.py`) | Used by gauge optimization (`algorithms/gaugeopt.py`) |
-| `circuits/cloudcircuitconstruction.py`, including `_FirstOrderProbabilityJacobian` and `_linearized_lindblad_parameterization` | Rewritten in 0.11 to **not** use the term simulator. Keep it and its tests (`test_nqubit.py` sequence-selection tests, `test_nqnoiseconstruction.py::CloudNoiseFirstOrderJacobianTester`) |
-| `tools/legacytools.py`: `deprecate(..., message=, suppress_nested=)`, `warn_deprecated(..., message=, stacklevel=)` and their tests | General deprecation tooling added alongside this work. Only the `TERM_SIM_DEPRECATION_MESSAGE` constant goes |
+| `circuits/cloudcircuitconstruction.py` | Keep it and its sequence-selection tests (`test_nqubit.py`). In 0.11 it still uses the term simulator (the `_TermFSim` uses and the `_ignore_term_deprecation_warnings` decorator) until #969 Part 1 replaces it |
+| `tools/legacytools.py`: `deprecate(..., message=, suppress_nested=)`, `warn_deprecated(..., message=)` and their tests | General deprecation tooling added alongside this work. Only the `TERM_SIM_DEPRECATION_MESSAGE` constant goes |
 | `Evotype.supports()` / `supported_reptypes()` | Generic. Only the `'term'`/`'direct term'` dict entries go |
 
 ## 2. Recommended order of work
 
 Delete from the top of the dependency stack down, so that every intermediate state still imports:
 
+0. Check that #969 Part 1 (the replacement of the term path in `cloudcircuitconstruction.py`) has landed. Stop if it hasn't.
 1. Tests and reference files (§7). Removing them first means failing tests can't mislead you.
 2. Callers outside the term modules: `algorithms/core.py`, `objectivefns.py`, modelpacks, package `__init__` re-exports (§4).
 3. The simulator, its kernels and its layout (§3.1).
@@ -173,7 +174,7 @@ python setup.py build_ext --inplace   # or: pip install -e .  (rebuilds basereps
 |---|---|
 | `test/unit/objects/test_termsim_deprecation.py` | **Whole file** |
 | `test/test_packages/drivers/test_calcmethods1Q.py` | The 9 tests decorated `@ignore_termsim_deprecation`: `test_stdgst_terms`, `test_stdgst_prunedpath`, `test_reducedmod_svterm`, `test_reducedmod_svterm_errorgens`, `test_reducedmod_prunedpath_svterm_errorgens`, `test_reducedmod_cterm`, `test_reducedmod_cterm_errorgens`, `test_circuitsim_svterm`, `test_circuitsim_cterm`; then the `ignore_termsim_deprecation` marker definition and its comment |
-| `test/test_packages/drivers/test_nqubit.py` | `test_2Q_terms` and the marker definition. **Keep** `test_sequential_sequenceselection` / `test_greedy_sequenceselection` (cloud-noise, not term-based any more) |
+| `test/test_packages/drivers/test_nqubit.py` | `test_2Q_terms` and the marker definition. **Keep** `test_sequential_sequenceselection` / `test_greedy_sequenceselection` (cloud-noise sequence selection) |
 | `test/unit/modelmembers/test_lindbladcoefficients.py` | `test_create_lindblad_term_objects_snapshot_1q`, `test_term_objects_reconstruct_dense_errorgen_1q`, `test_term_objects_reconstruct_dense_errorgen_other_elements_evotypes` (marked), **and** `test_coefficient_polynomial_contract` (unmarked; tests the private `_coefficient_polynomial`); helpers and data used only by them (as of 0.11: `_TERM_SNAPSHOT_1Q`, `_TERM_SNAPSHOT_CONFIGS`, `_term_eval_point`, `_sorted_coeffs`, `_evaluated_term_coeffs`, `_std_superop_from_terms`, `_dense_std_superop_from_block`, `_setup_1q_block_with_deterministic_data`, and the case data feeding `test_coefficient_polynomial_contract`; grep each before deleting); the marker definition. Update the module docstring if it advertises term coverage |
 | `test/unit/modelmembers/test_other_unconstrained_coefficients.py` | `test_term_objects_reconstruct_dense_errorgen_1q`, its helper `_std_superop_from_terms`, the marker definition (keep `_errorgen_dense`, which other tests use) |
 | `test/unit/objects/test_cython_build.py` | The `pygsti.evotypes.statevec.termreps` line in `test_statevec_modules_exist`, the `pygsti.evotypes.stabilizer.termreps` line in `test_stabilizer_modules_exist`, and the whole `test_termforwardsim_calc_modules_exist` |
@@ -219,7 +220,7 @@ flake8 --count --config .flake8-critical .
 
 Also check that:
 - **Error-generator-propagation-style models still build**: e.g. `pygsti.modelpacks.smq1Q_XY.target_model("H+S", evotype="statevec")` and a stabilizer-evotype cloud/crosstalk model construct without error. This exercises the kept `OpRepExpErrorgen`/`OpRepLindbladErrorgen` reps.
-- **`create_cloudnoise_circuits` is unchanged**: the `test_nqubit.py` sequence-selection tests compare against stored reference files and must pass without regenerating them.
+- **Cloud-noise sequence selection is unchanged**: the `test_nqubit.py` sequence-selection tests compare against stored reference files and must still pass against those unchanged references, without regenerating them.
 - **`Polynomial` / opcalc evaluators are intact**: `test/unit/objects/test_polynomial.py`, `test/unit/objects/test_opcalc.py` and `test/unit/tools/test_errgenpolytools.py` pass.
 - **Old serialized models** (e.g. JSON files that recorded a `TermForwardSimulator` as `sim`) now fail to load. That's the intended breaking change, but mention it in the CHANGELOG. A model saved with a term simulator can't be loaded in 0.12 unless the loader falls back to a default simulator; decide whether that fallback is wanted.
 

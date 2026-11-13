@@ -15,12 +15,9 @@ from __future__ import annotations
 from typing import Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 
 from pygsti.tools.legacytools import deprecate as _deprecate
 from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
@@ -161,6 +158,7 @@ class ComposedPOVMEffect(_POVMEffect, _Torchable):  # , _ErrorMapContainer
         # All free parameters belong to the error map; the static effect vector is baked in.
         # Mirrors to_dense: torch_base = error_map_superop.T @ static_effect (error maps are real on
         # HS space, so the transpose is the numpy .conjugate().T).
+        _torch = _import_torch()
         static_vec = _np.ascontiguousarray(self.effect_vec.to_dense('HilbertSchmidt'))
         t_effect = _torch.from_numpy(static_vec).to(dtype=real_dtype, device=device)
         return (type(self.error_map), self.error_map.stateless_data(real_dtype, device), t_effect)

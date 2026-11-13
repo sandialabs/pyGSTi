@@ -296,9 +296,9 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
         The quantity to plot. Default is 'polarization' as used and defined in arXiv:2008.11294. The plot
         will show the maximum, mean, and minimum of this metric at each circuit shape.
 
-    threshold : float, optional
+    threshold : float or None, optional
         The threshold for "success" for the figure-of-merit defined by `metric`. This threshold is used
-        to compute the three "success" boundaries that are shown in the plot.
+        to compute the three "success" boundaries that are shown in the plot. If None, no boundaries are drawn.
 
     hypothesis_test : string, optional
         The type of statistical significance adjustment to apply to the boundaries. The options are
@@ -341,8 +341,9 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
     vb_data = {stat: vbdataframe.vb_data(metric=metric, statistic=stat, no_data_action='discard')
                for stat in ('min', 'mean', 'max')}
     # Used to find the min and max boundaries if they are adjusted for statistical significance.
-    capability_regions = vbdataframe.capability_regions(metric=metric, threshold=threshold, significance=significance,
-                                                        monotonic=True)
+    if threshold is not None:
+        capability_regions = vbdataframe.capability_regions(metric=metric, threshold=threshold,
+                                                            significance=significance, monotonic=True)
 
     if hypothesis_test == 'standard':
         adjusted_boundaries = ('max', 'min')
@@ -361,20 +362,22 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
                                   scale=scale[statistic], linescale=linescale[statistic], cmap=cmap)
 
     # Plots the boundaries that have been adjusted for statistical significance.
-    for statistic in adjusted_boundaries:
-        if statistic == 'max': effective_threshold = 0.99
-        elif statistic == 'min': effective_threshold = 1.99
-        volumetric_boundary_plot(capability_regions, y_values=y_values, x_values=x_values,
-                                 threshold=effective_threshold,
-                                 missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
-                                 color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
-                                 dashing=boundary_dashing[statistic])
+    if threshold is not None:
+        for statistic in adjusted_boundaries:
+            if statistic == 'max': effective_threshold = 0.99
+            elif statistic == 'min': effective_threshold = 1.99
+            volumetric_boundary_plot(capability_regions, y_values=y_values, x_values=x_values,
+                                     threshold=effective_threshold,
+                                     missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
+                                     color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
+                                     dashing=boundary_dashing[statistic])
 
     # Plots the boundaries that are not adjusted for statistical significance.
-    for statistic in unadjusted_boundaries:
-        volumetric_boundary_plot(vb_data[statistic], y_values=y_values, x_values=x_values, threshold=threshold,
-                                 monotonic=False, missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
-                                 color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
-                                 dashing=boundary_dashing[statistic])
+    if threshold is not None:
+        for statistic in unadjusted_boundaries:
+            volumetric_boundary_plot(vb_data[statistic], y_values=y_values, x_values=x_values, threshold=threshold,
+                                     monotonic=False, missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
+                                     color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
+                                     dashing=boundary_dashing[statistic])
 
     return fig, ax

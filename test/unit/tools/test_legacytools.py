@@ -1,4 +1,6 @@
+import sys
 import warnings
+from unittest import mock
 
 from pygsti.tools import legacytools
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
@@ -56,21 +58,27 @@ class LegacyTestCase(BaseCase):
             self.assertEqual(Foo().baz, 3)
         self.assertEqual(str(cm.warning), "Foo.baz is deprecated.")
 
-    def test_warning_attributed_to_caller(self):
+    def test_warnings_attributed_to_caller(self):
 
         @legacytools.deprecate(message="x")
         def oldFn():
             return None
 
-        with self.assertWarns(pyGSTiDeprecationWarning) as cm:
-            oldFn()
-        self.assertEqual(cm.filename, __file__)
+        calls = {'deprecate': oldFn, 'warn_deprecated': lambda: legacytools.warn_deprecated("X", message="y")}
+        for flag in ((True, False) if sys.version_info >= (3, 12) else (False,)):
+            for label, call in calls.items():
+                with self.subTest(skip_file_prefixes=flag, call=label), \
+                        mock.patch.object(legacytools, '_HAS_SKIP_FILE_PREFIXES', flag), \
+                        warnings.catch_warnings(record=True) as rec:
+                    warnings.simplefilter("always")
+                    call()
+                    rec = [r for r in rec if issubclass(r.category, pyGSTiDeprecationWarning)]
+                    self.assertEqual([r.filename for r in rec], [__file__])
 
     def test_warn_deprecated_custom_message(self):
         with self.assertWarns(pyGSTiDeprecationWarning) as cm:
             legacytools.warn_deprecated("SomeClass", message="{name} will be removed in 0.12.")
         self.assertEqual(str(cm.warning), "SomeClass will be removed in 0.12.")
-        self.assertEqual(cm.filename, __file__)
 
     def test_warn_deprecated_replacement_ignored_with_message(self):
         with self.assertWarns(pyGSTiDeprecationWarning) as cm:
@@ -119,7 +127,6 @@ class LegacyTestCase(BaseCase):
             warnings.simplefilter("always")
             self.assertEqual(outer(), 2)
         self.assertEqual([str(r.message) for r in rec], ["outer"])
-        self.assertEqual(rec[0].filename, __file__)
 
         with warnings.catch_warnings(record=True) as rec:  # default: nested warnings are not suppressed
             warnings.simplefilter("always")

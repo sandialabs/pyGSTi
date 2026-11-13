@@ -602,8 +602,9 @@ class VBDataFrame(object):
         Parameters
         ----------
         metric : string, optional
-            The type of data. Must be 'polarization' or 'success_probability', and this must be a column
-            in the dataframe.
+            The type of data. Must be 'polarization' or 'success_probabilities', and this must be a column
+            in the dataframe. 'success_probability' is accepted as a synonym for
+            'success_probabilities', for backwards compatibility.
 
         threshold : float, optional
             The threshold for  "success".
@@ -627,7 +628,10 @@ class VBDataFrame(object):
             (2, 1, 0, NaN).
         """
         capreg = {}
-        assert(metric in ('polarization', 'success_probability'))
+        # 'success_probability' is the spelling this method has always accepted; 'success_probabilities'
+        # is the name of the dataframe column that is actually read below, and the spelling that
+        # vb_data and filter_data take.
+        assert(metric in ('polarization', 'success_probabilities', 'success_probability'))
 
         for x in self.x_values:
             tempdf_x = self.dataframe[self.dataframe[self.x_axis] == x]

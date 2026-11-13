@@ -195,7 +195,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
         # (deserialization goes through __init__ too, so it also warns)
-        _warn_deprecated("TermForwardSimulator", message=_TERM_SIM_DEPRECATION_MESSAGE, stacklevel=3)
+        _warn_deprecated("TermForwardSimulator", message=_TERM_SIM_DEPRECATION_MESSAGE)
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
 
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode

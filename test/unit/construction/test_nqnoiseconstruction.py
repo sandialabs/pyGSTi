@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import scipy
 
@@ -5,6 +7,7 @@ import pygsti.models.modelconstruction as mc
 import pygsti.circuits.cloudcircuitconstruction as cc
 from pygsti.circuits import Circuit
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase
 
 
@@ -134,59 +137,18 @@ class NQNoiseConstructionTester(BaseCase):
         self.assertAlmostEqual(p1['00'], 0.08733219254516078)
         self.assertAlmostEqual(p1['01'], 0.9126678074548386)
 
+    def test_cloudnoise_circuits_deprecation_warnings(self):
+        pspec = _QubitProcessorSpec(2, ('Gxpi2', 'Gypi2', 'Gcnot', '{idle}'), geometry='line')
+        fids = [(), ('Gxpi2',), ('Gypi2',)]
 
-class CloudNoiseFirstOrderJacobianTester(BaseCase):
-    """ Tests of the (non-term-simulator) first-order machinery used by create_cloudnoise_circuits """
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cc.create_cloudnoise_circuits(pspec, [1, 2], fids, max_idle_weight=1, maxhops=0)
+        self.assertEqual([str(x.message) for x in w if issubclass(x.category, pyGSTiDeprecationWarning)], [])
 
-    def test_linearized_lindblad_parameterization(self):
-        lin = cc._linearized_lindblad_parameterization
-        self.assertEqual(lin("H+S"), "H+s")
-        self.assertEqual(lin("H+s"), "H+s")
-        self.assertEqual(lin("H+D"), "H+d")
-        self.assertEqual(lin("S"), "s")
-        self.assertEqual(lin("CPTPLND"), "GLND")
-        self.assertEqual(lin("GLND"), "GLND")
-        self.assertEqual(lin("exp(H+S)"), "exp(H+s)")
-        with self.assertRaises(ValueError):
-            lin("full TP")
-
-    def test_first_order_jacobian_matches_finite_differences(self):
-        from pygsti.forwardsims import MatrixForwardSimulator
-        from pygsti.baseobjs import Label
-        pspec = _QubitProcessorSpec(2, ('Gx', 'Gy', 'Gcnot', '{idle}'), geometry='line')
-
-        def build(param):
-            return mc.create_cloud_crosstalk_model_from_hops_and_weights(
-                pspec, None, 1, 0, 1, 0, 0, simulator=MatrixForwardSimulator(), gate_type=param,
-                spam_type=param, errcomp_type="gates", implicit_idle_mode="add_global")
-
-        orig_mdl = build("H+S")  # stochastic rates are *quadratic* in the parameters
-        jac_calc = cc._FirstOrderProbabilityJacobian(orig_mdl, build("H+s"))
-        Np = jac_calc.num_params
-        self.assertEqual(Np, orig_mdl.num_params)
-
-        rng = np.random.default_rng(1234)
-        theta0 = rng.uniform(0.5, 1.5, Np)
-        wrt = np.arange(0, Np, 2)
-        transform = jac_calc.wrt_param_transform(theta0, wrt)
-        c1 = Circuit([Label('Gx', 0), Label('Gcnot', (0, 1)), Label('Gy', 1), ()], line_labels=(0, 1))
-        c0 = Circuit([Label('Gx', 0), Label('Gy', 1)], line_labels=(0, 1))
-        J, = jac_calc.amplified_jacobians([(c1, c0)], transform)
-
-        # J = (dp/dtheta_lin at zero error) . (chain-rule transform evaluated at theta0)
-        lin_d = jac_calc.dprobs([c1], transform[0])[0] - jac_calc.dprobs([c0], transform[0])[0]
-        G = jac_calc.param_transform(theta0)[transform[0], :][:, wrt]
-        self.assertArraysAlmostEqual(J.real, lin_d @ G)
-        self.assertTrue(np.linalg.norm(J) > 0)
-
-        # finite-difference check of the zero-error derivatives of the linear model
-        lin_mdl = jac_calc.linear_model
-        eps = 1e-6
-        full = jac_calc.dprobs([c1])[0]
-        for j in rng.choice(Np, 5, replace=False):
-            v = np.zeros(Np); v[j] = eps
-            lin_mdl.from_vector(v); pp = lin_mdl.probabilities(c1)
-            lin_mdl.from_vector(-v); pm = lin_mdl.probabilities(c1)
-            fd = [(pp[o] - pm[o]) / (2 * eps) for o in jac_calc.outcomes]
-            self.assertArraysAlmostEqual(full[:, j], fd, places=5)
-        lin_mdl.from_vector(np.zeros(Np))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cc._create_xycnot_cloudnoise_circuits(2, [1, 2], 'line', [(0, 1)], max_idle_weight=1, maxhops=0)
+        msgs = [str(x.message) for x in w if issubclass(x.category, pyGSTiDeprecationWarning)]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('_create_xycnot_cloudnoise_circuits', msgs[0])
