@@ -202,95 +202,32 @@ Notice the format of [intermediate_meas_dataset.txt](../../../tutorial_files/int
 
 ### Running GST under two parameterizations
 
-We fit the data under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  The `"full TP"` fit runs through `StandardGST` (the protocol and its modes are covered in [running GST](GSTProtocols)), with the ideal model as the target:
+We fit the data under two parameterizations: `"full TP"` constrains the instrument members to sum to a trace-preserving map, while `"CPTPLND"` also constrains every member to be completely positive. Both fits use `StandardGST` (see [running GST](GSTProtocols)) with the ideal model as the target:
 
 ```{code-cell} ipython3
 from pygsti.protocols import StandardGST, ProtocolData
 
-gst = StandardGST(modes=('full TP',), target_model=mdl_ideal, verbosity=2)
+gst = StandardGST(modes=('full TP', 'CPTPLND'), target_model=mdl_ideal,
+                  optimizer={'maxiter': 300}, verbosity=2)
 results = gst.run(ProtocolData(edesign, ds))
 ```
 
-### Seeding the CP-constrained fit
+The `"CPTPLND"` fit starts from the ideal model. For the projective instrument used here, conversion to the effect-then-gate representation puts the projectors in the effects and uses identity post-measurement gates. The effect and gate error maps can then learn measurement noise from the data. We allow up to 300 optimizer iterations per fit stage. The default optimizer handles the zero-noise starting point; no custom seed or preliminary `"full TP"` fit is required.
 
-The `"CPTPLND"` fit takes more care, and the care is all about the seed.  `StandardGST`'s `"CPTPLND"` mode would start the fit at the target model, and our target instrument is *projective*.  Converting a projective member into the effect-then-gate representation recovers a singular post-measurement gate (a perfect collapse), which gets frozen into the static part of the parameterized member; the Lindblad error generator composed on top of it cannot undo the collapse.  Every instrument the optimizer can reach inherits that deficiency, so the fit converges with the instrument still (essentially) at its ideal value, no matter what the data say.
+### Checking the fits
 
-So we seed differently: run the `"full TP"` fit first, project its instrument members onto the set of valid CPTR maps, and start the `"CPTPLND"` fit from *that* instrument, with the gates and SPAM seeded at the target exactly as `StandardGST` would have.  The projection below is a simple one, done in two CP-preserving steps: clip each member's negative Choi eigenvalues (this yields the nearest CP map in Frobenius norm), then restore exact joint trace preservation by conjugating each member with $A^{-1/2}$, where $A$ is the sum of the clipped members' measurement effects.
-
-```{admonition} More general tooling
-:class: seealso
-The recipe here is a deliberately simple version of tooling under development in [PR #862](https://github.com/sandialabs/pyGSTi/pull/862).  The `refit_instruments_cptplnd` function on that branch adds semidefinite-programming-based projection, diagnostics that explain *why* a given seed will cause problems (with targeted repairs), and parameterization-preserving gauge optimization, which is needed for correct error bars.  If the recipe here does not work for your instrument, check out that work in progress.
-```
+Because this is simulated data, we can compare each fit's log-likelihood with that of the data-generating model on the same circuits and counts. A fit that recovers the measurement behavior should perform comparably to the generator or better, since it can also fit some sampling noise. [Judging GST fits](FitStatistics) discusses this statistic in more detail.
 
 ```{code-cell} ipython3
-from pygsti.algorithms import gaugeopt_to_target
-from pygsti.models.gaugegroup import TPGaugeGroup
-from pygsti.protocols import GateSetTomography, GSTInitialModel
-from pygsti.tools import (jamiolkowski_iso, jamiolkowski_iso_inv,
-                          change_basis, stdmx_to_vec, vec_to_stdmx)
-
-def project_to_cptr_superops(instrument, basis):
-    """Project an instrument's dense members onto the CPTR set: clip negative
-    Choi eigenvalues, then conjugate by A^(-1/2) so that the members' effects
-    sum to the identity again.  Both steps preserve complete positivity."""
-    d = int(round(np.sqrt(basis.dim)))
-    projected = {}
-    for outcome, member in instrument.items():
-        choi = jamiolkowski_iso(member.to_dense(), basis, 'std')
-        evals, U = np.linalg.eigh(choi)
-        choi_cp = (U * np.clip(evals, 0.0, None)) @ U.conj().T
-        projected[outcome] = jamiolkowski_iso_inv(choi_cp, 'std', basis)
-
-    id_superket = stdmx_to_vec(np.eye(d, dtype=complex), basis).ravel()
-    A = sum(vec_to_stdmx(S.T @ id_superket, basis, keep_complex=True)
-            for S in projected.values())
-    w, V = np.linalg.eigh(A)
-    M = (V * w**-0.5) @ V.conj().T  # A^(-1/2), Hermitian
-    conj_M = change_basis(np.kron(M, M.T), 'std', basis, expect_real=True)
-    return {outcome: S @ conj_M for outcome, S in projected.items()}
+circuits = edesign.all_circuits_needing_data
+for label, model in [('ideal', mdl_ideal), ('generator', mdl_noisy)] + [
+        (mode, results.estimates[mode].models['final iteration estimate'])
+        for mode in ('full TP', 'CPTPLND')]:
+    deviance = pygsti.tools.two_delta_logl(model, ds, circuits)
+    print(f"{label:9s}: 2 delta log L = {deviance:.2f}")
 ```
 
-```{code-cell} ipython3
-:tags: [output_scroll]
-
-def refit_instruments_cptplnd(results, base_estimate_label='full TP',
-                              new_estimate_label='CPTPLND', verbosity=2):
-    """Add a CP-constrained Lindblad estimate to `results`, warm-starting its
-    instruments from the CPTP projection of an existing estimate's instruments."""
-    base_est = results.estimates[base_estimate_label]
-    src_mdl = base_est.models['final iteration estimate'].copy()
-    target = base_est.models['target']
-
-    # CP-ness is gauge-dependent, so bring the source model as close to the
-    # target as a TP gauge transformation allows before projecting.
-    src_mdl = gaugeopt_to_target(
-        src_mdl, target, gauge_group=TPGaugeGroup(src_mdl.state_space, src_mdl.basis))
-
-    seed = target.copy()
-    seed.set_all_parameterizations('CPTPLND')
-    for lbl in list(seed.instruments.keys()):
-        cptr_superops = project_to_cptr_superops(src_mdl.instruments[lbl], seed.basis)
-        seed[lbl] = Instrument.from_cptr_superops(
-            cptr_superops, seed.basis, gate_parameterization='CPTPLND')
-
-    proto = GateSetTomography(
-        initial_model=GSTInitialModel(model=seed, target_model=target),
-        gaugeopt_suite='stdgaugeopt', verbosity=verbosity, name=new_estimate_label)
-    new_results = proto.run(results.data, disable_checkpointing=True)
-    results.add_estimates(new_results, silent_steal=True)
-
-refit_instruments_cptplnd(results, verbosity=3)
-```
-
-Both fits recover the data-generating model fairly well; [judging GST fits](FitStatistics) covers assessing fit quality quantitatively. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
-
-```{code-cell} ipython3
-for mode in ('full TP', 'CPTPLND'):
-    mdl_go = results.estimates[mode].models['stdgaugeopt']
-    print(f"{mode:8s}: Frobenius distance to target = {mdl_ideal.frobeniusdist(mdl_go):.4f}")
-```
-
-Seeding was the whole story of this section, so we should also check that the fitted instruments landed where the *data* pointed.  Both are far from the ideal instrument and close to the data-generating one, which is what a working fit looks like here:
+We also inspect the fitted instrument matrices after gauge optimization to the ideal target. These distances depend on the chosen gauge, so use the likelihood comparison above to judge agreement with the data.
 
 ```{code-cell} ipython3
 inst_true = mdl_noisy.instruments[('Iz', 0)]
@@ -339,4 +276,4 @@ with warnings.catch_warnings():
 
 The report is served with these docs: <a href="../../../reports/mcm_gst_report/main.html">MCM GST</a>.
 
-**That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, and performed tomography under two parameterizations -- learning how to seed a CP-constrained instrument fit, and why the completely-positive representation gives instrument estimates you can interpret.
+The two fits illustrate the role of the instrument parameterization: both estimate the measured behavior, while `"CPTPLND"` keeps each fitted member completely positive.
