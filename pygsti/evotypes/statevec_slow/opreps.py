@@ -10,14 +10,16 @@ Operation representation classes for the `statevec_slow` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools as _itertools
+from __future__ import annotations
+
+from collections.abc import Sequence as _Sequence
 import copy as _copy
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
 from numpy.random import RandomState as _RandomState
 
-from .statereps import StateRepDensePure as _StateRepDensePure
+from .statereps import StateRep as _StateRep, StateRepDensePure as _StateRepDensePure
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
@@ -165,7 +167,8 @@ class OpRepSum(OpRep):
 
 class OpRepEmbedded(OpRep):
 
-    def __init__(self, state_space, target_labels, embedded_rep):
+    def __init__(self, state_space: _StateSpace.Castable, target_labels: _Sequence[str | int],
+                 embedded_rep: OpRep) -> None:
 
         state_space = _StateSpace.cast(state_space)
         iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
@@ -187,135 +190,63 @@ class OpRepEmbedded(OpRep):
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
-        #dim = state_space.udim
-        nBlocks = state_space.num_tensor_product_blocks
-        iActiveBlock = iTensorProdBlk
-        nComponents = len(state_space.tensor_product_block_labels(iActiveBlock))
-        embeddedDim = embedded_rep.dim  # a *unitary* dim - see .dim property above
-        blocksizes = _np.array([_np.prod(state_space.tensor_product_block_udimensions(k))
-                                for k in range(nBlocks)], _np.int64)
+        blocksizes = [int(_np.prod(dims)) for dims in state_space.tensor_product_blocks_udimensions]
+        offset = sum(blocksizes[:iTensorProdBlk])
+        multipliers = _np.append(_np.cumprod(numBasisEls[:0:-1])[::-1], 1).astype(_np.int64)
 
-        self.target_labels = target_labels
+        def _flat_offsets(label_inds: _Sequence[int]) -> _np.ndarray:
+            offsets = _np.zeros(1, _np.int64)
+            for i in label_inds:
+                offsets = (offsets[:, None] + multipliers[i] * _np.arange(numBasisEls[i])[None, :]).ravel()
+            return offsets
+
+        untouched = [i for i in range(len(numBasisEls)) if i not in labelIndices]
         self.embedded_rep = embedded_rep
-        self.num_basis_els = numBasisEls
-        self.action_inds = actionInds
-        self.blocksizes = blocksizes
-
-        num_basis_els_noop_blankaction = self.num_basis_els.copy()
-        for i in self.action_inds: num_basis_els_noop_blankaction[i] = 1
-        self.basisInds_noop_blankaction = [list(range(n)) for n in num_basis_els_noop_blankaction]
-
-        # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        self.multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(self.num_basis_els[1:]))))), _np.int64)
-        self.basisInds_action = [list(range(self.num_basis_els[i])) for i in self.action_inds]
-
-        self.embeddedDim = embeddedDim
-        self.ncomponents = nComponents  # number of components in "active" block
-        self.active_block_index = iActiveBlock
-        self.nblocks = nBlocks
-        self.offset = sum(blocksizes[0:self.active_block_index])
+        self._embedded_state_space = state_space.create_subspace(target_labels)
+        self._block_base_inds = offset + _flat_offsets(untouched)
+        self._embedded_rel_inds = _flat_offsets(labelIndices)
         super(OpRepEmbedded, self).__init__(state_space)
 
-    def _acton_other_blocks_trivially(self, output_state, state):
-        offset = 0
-        for iBlk, blockSize in enumerate(self.blocksizes):
-            if iBlk != self.active_block_index:
-                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
-            offset += blockSize
+    def _apply(self, state: _StateRep, adjoint: bool) -> _StateRepDensePure:
+        # Read the current matrix on every action: embedded parameters may have changed.
+        if isinstance(self.embedded_rep, OpRepDenseUnitary):
+            mx = self.embedded_rep.to_dense('Hilbert')
+            if adjoint:
+                mx = mx.conj().T
+        else:
+            # Composed and other structured reps need not expose a dense matrix.
+            linop = self.embedded_rep.aslinearoperator()
+            identity = _np.identity(self.embedded_rep.dim, complex)
+            mx = linop.rmatmat(identity) if adjoint else linop.matmat(identity)
+        inds = self._block_base_inds[:, None] + self._embedded_rel_inds[None, :]
+        out = state.data.copy()
+        out[inds] = state.data[inds] @ mx.T
+        return _StateRepDensePure(out, state.state_space, state.basis)
 
-    def acton(self, state):
-        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
+    def acton(self, state: _StateRep) -> _StateRepDensePure:
+        return self._apply(state, False)
 
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.data[inds],
-                                                  state.state_space.create_subspace(self.target_labels), basis=None)
-            embedded_outstate = self.embedded_rep.acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
+    def adjoint_acton(self, state: _StateRep) -> _StateRepDensePure:
+        return self._apply(state, True)
 
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
+    def _apply_random(self, state: _StateRep, rand_state: _RandomState | _np.random.Generator | None,
+                      adjoint: bool) -> _StateRepDensePure:
+        # Preserve one random draw per untouched-index block, in its original order.
+        action = self.embedded_rep.adjoint_acton_random if adjoint else self.embedded_rep.acton_random
+        out = state.data.copy()
+        for base in self._block_base_inds:
+            inds = base + self._embedded_rel_inds
+            substate = _StateRepDensePure(state.data[inds], self._embedded_state_space, basis=None)
+            out[inds] = action(substate, rand_state).data
+        return _StateRepDensePure(out, state.state_space, state.basis)
 
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this gate map on an input state """
-        #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
+    def acton_random(self, state: _StateRep,
+                     rand_state: _RandomState | _np.random.Generator | None) -> _StateRepDensePure:
+        return self._apply_random(state, rand_state, False)
 
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.data[inds],
-                                                  state.state_space.create_subspace(self.target_labels), basis=None)
-            embedded_outstate = self.embedded_rep.adjoint_acton(embedded_instate)
-            output_state.data[inds] += embedded_outstate.data
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
-
-    def acton_random(self, state, rand_state):
-        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
-
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.data[inds],
-                                                  state.state_space.create_subspace(self.target_labels), basis=None)
-            embedded_outstate = self.embedded_rep.acton_random(embedded_instate, rand_state)
-            output_state.data[inds] += embedded_outstate.data
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
-
-    def adjoint_acton_random(self, state, rand_state):
-        """ Act the adjoint of this gate map on an input state """
-        #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
-        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
-
-        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
-            vec_index_noop = _np.dot(self.multipliers, tuple(b))
-            inds = []
-            for op_b in _itertools.product(*self.basisInds_action):
-                vec_index = vec_index_noop
-                for i, bInd in zip(self.action_inds, op_b):
-                    #b[i] = bInd #don't need to do this; just update vec_index:
-                    vec_index += self.multipliers[i] * bInd
-                inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.data[inds],
-                                                  state.state_space.create_subspace(self.target_labels), basis=None)
-            embedded_outstate = self.embedded_rep.adjoint_acton_random(embedded_instate, rand_state)
-            output_state.data[inds] += embedded_outstate.data
-
-        #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state, state)
-        return output_state
+    def adjoint_acton_random(self, state: _StateRep,
+                             rand_state: _RandomState | _np.random.Generator | None) -> _StateRepDensePure:
+        return self._apply_random(state, rand_state, True)
 
 
 class OpRepExpErrorgen(OpRep):

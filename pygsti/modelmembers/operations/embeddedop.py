@@ -11,11 +11,11 @@ The EmbeddedOp class and supporting functionality.
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Tuple, Any, TYPE_CHECKING
+from collections.abc import Iterator, Sequence
+from typing import Tuple, Any, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
-
-import itertools as _itertools
+    from pygsti.models.model import Model as _Model
 
 import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
@@ -54,10 +54,11 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         that specifies the only non-trivial action of the EmbeddedOp.
     """
 
-    def __init__(self, state_space, target_labels, operation_to_embed, allocated_to_parent=None):
+    def __init__(self, state_space: _StateSpace.Castable, target_labels: Sequence[str | int],
+                 operation_to_embed: _LinearOperator, allocated_to_parent: _Model | None = None) -> None:
         self.target_labels = tuple(target_labels) if (target_labels is not None) else None
         self.embedded_op = operation_to_embed
-        self._iter_elements_cache = {"Hilbert": None, "HilbertSchmidt": None}  # speeds up _iter_matrix_elements
+        self._matrix_elements_cache = {}
 
         assert(_StateSpace.cast(state_space).contains_labels(target_labels)), \
             "`target_labels` (%s) not found in `state_space` (%s)" % (str(target_labels), str(state_space))
@@ -115,10 +116,11 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # Don't pickle 'instancemethod' or parent (see modelmember implementation)
         return _modelmember.ModelMember.__getstate__(self)
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: dict[str, Any]) -> None:
         if "dirty" in d:  # backward compat: .dirty was replaced with ._dirty in ModelMember
             d['_dirty'] = d['dirty']; del d['dirty']
         self.__dict__.update(d)
+        self._matrix_elements_cache = {}  # Rebuild indices when loading older pickles too.
 
     def submembers(self):
         """
@@ -147,109 +149,43 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         """
         self.embedded_op.set_time(t)
 
-    def _iter_matrix_elements_precalc(self, on_space):
-        divisor = 1; divisors = []
-        for l in self.target_labels:
-            divisors.append(divisor)
-            dim = self.state_space.label_udimension(l) if on_space == "Hilbert" \
-                else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)
-            divisor *= dim
+    def _matrix_element_indices(self, on_space: Literal['Hilbert', 'HilbertSchmidt'],
+                                rel_to_block: bool = False) -> Sequence[_np.ndarray]:
+        """Return broadcast index arrays mapping embedded matrix entries into this operation."""
+        key = (on_space, rel_to_block)
+        if key in self._matrix_elements_cache:
+            return self._matrix_elements_cache[key]
 
-        iTensorProdBlk = [self.state_space.label_tensor_product_block_index(label) for label in self.target_labels][0]
-        tensorProdBlkLabels = self.state_space.tensor_product_block_labels(iTensorProdBlk)
-        if on_space == "Hilbert":
-            basisInds = [list(range(self.state_space.label_udimension(l))) for l in tensorProdBlkLabels]
-        else:
-            basisInds = [list(range(self.state_space.label_dimension(l))) for l in tensorProdBlkLabels]
-        # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
+        block = self.state_space.label_tensor_product_block_index(self.target_labels[0])
+        labels = self.state_space.tensor_product_block_labels(block)
+        block_dims = (self.state_space.tensor_product_blocks_udimensions if on_space == 'Hilbert'
+                      else self.state_space.tensor_product_blocks_dimensions)
+        dims = _np.asarray(block_dims[block], dtype=_np.int64)
+        targets = [labels.index(label) for label in self.target_labels]
+        untouched = [i for i in range(len(labels)) if i not in targets]
+        strides = _np.append(_np.cumprod(dims[:0:-1])[::-1], 1).astype(_np.int64)
 
-        basisInds_noop = basisInds[:]
-        basisInds_noop_blankaction = basisInds[:]
-        labelIndices = [tensorProdBlkLabels.index(label) for label in self.target_labels]
-        for labelIndex in sorted(labelIndices, reverse=True):
-            del basisInds_noop[labelIndex]
-            basisInds_noop_blankaction[labelIndex] = [0]
+        def _flat_offsets(label_inds: Sequence[int]) -> _np.ndarray:
+            offsets = _np.zeros(1, _np.int64)
+            for i in label_inds:
+                offsets = (offsets[:, None] + strides[i] * _np.arange(dims[i])[None, :]).ravel()
+            return offsets
 
-        sorted_bili = sorted(list(enumerate(labelIndices)), key=lambda x: x[1])
-        # for inserting target-qubit basis indices into list of noop-qubit indices
+        offset = 0 if rel_to_block else sum(int(_np.prod(ds)) for ds in block_dims[:block])
+        inds = offset + _flat_offsets(targets)[:, None] + _flat_offsets(untouched)[None, :]
+        local = _np.arange(inds.shape[0], dtype=_np.int64)
+        # Keep broadcast views: materializing four arrays would require O(d**2 * blocks) storage.
+        indices = _np.broadcast_arrays(inds[:, None, :], inds[None, :, :],
+                                       local[:, None, None], local[None, :, None])
+        self._matrix_elements_cache[key] = indices
+        return indices
 
-        # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        multipliers = _np.array(_np.flipud(_np.cumprod([1] + list(
-            reversed(list(map(len, basisInds[1:])))))), _np.int64)
+    def _iter_matrix_elements(self, on_space: Literal['Hilbert', 'HilbertSchmidt'],
+                              rel_to_block: bool = False) -> Iterator[tuple[_np.int64, _np.int64, _np.int64, _np.int64]]:
+        """Iterate over (row, column, embedded row, embedded column) in row/column/block order."""
+        return zip(*(index.flat for index in self._matrix_element_indices(on_space, rel_to_block)))
 
-        # number of basis elements preceding our block's elements
-        if on_space == "Hilbert":
-            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
-        else:
-            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
-        offset = sum(blockDims[0:iTensorProdBlk])
-
-        return divisors, multipliers, sorted_bili, basisInds_noop, offset
-
-    def _iter_matrix_elements(self, on_space, rel_to_block=False):
-        """ Iterates of (op_i,op_j,embedded_op_i,embedded_op_j) tuples giving mapping
-            between nonzero elements of operation matrix and elements of the embedded operation matrix """
-        if self._iter_elements_cache[on_space] is not None:
-            for item in self._iter_elements_cache[on_space]:
-                yield item
-            return
-
-        def _merge_op_and_noop_bases(op_b, noop_b, sorted_bili):
-            """
-            Merge the Pauli basis indices for the "operation"-parts of the total
-            basis contained in op_b (i.e. of the components of the tensor
-            product space that are operated on) and the "noop"-parts contained
-            in noop_b.  Thus, len(op_b) + len(noop_b) == len(basisInds), and
-            this function merges together basis indices for the operated-on and
-            not-operated-on tensor product components.
-            Note: return value always have length == len(basisInds) == number
-            of components
-            """
-            ret = list(noop_b[:])  # start with noop part...
-            for bi, li in sorted_bili:
-                ret.insert(li, op_b[bi])  # ... and insert operation parts at proper points
-            return ret
-
-        def _decomp_op_index(indx, divisors):
-            """ Decompose index of a Pauli-product matrix into indices of each
-                Pauli in the product """
-            ret = []
-            for d in reversed(divisors):
-                ret.append(indx // d)
-                indx = indx % d
-            return ret
-
-        divisors, multipliers, sorted_bili, basisInds_noop, nonrel_offset = \
-            self._iter_matrix_elements_precalc(on_space)
-        offset = 0 if rel_to_block else nonrel_offset
-
-        #Begin iteration loop
-        self._iter_elements_cache[on_space] = []
-        embedded_dim = self.embedded_op.state_space.udim if on_space == "Hilbert" else self.embedded_op.state_space.dim
-        for op_i in range(embedded_dim):     # rows ~ "output" of the operation map
-            for op_j in range(embedded_dim):  # cols ~ "input"  of the operation map
-                op_b1 = _decomp_op_index(op_i, divisors)  # op_b? are lists of dm basis indices, one index per
-                # tensor product component that the operation operates on (2 components for a 2-qubit operation)
-                op_b2 = _decomp_op_index(op_j, divisors)
-
-                # loop over all state configurations we don't operate on
-                for b_noop in _itertools.product(*basisInds_noop):
-                    # - so really a loop over diagonal dm elements
-                    # using same b_noop for in and out says we're acting
-                    b_out = _merge_op_and_noop_bases(op_b1, b_noop, sorted_bili)
-                    # as the identity on the no-op state space
-                    b_in = _merge_op_and_noop_bases(op_b2, b_noop, sorted_bili)
-                    # index of output dm basis el within vec(tensor block basis)
-                    out_vec_index = _np.dot(multipliers, tuple(b_out))
-                    # index of input dm basis el within vec(tensor block basis)
-                    in_vec_index = _np.dot(multipliers, tuple(b_in))
-
-                    item = (out_vec_index + offset, in_vec_index + offset, op_i, op_j)
-                    self._iter_elements_cache[on_space].append(item)
-                    yield item
-
-    def to_sparse(self, on_space: SpaceT='minimal'):
+    def to_sparse(self, on_space: SpaceT = 'minimal') -> _sps.csr_matrix:
         """
         Return the operation as a sparse matrix
 
@@ -267,11 +203,11 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements(on_space):
-            finalOp[i, j] = embedded_sparse[gi, gj]
+        i, j, gi, gj = (a.ravel() for a in self._matrix_element_indices(on_space))
+        finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def to_dense(self, on_space: SpaceT='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal') -> _np.ndarray:
         """
         Return the operation as a dense matrix
 
@@ -309,8 +245,8 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements(on_space):
-            finalOp[i, j] = embedded_dense[gi, gj]
+        i, j, gi, gj = self._matrix_element_indices(on_space)
+        finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
 
     @property
@@ -377,10 +313,11 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # that mirror `to_dense`'s overwrite of `np.identity(dim)`.  `t_bg` is that identity with every
         # covered (i, j) zeroed out. Parameters are pure pass-through to the embedded op.
         _torch = _import_torch()
-        quads = list(self._iter_matrix_elements('HilbertSchmidt'))
-        i, j, gi, gj = (_torch.tensor(c, dtype=_torch.long, device=device) for c in zip(*quads))
+        rows, cols, source_rows, source_cols = self._matrix_element_indices('HilbertSchmidt')
+        i, j, gi, gj = (_torch.tensor(c.ravel(), dtype=_torch.long, device=device)
+                       for c in (rows, cols, source_rows, source_cols))
         bg = _np.identity(self.state_space.dim)
-        bg[[q[0] for q in quads], [q[1] for q in quads]] = 0.0
+        bg[rows, cols] = 0.0
         t_bg = _torch.from_numpy(bg).to(dtype=real_dtype, device=device)
         return (type(self.embedded_op), self.embedded_op.stateless_data(real_dtype, device), t_bg, i, j, gi, gj)
 
@@ -392,7 +329,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.
         return _torch.zeros_like(t_bg).index_put((i, j), A[gi, gj]) + t_bg
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def deriv_wrt_params(self, wrt_filter: Sequence[int] | _np.ndarray | None = None) -> _np.ndarray:
         """
         The element-wise derivative this operation.
 
@@ -426,8 +363,8 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements(on_space):
-            derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
+        i, j, gi, gj = self._matrix_element_indices(on_space)
+        derivMx[i * dim + j, :] = embedded_deriv[gi * M + gj, :]
         return derivMx  # Note: wrt_filter has already been applied above
 
     @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
