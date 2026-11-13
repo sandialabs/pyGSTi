@@ -4,7 +4,7 @@
 You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector in the bottom-right corner of the page to switch between tagged releases and the latest development build.
 ```
 
-pyGSTi is a Python framework for modeling and characterizing quantum information processors, from single qubits to devices with tens or hundreds of them. It was built to perform gate set tomography, which is where the name comes from, and GST is still its most detailed capability. It now also runs randomized benchmarking, volumetric and mirror-circuit benchmarks, drift detection, idle tomography and robust phase estimation, and it will build noise models, simulate circuits and generate interactive reports along the way.
+pyGSTi is a Python framework for modeling and characterizing quantum information processors, from single qubits to devices with tens or hundreds of them. It was built to perform gate set tomography, which gives the package its name. It now also runs randomized benchmarking, volumetric and mirror-circuit benchmarks, drift detection, idle tomography and robust phase estimation, and it will build noise models, simulate circuits and generate interactive reports along the way.
 
 ## Getting started
 
@@ -21,7 +21,7 @@ This documentation is arranged in six sections, and which one you want depends o
 - **[Core objects](../internals/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. Use it when you need to inspect or extend those components.
 - **[Reference](../reference/Index)** holds the [FAQ](../reference/Troubleshooting), [citing pyGSTi](../reference/Citing), [migrating from the function-based API](../reference/FromFunctionAPI) and the API reference.
 
-If you have a specific problem and want to know which few lines of Python solve it, try the [FAQ](../reference/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
+For answers to common usage questions, try the [FAQ](../reference/Troubleshooting). For other questions, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
 
 ## Citing pyGSTi
 

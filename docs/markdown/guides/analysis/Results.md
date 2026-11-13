@@ -8,4 +8,4 @@ A protocol's results contain its estimates and the data used to produce them. [I
 - [Error bars](ErrorBars) computes uncertainty estimates.
 - [Model testing](ModelTesting) compares a specified model with data without fitting a new model.
 
-If you're unsure whether a GST fit is acceptable, start with [Judging GST fits](../gst/JudgingTheFit).
+To assess a GST model’s agreement with data, see [Judging GST fits](../gst/JudgingTheFit).

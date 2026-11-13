@@ -1,13 +1,11 @@
 # Core objects
 
-This part is the layer the [characterization guides](../guides/Index) stand on. Nothing in it is needed to run a protocol and read the answer; come here when something one level up did not behave the way you expected, or when you are extending pyGSTi.
+These chapters explain the model components, conventions, simulation engines, and reporting objects used by pyGSTi's protocols. Use them to customize an analysis, inspect how its objects work, or extend the library.
 
-**Model components.** For complete models and their noise, start with [Defining models](../guides/models/DeviceModels). [Operators](models/Operators) is the inventory of operator types and parameterizations a `Model` is built from. [Custom operators](models/CustomOperators) covers writing your own operator class, and factories for gates whose parameters ride on the circuit label; [custom POVMs](models/CustomPOVMs) swaps in a measurement of your own (a two-qubit parity check in the example). [Parameter labels, bounds, and tying](models/TyingParameters) reaches one parameter by its label, to bound it or tie it to another.
+- [Operators](models/Operators) covers operation, state-preparation, and measurement classes, their parameterizations, and custom implementations. For complete device models, start with [Defining models](../guides/models/DeviceModels).
+- [Bases and state spaces](conventions/Bases) explains matrix-basis conventions, subsystem labels, and state-space structure.
+- [Forward simulators](simulation/ForwardSimulators) covers computing circuit probabilities, stabilizer simulation, and numerical and symbolic error-generator propagation.
+- [Low-level GST](extending/LowLevelGST) provides direct access to fitting and gauge-optimization algorithms for analyses assembled below the protocol interface.
+- [Workspace tables and plots](figures/WorkspaceFigures) shows how to create individual report components and add controls that select their inputs.
 
-**Conventions.** [Bases](conventions/Bases) and [state spaces](conventions/StateSpaces) pin down what everything else assumes: which matrix basis a dense operator is written in, and how a state space is labeled and factored.
-
-**Simulation.** [Forward simulators](simulation/ForwardSimulators) explains the evolution types and simulation engines that turn a model into circuit probabilities, and which to pick as the qubit count grows. The [CHP interface](simulation/StabilizerCHP) is the legacy path to the CHP stabilizer simulator; the page is still under construction. [Error generator propagation](simulation/ErrorGeneratorPropagation) pushes sparse Markovian error generators through Clifford circuits, and [error generator polynomials](simulation/ErrorGeneratorPolynomials) turns the propagated rates and observable corrections into symbolic polynomials, for re-evaluation at many noise-parameter values. Both need `stim`. See [parallelizing error generator propagation](simulation/ErrorGeneratorPropagation-Parallelization) for worker pools and parallelization thresholds.
-
-**Extending pyGSTi.** [Low-level GST](extending/LowLevelGST) drops beneath the `Protocol` layer to the LGST and long-sequence GST algorithms themselves, for a protocol of your own that borrows pieces of GST. [Adding and retargeting gauge optimizations](extending/GaugeOptReference) re-runs gauge optimization on results you already have, with a different score or a different target.
-
-**Figures.** [Workspace tables and plots](figures/WorkspaceFigures) is a gallery of the `Workspace` figures every report is assembled from, for building them one at a time in a notebook. A [switchboard](figures/Switchboards) puts buttons, dropdowns, and sliders in front of a set of figures so you can flip between them in place.
+For analyses organized around an experiment design and a protocol, see the [Characterization guides](../guides/Index).
