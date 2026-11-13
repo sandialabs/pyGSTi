@@ -132,7 +132,14 @@ class ModelPack(_ABC):
         return static_target_model.create_processor_spec(qubit_labels if qubit_labels is not None else self._sslbls)
 
     def _get_cachefile_names(self, param_type, simulator):
-        """ Get the standard cache file names for a modelpack """
+        """
+        Get the standard cache file names for a modelpack.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator` (precomputed term
+            polynomial caches); will be removed in pyGSTi 0.12.
+            See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
 
         if param_type == "H+S terms":
             cachePath = _Path(__file__).absolute().parent / "caches"
@@ -534,6 +541,11 @@ def _load_calccache(key_path, val_path):
     """
     The complement to _write_calccache, this function loads a cache
     dictionary from key and value filenames.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (precomputed term
+        polynomial caches); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     Parameters
     ----------

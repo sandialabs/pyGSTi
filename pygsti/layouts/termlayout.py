@@ -1,5 +1,9 @@
 """
 Defines the TermCOPALayout class.
+
+.. deprecated:: 0.11
+    This module exists solely to support the deprecated `TermForwardSimulator` and will be
+    removed in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -23,6 +27,11 @@ from pygsti.tools import listtools as _lt
 class _TermCOPALayoutAtom(_DistributableAtom):
     """
     The atom ("atomic unit") for dividing up the element dimension in a :class:`TermCOPALayout`.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+        in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     This class notably holds the current "path-set" used to evaluate circuit probabilities,
     as well as compact representations of the polynomials for evaluating these probabilities.
@@ -123,6 +132,11 @@ class _TermCOPALayoutAtom(_DistributableAtom):
 class TermCOPALayout(_DistributableCOPALayout):
     """
     A circuit outcome probability array (COPA) layout for circuit simulation by taylor-term path integration.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+        in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     A simple distributed layout that divides a list of circuits among available
     processors.  This layout is designed for Taylor-term based calculations for which

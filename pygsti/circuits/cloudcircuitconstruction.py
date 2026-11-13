@@ -31,6 +31,7 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.forwardsims.termforwardsim import _ignore_term_deprecation_warnings
 
 RANK_TOL = 1e-9
 
@@ -1387,8 +1388,8 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
-        The "root" (no trailing " terms", etc.) parameterization used for the
+    parameterization : {"CPTP", "H+S", "S", "D"}
+        The "root" parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
     verbosity : int, optional
@@ -1429,16 +1430,6 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     """
     from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
-    #from pygsti.modelpacks import smq1Q_XYI  # the base model for 1Q gates
-    #from pygsti.modelpacks import smq2Q_XYICNOT  # the base model for 2Q (CNOT) gate
-    #evotype = "statevec"  # needed to match internals of create_cloudnoise_circuits
-    #tgt1Q = smq1Q_XYI.target_model("static unitary", evotype=evotype)
-    #tgt2Q = smq2Q_XYICNOT.target_model("static unitary", evotype=evotype)
-    #Gx = tgt1Q.operations[('Gxpi2', 0)]
-    #Gy = tgt1Q.operations[('Gypi2', 0)]
-    #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
-    #Gii = tgt2Q.operations[()]
-    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
     gatenames = ['Gx', 'Gy', '{idle}']
     if num_qubits > 1:
@@ -1460,6 +1451,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
                                       verbosity, cache, idle_only, idt_pauli_dicts, algorithm, comm=comm)
 
 
+@_ignore_term_deprecation_warnings  # still uses TermForwardSimulator internally until #969 replaces it (#916)
 def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
                                parameterization="H+S", verbosity=0, cache=None, idle_only=False,
@@ -1520,7 +1512,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    parameterization : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+    parameterization : {"CPTP", "H+S", "S", "D"}
         The parameterization used to define which parameters need to be
         amplified.
 

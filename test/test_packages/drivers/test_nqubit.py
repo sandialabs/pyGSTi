@@ -13,6 +13,11 @@ from pygsti.models import modelconstruction
 from pygsti.circuits import cloudcircuitconstruction
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure
 
+# TermForwardSimulator is deprecated (see #916); its tests are kept until the deprecation expires
+# (pyGSTi 0.12).  See agent-docs/known-debt.md.  This filter only ignores the term-sim deprecation.
+ignore_termsim_deprecation = pytest.mark.filterwarnings(
+    "ignore:.*TermForwardSimulator.*:pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+
 
 class NQubitTestCase(BaseTestCase):
 
@@ -119,6 +124,7 @@ class NQubitTestCase(BaseTestCase):
                                                     gauge_opt_suite_name='none') #probably don't care about convergence for same reason we
                                                     #don't for the 3Q case?
 
+    @ignore_termsim_deprecation
     def test_2Q_terms(self):
 
         gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_2Q_seqs.json")

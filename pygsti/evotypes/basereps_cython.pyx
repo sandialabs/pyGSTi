@@ -26,6 +26,13 @@ cdef class EffectRep:
     pass
 
 cdef class TermRep:
+    """
+    The base class for rank-1 term representation classes.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+        in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+    """
     pass
 
 

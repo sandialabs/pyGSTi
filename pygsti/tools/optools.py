@@ -2818,10 +2818,9 @@ def is_valid_lindblad_paramtype(typ):
     or any/all of the letters "H" (Hamiltonian), "S" (Stochastic, CPTP),
     "s" (Stochastic), "A" (Affine), "D" (Depolarization, CPTP),
     "d" (Depolarization) joined with plus (+) signs.  Note that "A" cannot
-    appear without one of {"S","s","D","d"}. The suffix can be non-existent
-    (density-matrix), "terms" (state-vector terms) or "clifford terms"
-    (stabilizer-state terms).  For example, valid Lindblad types are "H+S",
-    "H+d+A", "CPTP clifford terms", or "S+A terms".
+    appear without one of {"S","s","D","d"}.  (Evolution-type suffixes such as
+    " terms" and " clifford terms" are no longer supported.)  For example, valid
+    Lindblad types are "H+S", "H+d+A", or "CPTPLND".
 
     Parameters
     ----------

@@ -607,7 +607,7 @@ class ComposedOpFactory(OpFactory):
         to `"auto"` to take the state space from `factories_or_ops_to_compose[0]`
         *if* there's at least one factory or operator being composed.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+    evotype : {"densitymx","statevec","stabilizer","auto"}
         The evolution type of this factory.  Can be set to `"auto"` to take
         the evolution type of `factories_or_ops_to_compose[0]` *if* there's
         at least one factory or operator being composed.
@@ -795,7 +795,7 @@ class UnitaryOpFactory(OpFactory):
         by this factor need to be given a dense superoperator representation, this
         basis is used.  Usually the default of `"pp"` is what you want.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+    evotype : {"densitymx","statevec","stabilizer"}
         The evolution type of the operation(s) this factory builds.
     """
 
