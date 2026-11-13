@@ -116,7 +116,6 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    #printer.log('', 2)
     printer.log("--- Contract to XP ---", 1)
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
 
@@ -137,7 +136,6 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
                            callback=print_obj_func if bToStdout else None)
 
     mdl.from_vector(optSol.x)
-    #mdl.log("Contract to XP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )
     if optSol.fun >= CLIFF: _warnings.warn("Failed to contract model to XP")
 
     printer.log('The closest legal point found was distance: ' + str(optSol.fun), 1)
@@ -153,7 +151,6 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
     CLIFF = 10000
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
     mxBasis = mdl.basis
@@ -175,7 +172,6 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
                            callback=print_obj_func if bToStdout else None)
 
     mdl.from_vector(optSol.x)
-    #mdl.log("Contract to CP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )
     if optSol.fun >= CLIFF: _warnings.warn("Failed to contract model to CP")
 
     printer.log('The closest legal point found was distance: ' + str(optSol.fun), 1)
@@ -201,9 +197,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 
         if tp_also:
             assert(abs(sum(evals) - 1.0) < 1e-8)  # check that Jmx always has trace == 1
-        #if abs( sum(evals) - 1.0 ) >= 1e-8: #DEBUG
-        #  print "WARNING: JMx given with evals = %s (sum = %s != 1)" % (evals,sum(evals))
-        #  print "WARNING: JMx from: "; _tools.print_mx(new_op)
 
         it = 0
         while min(evals) < -tol or abs(sum(evals) - 1.0) >= tol:
@@ -237,10 +230,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
                     # last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
                     new_evals[i] = 1.0  # so set what was the largest eigenvalue == 1.0
             new_evals = _np.array(new_evals)
-            #if abs( sum(new_evals) - 1.0 ) >= 1e-8:              #DEBUG
-            #  print "DEBUG: sum(new_evals) == ",sum(new_evals)   #DEBUG
-            #  print "DEBUG: new_evals == ",new_evals             #DEBUG
-            #  print "DEBUG: orig evals == ",evals                #DEBUG
             assert(abs(sum(new_evals) - 1.0) < 1e-8)
 
             new_Jmx = (evecs * new_evals[_np.newaxis, :]) @ inv_evecs
@@ -257,14 +246,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
                     new_Jmx[i, j] = new_Jmx[i, j].real
 
             evecs, evals, inv_evecs = _tools.eigendecomposition(new_Jmx)
-
-            #DEBUG
-            #EVAL_TOL = 1e-10
-            #if abs( sum(evals) - 1.0 ) >= 1e-8:
-            #  print "DEBUG2: sum(evals) == ",sum(evals)
-            #  print "DEBUG2: evals == ",evals
-            #if min(evals) < -EVAL_TOL:
-            #  print "DEBUG3: evals = ",evals
 
             # Check that trace-trunc above didn't mess up positivity
             assert(min(evals) >= -1e-10 and abs(sum(evals) - 1.0) < 1e-8)
@@ -291,7 +272,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")
-        #else: print "contract_to_cp_direct success in %d iterations" % it  #DEBUG
 
         op0 = mdl.operations[opLabel].to_dense('minimal')
         op1 = gate.to_dense('minimal')
@@ -299,7 +279,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
         printer.log("Direct CP contraction of %s gate gives frobenius diff of %g" %
                     (opLabel, dist), 2)
 
-    #mdl.log("Choi-Truncate to %s" % ("CPTP" if tp_also else "CP"), { 'maxiter': maxiter } )
     distance = mdl.frobeniusdist(model)
     printer.log(('The closest legal point found was distance: %s' % str(distance)), 1)
 
@@ -317,7 +296,6 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_tp(model, verbosity):
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
-    #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
     mdl = model.copy()
     for (_, gate) in list(mdl.operations.items()):
@@ -336,7 +314,6 @@ def _contract_to_tp(model, verbosity):
     distance = mdl.frobeniusdist(model)
     printer.log(('Projected TP model was at distance: %g' % distance), 1)
 
-    #mdl.log("Contract to TP")
     return distance, mdl
 
 

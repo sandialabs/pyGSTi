@@ -1,4 +1,5 @@
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import collections as _collections
@@ -101,7 +102,9 @@ class InvalidParamModeError(ValueError):
 # {param_mode: parameterization class}; the block holds one instance in `self._parameterization` and
 # delegates all param_mode-dependent numeric work to it.
 #
-# The numpy `block_data_jacobian` is what the standard MapForwardSimulator path needs.
+# The *only* primitive needed to make a block Torchable is the parameterization's differentiable
+# `block_data_torch` (see LindbladCoefficientBlock.torch_base), and the numpy `block_data_jacobian`
+# is what the standard MapForwardSimulator path needs.
 # 
 #   --> Adding a new parameterization = adding one _BlockParameterization subclass and registering it.
 #
@@ -135,6 +138,43 @@ class _BlockParameterization:
         """Second derivative of the term-superoperators w.r.t. params (rarely used)."""
         raise NotImplementedError
 
+    # --- Torchable support (differentiable params -> block_data) ---
+    def torch_stateless_data(self, blk, real_dtype, device):
+        """Constants (independent of the free params) needed by `block_data_torch`."""
+        return (len(blk._bel_labels),)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        """Differentiable torch reconstruction of block_data from the parameter tensor t_param,
+        given the stateless data `sd` returned by `torch_stateless_data`."""
+        raise NotImplementedError
+
+    def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        """Return the _Polynomial for one block_data entry.
+
+        Evaluating the returned polynomial at the block's parameter vector
+        (placed at offset ``pio``) must equal the corresponding value produced
+        by ``params_to_block_data`` (i.e. ``blk.block_data[index]``).
+
+        Parameters
+        ----------
+        blk : LindbladCoefficientBlock
+            The owning coefficient block.
+        index : int or tuple of ints
+            Integer coefficient index for vector blocks, or an (i, j) tuple
+            for matrix blocks.
+        pio : int
+            Global parameter index offset for polynomial variables.
+        mpv : int
+            Maximum number of polynomial variables.
+
+        Returns
+        -------
+        Polynomial
+        """
+        raise NotImplementedError
+
+
 
 class _StaticParam(_BlockParameterization):
     """Zero-parameter block: block_data is a fixed constant."""
@@ -160,6 +200,20 @@ class _StaticParam(_BlockParameterization):
             return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
         return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
+    def torch_stateless_data(self, blk, real_dtype, device):
+        _torch = _import_torch()
+        arr = _np.ascontiguousarray(blk.block_data)
+        ten = _torch.from_numpy(arr).to(dtype=real_dtype, device=device)
+        return (ten,)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return sd[0]
+
+    def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        val = blk.block_data[index]
+        return _Polynomial({(): val}, mpv)
+
 
 class _RealVectorElements(_BlockParameterization):
     """Unconstrained real-vector parameterization: block_data == v (identity map).  Shared numeric
@@ -183,6 +237,13 @@ class _RealVectorElements(_BlockParameterization):
         nP = blk.num_params
         return _np.zeros((d1, d2, nP, nP), 'd')
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param
+
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        return _Polynomial({(pio + index,): 1.0}, mpv)
+
 
 class _HamElements(_RealVectorElements):
     def param_labels(self, blk):
@@ -203,6 +264,11 @@ class _EEGVectorElements(_RealVectorElements):
 
     def block_data_jacobian(self, blk, v):
         return _np.identity(len(blk._eeg_labels), 'd')
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        # Sized by _eeg_labels (not _bel_labels): these blocks have one parameter per elementary
+        # error generator.  The identity block_data_torch is inherited from _RealVectorElements.
+        return (len(blk._eeg_labels),)
 
     def param_labels(self, blk):
         labels = []
@@ -247,6 +313,14 @@ class _DiagCholesky(_BlockParameterization):
         I = _np.identity(nP, 'd')
         return trans[:, :, :, None] * (2.0 * I)[None, None, :, :]
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param**2
+
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        var = pio + index
+        return _Polynomial({(var, var): 1.0}, mpv)
+
 
 class _Depol(_BlockParameterization):
     """Depolarizing: a single nonnegative coefficient shared by all diagonal generators
@@ -280,6 +354,16 @@ class _Depol(_BlockParameterization):
         base = _np.sum(superops, axis=0)   # shape (d,d)
         return base[:, :, None, None] * 2.0
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        _torch = _import_torch()
+        n = sd[0]
+        return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
+
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        var = pio
+        return _Polynomial({(var, var): 1.0}, mpv)
+
 
 class _RelDepol(_BlockParameterization):
     """Relative depolarizing: a single (possibly negative) coefficient shared by all diagonal
@@ -311,6 +395,15 @@ class _RelDepol(_BlockParameterization):
         d1, d2 = superops.shape[1:3]
         return _np.zeros((d1, d2, 1, 1), 'd')
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        _torch = _import_torch()
+        n = sd[0]
+        return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
+
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        return _Polynomial({(pio,): 1.0}, mpv)
+
 
 class _OtherElements(_BlockParameterization):
     """Unconstrained Hermitian-matrix parameterization for the full 'other' block.  The n*n real
@@ -321,6 +414,12 @@ class _OtherElements(_BlockParameterization):
         return len(blk._bel_labels)**2
 
     def params_to_block_data(self, blk, v):
+        # Maps real parameter vector v to complex Hermitian block_data.
+        # Parameter matrix P = reshape(v, (n, n)):
+        #   diag:  block_data[i, i] = P[i, i]
+        #   lower: block_data[i, j] = P[i, j] + 1j * P[j, i]  (i > j)
+        #   upper: block_data[i, j] = P[j, i] - 1j * P[i, j]  (i < j, by Hermiticity)
+        # Keep conventions in sync with _coefficient_polynomial().
         num_bels = len(blk._bel_labels)
         params = v.reshape((num_bels, num_bels))
         params_upper_indices = triu_indices(num_bels)
@@ -379,6 +478,37 @@ class _OtherElements(_BlockParameterization):
         # unconstrained Hermitian: Hessian is identically zero
         return _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        _torch = _import_torch()
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        lowP = _torch.tril(P, -1)
+        Re = lowP + lowP.T + _torch.diag(_torch.diagonal(P))
+        lowPT = _torch.tril(P.T, -1)
+        Imag = lowPT - lowPT.T
+        return _torch.complex(Re, Imag)
+
+    def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        # Parameter matrix P = reshape(v, (n, n)) encodes Hermitian block_data:
+        #   diag:  block_data[i, i] = P[i, i] (real)
+        #   lower: block_data[i, j] = P[i, j] + 1j * P[j, i]  (i > j)
+        #   upper: block_data[i, j] = P[j, i] - 1j * P[i, j]  (i < j, by Hermiticity)
+        # Keep conventions in sync with params_to_block_data().
+        i, j = index
+        num_bels = len(blk._bel_labels)
+        if i == j:
+            var_ii = pio + (i * num_bels + i)
+            return _Polynomial({(var_ii,): 1.0}, mpv)
+        elif i > j:
+            var_ij = pio + (i * num_bels + j)
+            var_ji = pio + (j * num_bels + i)
+            return _Polynomial({(var_ij,): 1.0, (var_ji,): 1.0j}, mpv)
+        else:  # i < j
+            var_ji = pio + (j * num_bels + i)
+            var_ij = pio + (i * num_bels + j)
+            return _Polynomial({(var_ji,): 1.0, (var_ij,): -1.0j}, mpv)
+
 
 class _OtherCholesky(_BlockParameterization):
     """CPTP (positive-semidefinite) parameterization for the full 'other' block: block_data = C C^dag,
@@ -389,6 +519,9 @@ class _OtherCholesky(_BlockParameterization):
         return len(blk._bel_labels)**2
 
     def params_to_block_data(self, blk, v):
+        # Maps real parameter vector v to positive semidefinite block_data = C @ C^dag,
+        # where C is lower-triangular with real diagonal elements.
+        # Keep conventions in sync with _coefficient_polynomial().
         num_bels = len(blk._bel_labels)
         params = v.reshape((num_bels, num_bels))
         params_upper_indices = triu_indices(num_bels)
@@ -505,6 +638,42 @@ class _OtherCholesky(_BlockParameterization):
         for base, b, r in iter_base_ab_qr(False, False):
             d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
         return d2Odp2
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        _torch = _import_torch()
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        Cre = _torch.tril(P, -1) + _torch.diag(_torch.diagonal(P))
+        Cim = _torch.tril(P.T, -1)
+        C = _torch.complex(Cre, Cim)
+        return C @ C.conj().T
+
+    def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        # block_data = C @ C^dag where lower-triangular Cholesky factor C has:
+        #   Re(C[a, b]) = P[a, b]  for b <= a
+        #   Im(C[a, b]) = P[b, a]  for b < a  (and 0 for b == a)
+        #
+        # block_data[i, j] = sum_k C[i, k] * conj(C[j, k])
+        #                  = sum_k (Re(C[i, k]) + 1j*Im(C[i, k])) * (Re(C[j, k]) - 1j*Im(C[j, k]))
+        # Keep conventions in sync with params_to_block_data().
+        i, j = index
+        num_bels = len(blk._bel_labels)
+
+        def i_re(a, b): return pio + (a * num_bels + b)
+        def i_im(a, b): return pio + (b * num_bels + a)
+
+        polyTerms = {}
+        for k in range(0, min(i, j) + 1):
+            if k <= i and k <= j:
+                polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
+            if k <= i and k < j:
+                polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
+            if k < i and k <= j:
+                polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
+            if k < i and k < j:
+                polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
+        return _Polynomial(polyTerms, mpv)
 
 
 class LindbladCoefficientBlock(_NicelySerializable):
@@ -1003,6 +1172,26 @@ class LindbladCoefficientBlock(_NicelySerializable):
         assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
         return _np.real(d2)
 
+    def stateless_data(self, real_dtype, device):
+        """
+        Returns `(parameterization_class, torch_ctx)`, where `torch_ctx` carries the constants that
+        `torch_base` needs.  This mirrors the Torchable API, but lives on the (non-ModelMember)
+        coefficient block, so that a Torchable `LindbladErrorgen` can compose its blocks' contributions.
+        """
+        inner_sd = self._parameterization.torch_stateless_data(self, real_dtype, device)
+        return (type(self._parameterization), inner_sd)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable reconstruction of `block_data` from the parameter tensor `t_param`.
+
+        With `sd = blk.stateless_data(...)` and `t_param = torch.from_numpy(blk.to_vector())`,
+        `type(blk).torch_base(sd, t_param)` reproduces `blk.block_data` as a torch Tensor whose
+        autodiff Jacobian w.r.t. `t_param` equals `blk.deriv_wrt_params(...)`. 
+        """
+        param_cls, inner_sd = sd
+        return param_cls.block_data_torch(inner_sd, t_param)
+
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         # Always serialize under the *base* class name; ``block_type`` (below) selects the concrete
@@ -1082,20 +1271,20 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
         for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
             # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
             scale, U = _mt.to_unitary(self._basis[bel_label])
+            coeff_poly = self._parameterization._coefficient_polynomial(self, k, pio, mpv)
 
-            if self._param_mode == 'elements':
-                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
-            elif self._param_mode == 'static':
-                cpi = ()  # not multiplied by any parameters
-                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
-            else:
-                raise ValueError("Internal error: invalid param mode!!")
+            U_dag = U.conjugate().T
 
             # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                _Polynomial({cpi: -1j * scale}, mpv), U, None, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                _Polynomial({cpi: +1j * scale}, mpv), None, U.conjugate().T, evotype, state_space))
+            poly_left = (-1j * scale) * coeff_poly
+            term_left = _term.RankOnePolynomialOpTerm.create_from(
+                poly_left, U, None, evotype, state_space)
+
+            poly_right = (1j * scale) * coeff_poly
+            term_right = _term.RankOnePolynomialOpTerm.create_from(
+                poly_right, None, U_dag, evotype, state_space)
+
+            Lterms.extend([term_left, term_right])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1109,6 +1298,9 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
         return block_data_indices
+
+    def _coefficient_labels_impl(self):
+        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
 
 
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
@@ -1138,29 +1330,27 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
             scale, U = _mt.to_unitary(self._basis[bel_label])
             scale = scale**2  # because there are two "U"s in each overall term below
 
-            if self._param_mode in ('depol', 'reldepol'):
-                cpi = (pio + 0,)
-            elif self._param_mode in ('cholesky', 'elements'):
-                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
-            elif self._param_mode == 'static':
-                cpi = ()  # not multiplied by any parameters
-                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
-            else:
-                raise ValueError("Internal error: invalid param mode!!")
-
-            pw = 2 if self._param_mode in ("cholesky", "depol") else 1
+            base_poly = self._parameterization._coefficient_polynomial(self, k, pio, mpv) * scale
             Lm = Ln = U
             Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
             Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
 
             # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
             # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                _Polynomial({cpi * pw: -0.5 * scale}, mpv), None, _np.dot(Ln_dag, Lm), evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                _Polynomial({cpi * pw: -0.5 * scale}, mpv), _np.dot(Lm_dag, Ln), None, evotype, state_space))
+            poly_sandwich = 1.0 * base_poly
+            term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                poly_sandwich, Ln, Lm, evotype, state_space)
+
+            poly_anti = -0.5 * base_poly
+            op_post = _np.dot(Ln_dag, Lm)
+            term_post = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, None, op_post, evotype, state_space)
+
+            op_pre = _np.dot(Lm_dag, Ln)
+            term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, op_pre, None, evotype, state_space)
+
+            Lterms.extend([term_sandwich, term_post, term_pre])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1174,6 +1364,9 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
         return block_data_indices
+
+    def _coefficient_labels_impl(self):
+        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
 
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
@@ -1199,7 +1392,6 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
 
     def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
         Lterms = []
-        num_bels = len(self._bel_labels)
         for i, bel_labeli in enumerate(self._bel_labels):
             for j, bel_labelj in enumerate(self._bel_labels):
                 scalem, Um = _mt.to_unitary(self._basis[bel_labeli])  # ensure all Rank1Term operators are *unitary*
@@ -1208,40 +1400,24 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
                 Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
                 scale = scalem * scalen
 
-                polyTerms = {}
-                if self._param_mode == 'cholesky':
-                    # coeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-                    # coeffs_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-                    #           = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                    def i_re(a, b): return pio + (a * num_bels + b)
-                    def i_im(a, b): return pio + (b * num_bels + a)
-                    for k in range(0, min(i, j) + 1):
-                        if k <= i and k <= j:
-                            polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
-                        if k <= i and k < j:
-                            polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
-                        if k < i and k <= j:
-                            polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
-                        if k < i and k < j:
-                            polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
-                elif self._param_mode == 'elements':  # unconstrained
-                    # coeffs_ij = param[i,j] + 1j*param[j,i] (coeffs == block_data is Hermitian)
-                    ijIndx = pio + (i * num_bels + j)
-                    jiIndx = pio + (j * num_bels + i)
-                    polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
-                elif self._param_mode == 'static':
-                    polyTerms = {(): self.block_data[i, j]}
-                else:
-                    raise ValueError("Internal error: invalid param mode!!")
+                coeff_poly = self._parameterization._coefficient_polynomial(self, (i, j), pio, mpv)
+                base_poly = coeff_poly * scale
 
                 # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                base_poly = _Polynomial(polyTerms, mpv) * scale
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    1.0 * base_poly, Ln, Lm, evotype, state_space))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    -0.5 * base_poly, None, _np.dot(Ln_dag, Lm), evotype, state_space))  # adjoint(dot(Lm_dag,Ln))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    -0.5 * base_poly, _np.dot(Lm_dag, Ln), None, evotype, state_space))
+                poly_sandwich = 1.0 * base_poly
+                term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_sandwich, Ln, Lm, evotype, state_space)
+
+                poly_anti = -0.5 * base_poly
+                op_post = _np.dot(Ln_dag, Lm)  # adjoint(dot(Lm_dag,Ln))
+                term_post = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_anti, None, op_post, evotype, state_space)
+
+                op_pre = _np.dot(Lm_dag, Ln)
+                term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_anti, op_pre, None, evotype, state_space)
+
+                Lterms.extend([term_sandwich, term_post, term_pre])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1388,22 +1564,24 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
             #   - 0.5 {Um^dag Un, rho}.  Mirrors the construction in _OtherCoeffBlock.
             Um_dag = Um.conjugate().T
             Un_dag = Un.conjugate().T
-            return [
-                _term.RankOnePolynomialOpTerm.create_from(1.0 * poly, Un, Um, evotype, state_space),
-                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, None, _np.dot(Un_dag, Um),
-                                                           evotype, state_space),
-                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, _np.dot(Um_dag, Un), None,
-                                                           evotype, state_space),
-            ]
+            poly_sandwich = 1.0 * poly
+            term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                poly_sandwich, Un, Um, evotype, state_space)
+
+            poly_anti = -0.5 * poly
+            op_post = _np.dot(Un_dag, Um)
+            term_post = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, None, op_post, evotype, state_space)
+
+            op_pre = _np.dot(Um_dag, Un)
+            term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, op_pre, None, evotype, state_space)
+
+            return [term_sandwich, term_post, term_pre]
 
         def coeff_poly(k, scalar):
             # polynomial multiplying an O-generator for the k-th elementary error generator
-            if self._param_mode == 'elements':
-                return _Polynomial({(pio + k,): scalar}, mpv)
-            elif self._param_mode == 'static':
-                return _Polynomial({(): scalar * self.block_data[k]}, mpv)
-            else:
-                raise ValueError("Internal error: invalid param mode!!")
+            return self._parameterization._coefficient_polynomial(self, k, pio, mpv) * scalar
 
         for k, eeg in enumerate(self._eeg_labels):
             etype = eeg.errorgen_type
@@ -1452,6 +1630,13 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
                 and (self._param_mode == other_coeff_block._param_mode)
                 and (self._eeg_labels == other_coeff_block._eeg_labels)
                 and (self._basis == other_coeff_block._basis))
+
+    def _coefficient_labels_impl(self):
+        labels = []
+        for i, ilbl in enumerate(self._bel_labels):
+            for j, jlbl in enumerate(self._bel_labels):
+                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
+        return labels
 
 
 LindbladCoefficientBlock._BLOCK_TYPES = {

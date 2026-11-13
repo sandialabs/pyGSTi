@@ -179,7 +179,7 @@ $$\mathcal{L} = 0.1 H_X + 0.1 S_X$$
 where $H_X: \rho \rightarrow -i[\rho,X]$ and $S_X: \rho \rightarrow X\rho X - \rho$ are Hamiltonian and Pauli-stochastic errors, respectively.  We then use this error generator to create, using a `ExpErrogenOp` and `ComposedOp`, an operator corresponding to $e^{\mathcal{L}}U_0$, where $U_0$ is a $X(\pi/2)$ rotation.
 
 ```{code-cell} ipython3
-staticOp = ops.StaticStandardOp('Gxpi2')
+staticOp = ops.StaticUnitaryOp.from_standard_gate_name('Gxpi2')
 cptpGen2 = ops.LindbladErrorgen.from_elementary_errorgens({('H','X'): 0.1, ('S','X','X'): 0.1}, state_space=1)
 cptpOp2 = ops.ExpErrorgenOp(cptpGen2)
 composedOp = ops.ComposedOp([staticOp, cptpOp2])

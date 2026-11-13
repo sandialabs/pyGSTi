@@ -4,6 +4,7 @@ import pytest
 import pygsti.data as pdata
 from pygsti import io
 from pygsti.drivers import longsequence as ls
+from pygsti import protocols as proto
 from pygsti.forwardsims import mapforwardsim
 from pygsti.modelmembers import operations as operation
 from pygsti.models.gaugegroup import UnitaryGaugeGroup
@@ -370,3 +371,25 @@ class RobustDataScalingTester(LongSequenceGSTBase):
                 advanced_options={'bad_fit_threshold': -100,
                                  'on_bad_fit': ["foobar"]}
             )
+
+
+class GetOptimizerTester(BaseCase):
+
+    def test_no_finite_difference_iterations(self):
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        model = create_explicit_model(pkg.pspec)  # Matrix simulator, which used to get fditer=1
+        self.assertNotIn('fditer', ls._get_optimizer({}, model))
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            optimizer = ls._get_optimizer({'finitediff_iterations': 3}, model)
+        self.assertNotIn('fditer', optimizer)
+
+
+class LinearGSTTester(LongSequenceBase):
+
+    def test_lgst_protocol(self):
+        # replacement for the removed ``run_linear_gst`` driver (#888)
+        edesign = proto.StandardGSTDesign(self.pspec, self.prep_fids, self.meas_fids, self.germs, [1])
+        results = proto.LGST(self.model, verbosity=0).run(proto.ProtocolData(edesign, self.ds))
+        estimate = results.estimates['LinearGateSetTomography']
+        self.assertIn('lgst', estimate.models)
+        self.assertIn('stdgaugeopt', estimate.models)

@@ -81,3 +81,36 @@ class LabelDictTester(BaseCase):
         d[Label('IzTP')] = op_gi.copy()
         d['I_zTP'] = op_gi.copy()
         return
+
+    def test_multi_prefix_ordered_member_dict(self):
+        model = create_explicit_model_from_expressions(
+            [('Q0',)], ['Gi', 'Gx', 'Gy'],
+            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
+        )
+        op_gi = model.operations[Label('Gi')]
+        d = OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None})
+        d[Label('Gx')] = op_gi.copy()
+        d['{idle}'] = op_gi.copy()
+        self.assertIn(Label('Gx'), d)
+        self.assertIn('{idle}', d)
+
+        with self.assertRaises(KeyError) as cm:
+            d['rho0'] = op_gi.copy()
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        reconstructed = (
+            d.copy(),
+            pickle.loads(pickle.dumps(d)),
+            OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None}, list(d.items()))
+        )
+        for copied_d in reconstructed:
+            self.assertIn('Gx', copied_d)
+            self.assertIn('{idle}', copied_d)
+            with self.assertRaises(KeyError):
+                copied_d['rho0'] = op_gi.copy()
+
+        d_none = OrderedMemberDict(None, "full", None, {'cast_to_type': None})
+        d_none['rho0'] = op_gi.copy()
+        d_none['Gx'] = op_gi.copy()
+        self.assertIn('rho0', d_none)
+        self.assertIn('Gx', d_none)

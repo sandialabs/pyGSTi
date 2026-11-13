@@ -18,7 +18,7 @@ import pygsti.modelmembers.states as sv
 # Is the composed SPAM vec equivalent to applying each component separately?
 class ComposedSpamvecBase(object):
     base_prep_vec = sv.ComputationalBasisState([0], 'pp', 'default')
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
 
@@ -144,7 +144,7 @@ class FullDenseComposedSpamvecTester(MutableComposedSpamvecBase, BaseCase):
 # Is the composed POVM equivalent to applying each component separately?
 class ComposedPovmBase(object):
     base_prep = sv.ComputationalBasisState([0], 'pp', 'default') # 0 state prep
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
     
@@ -184,6 +184,18 @@ class ComposedPovmBase(object):
         composed_probs = composed_mdl.probabilities(composed_circ)
         for k,v in composed_probs.items():
             self.assertAlmostEqual(self.expected_out[k], v)
+
+    def test_convert_to_full_tp(self):
+        # Regression test for #544: converting a ComposedPOVM to "full TP" (without
+        # flatten_structure) used to give a TPPOVM of ComposedPOVMEffects, which
+        # failed in TPPOVM.to_vector().
+        tp_povm = pv.convert(self.povm, 'full TP', 'pp')
+        self.assertIsInstance(tp_povm, pv.TPPOVM)
+        for lbl, effect in tp_povm.items():
+            if lbl != tp_povm.complement_label:
+                self.assertIsInstance(effect, pv.FullPOVMEffect)
+            self.assertArraysAlmostEqual(effect.to_dense(), self.povm[lbl].to_dense())
+        self.assertEqual(len(tp_povm.to_vector()), tp_povm.num_params)
 
 # For ComposedPOVM, the noise op could be mutable
 class MutableComposedPovmBase(ComposedPovmBase):

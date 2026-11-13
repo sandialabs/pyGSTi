@@ -832,6 +832,22 @@ class Estimate(_MongoSerializable):
             self._final_objfn_cache = _CachedObjectiveFunction(objfn)
         return self._final_objfn_cache
 
+    def _release_comm_bound_stores(self):
+        """
+        Drop the MDC stores and objective function built on the run's communicator, keeping their cache.
+
+        A protocol's `run` calls this on every rank, at its end, when it ran on more than one rank.
+        The stores it drops make collective calls, so they hang if used later on a subset of ranks
+        (e.g. building a report on rank 0 alone). Building the serializable cache first is itself
+        collective, which is why it happens here, while every rank is present. Later calls that
+        need a store build a new one from whatever `resource_alloc` they are given.
+        """
+        if self._final_objfn_cache is None and self._final_mdc_store is not None:
+            self.final_objective_fn_cache()
+        self._final_objfn = None
+        self._final_mdc_store = None
+        self._per_iter_mdc_store = None
+
     def misfit_sigma(self, resource_alloc=None):
         """
         Returns the number of standard deviations (sigma) of model violation.

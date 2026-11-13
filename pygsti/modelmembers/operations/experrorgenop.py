@@ -9,11 +9,15 @@ The ExpErrorgenOp class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
 import math
-from typing import Union
+from typing import Union, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
 import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
@@ -23,8 +27,10 @@ from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as 
 from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs import _compatibility as _compat
+from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -32,7 +38,7 @@ MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't over
 TODENSE_TRUNCATE = 3e-10  # was 1e-11 and this gave some borderline test failures
 
 
-class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
+class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
     """
     An operation parameterized by the coefficients of an exponentiated sum of Lindblad-like terms.
     TODO: update docstring!
@@ -55,33 +61,27 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         #Create representation object
         rep_type_order = ('dense', 'experrgen') if evotype.prefer_dense_reps else ('experrgen', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'experrgen': 'experrorgen'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'experrgen':
-                    # "sparse mode" => don't ever compute matrix-exponential explicitly
-                    rep = evotype.create_experrorgen_rep(self.errorgen._rep)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-
-                    # Cache values - for later work with dense rep
-                    self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
-                    self.base_deriv = None
-                    self.base_hessian = None
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'experrgen':
+            # "sparse mode" => don't ever compute matrix-exponential explicitly
+            rep = evotype.create_experrorgen_rep(self.errorgen._rep)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+
+            # Cache values - for later work with dense rep
+            self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
+            self.base_deriv = None
+            self.base_hessian = None
+        self._rep_type = rep_type
 
         # Caches in case terms are used
         self.terms = {}
@@ -176,17 +176,56 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         Return this operation as a dense matrix.
 
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices use
+            `'Hilbert'`; for superoperator matrices use `'HilbertSchmidt'`.  `'minimal'` means
+            that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         Returns
         -------
         numpy.ndarray
+
+        Raises
+        ------
+        ValueError
+            If a Hilbert-space (unitary) matrix is requested but this operation does not act
+            unitarily -- i.e. its error generator contains non-Hamiltonian terms.
         """
         if self._rep_type == 'dense':
             # Then self._rep contains a dense version already
-            return self._rep.base  # copy() unnecessary since we set to readonly
-
+            superop = self._rep.base  # copy() unnecessary since we set to readonly
         else:
-            # Construct a dense version from scratch (more time consuming)
-            return _spl.expm(self.errorgen.to_dense(on_space))
+            # Construct a dense version from scratch (more time consuming). Ask the error
+            # generator for a superoperator regardless of `on_space`: an error generator is
+            # never itself unitary (it is the argument of the exponential, not the result), so
+            # LindbladErrorgen.to_dense rejects on_space='Hilbert' outright. Any cast down to a
+            # unitary has to happen after exponentiating, which is what we do below.
+            superop = _spl.expm(self.errorgen.to_dense('HilbertSchmidt'))
+
+        # Attempt to cast down to a unitary, if requested.
+        if on_space == 'Hilbert' or (on_space == 'minimal' and self.evotype.minimal_space == 'Hilbert'):
+            try:
+                return _ot.superop_to_unitary(superop, self.errorgen.matrix_basis, True)
+            except ValueError as e:
+                raise ValueError("Could not convert to unitary. Check that only Hamiltonian "
+                                 "errors are provided.") from e
+
+        return superop
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        assert isinstance(self.errorgen, _Torchable)
+        return (type(self.errorgen), self.errorgen.stateless_data(real_dtype, device))
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        _torch = _import_torch()
+        etype, esd = sd
+        L = etype.torch_base(esd, t_param)
+        return _torch.linalg.matrix_exp(L)
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def to_sparse(self, on_space: SpaceT='minimal'):

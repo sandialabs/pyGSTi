@@ -19,16 +19,19 @@ if TYPE_CHECKING:
     from cirq.circuits.circuit import Circuit as CirqCircuit
     from pygsti.baseobjs.label import ConcreteLabel
 
+import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup, LabelStr as _LabelStr
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 from pygsti.tools.exceptions import QiskitInteropWarning as _QiskitInteropWarning
+from pygsti.tools.exceptions import CirqInteropWarning as _CirqInteropWarning
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -127,6 +130,19 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
             for l in lbl.components]  # a *list*
 
 
+def _copy_nested_label_lists(labels):
+    """
+    Copy every list level of an editable Circuit's `_labels`, sharing the `Label` leaves.
+
+    Editable circuits store each layer as a list of components, and a compound component
+    as a further nested list (see `_label_to_nested_lists_of_simple_labels`).  Copying
+    only the outer list leaves those inner lists shared, so an in-place layer editor on
+    one circuit reaches into another's state -- see issue #759.  `Label` objects are
+    immutable, so only the lists need rebuilding.
+    """
+    return [_copy_nested_label_lists(el) if isinstance(el, list) else el for el in labels]
+
+
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj, _Label):
@@ -181,7 +197,12 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
         processed_seq = list(map(process_lists, seq))
         compilable_set = set(compilable_layer_indices)
         uncompilable_set = set(range(len(processed_seq))) - set(compilable_layer_indices)
-        if len(compilable_set) <= len(uncompilable_set):
+        # Mark whichever set is smaller, to keep the string short -- but only when
+        # marking the smaller one actually writes a marker.  An all-compilable
+        # circuit has an empty uncompilable set, so the '|' branch would emit
+        # nothing at all and the reader could not tell it from a circuit with no
+        # compilable layers.  Prefer '~' in that case and mark every layer.
+        if not uncompilable_set or len(compilable_set) <= len(uncompilable_set):
             marker = '~'; marked_set = compilable_set
         else:
             marker = '|'; marked_set = uncompilable_set
@@ -598,11 +619,14 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        # `saved_auxinfo["lanes"]` is a cache used by pygsti.circuits.split_circuits_into_lanes.
+        # It is populated lazily (see Circuit._cache_tensor_lanes)
+        self.saved_auxinfo = {}
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, saved_aux: Optional[dict[str, dict]]=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
@@ -619,7 +643,7 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-
+        self.saved_auxinfo = _copy.deepcopy(saved_aux) if saved_aux else {}
         return self
 
     #pickle management functions
@@ -639,7 +663,6 @@ class Circuit(object):
             else: #legacy support
                 self._hashable_tup = self.tup
                 self._hash = hash(self._hashable_tup)
-
 
     def to_label(self, nreps:int=1) -> _CircuitLabel:
         """
@@ -727,8 +750,8 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            return tuple([layer_lbl if isinstance(layer_lbl, _Label)
-                          else _Label(layer_lbl) for layer_lbl in self._labels])
+            return tuple([_Label(layer_lbl) for layer_lbl in self._labels])
+
     @property
     def tup(self):
         """
@@ -851,6 +874,12 @@ class Circuit(object):
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
 
+        if len(chk) != len(self._labels):
+            # zip below stops at the shorter sequence, so without this a truncated or
+            # extended string rep would pass the layer check vacuously (issue #761)
+            raise ValueError(("Cannot set .str to %s because it evaluates to"
+                              " %d layer(s) which is != this circuit's number of layers (%d).") %
+                             (value, len(chk), len(self._labels)))
         if not all([my_layer in (chk_lbl, [chk_lbl]) for chk_lbl, my_layer in zip(chk, self._labels)]):
             raise ValueError(("Cannot set .str to %s because it doesn't"
                               " evaluate to %s (this circuit)") %
@@ -897,7 +926,11 @@ class Circuit(object):
     def __radd__(self, x: Union[Circuit, Sequence[_Label]]):
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False)
+            # our layers all shift right by len(x), so our compilable indices shift with them
+            lenx = len(x)
+            shifted = tuple(i + lenx for i in self._compilable_layer_indices_tup)
+            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False,
+                                     compilable_layer_indices_tup=shifted)
         return x.__add__(self)
 
     def __add__(self, x: Union[Circuit, Sequence[_Label]]):
@@ -924,7 +957,9 @@ class Circuit(object):
                                       self._line_labels)) #trick for concatenating multiple tuples
             #new_line_labels.update(self._line_labels)
             new_line_labels = sorted(new_line_labels)
-            return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False)
+            # x's layers are appended after ours, so our indices keep their positions
+            return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False,
+                                     compilable_layer_indices_tup=self._compilable_layer_indices_tup)
 
         #Add special line label handling to deal with the special global idle circuits (which have no line labels
         # associated with them typically).
@@ -957,7 +992,19 @@ class Circuit(object):
                     +" standard line labels)."
             raise ValueError(msg)
 
+        # compilability is a per-layer property, and concatenation doesn't invalidate it:
+        # keep both operands' indices, shifting x's past our layers (#758)
+        new_compilable_indices = self._compilable_layer_indices_tup \
+            + tuple(i + len(self) for i in x._compilable_layer_indices_tup)
+
         if self._str is None or x._str is None:
+            s = None
+        elif new_compilable_indices:
+            # Don't splice the operands' cached strings: each chose '~' (mark the
+            # compilable layers) or '|' (mark the uncompilable ones) for its own layer
+            # count, so the concatenation can carry both markers, which is unparseable.
+            # Leaving the string rep unset regenerates it from the combined indices on
+            # first access, which is canonical by construction.
             s = None
         else:
             mystr, _ = self._labels_lines_str()
@@ -983,7 +1030,8 @@ class Circuit(object):
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
 
         return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
-                                 stringrep=s, occurrence=None)
+                                 stringrep=s, occurrence=None,
+                                 compilable_layer_indices_tup=new_compilable_indices)
 
     def sandwich(self, x, y) -> Circuit:
         """
@@ -1123,13 +1171,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
-                editable_labels = [sublist.copy() for sublist in self._labels]
+                editable_labels = _copy_nested_label_lists(self._labels)
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash.
@@ -1138,14 +1186,14 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      self._hashable_tup, self._hash)
+                                      self._hashable_tup, self._hash, saved_aux=self.saved_auxinfo)
             else:
                 static_labels = _sort_layer_labels(self._labels)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels,
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      hashable_tup, hash(hashable_tup))
+                                      hashable_tup, hash(hashable_tup), saved_aux=self.saved_auxinfo)
     
     def sort_layer_labels_inplace(self):
         """
@@ -1262,6 +1310,9 @@ class Circuit(object):
         integer then a :class:`Label` is returned (representing a layer or a
         part of a layer), otherwise a :class:`Circuit` is returned.
 
+        If the returned object is a Circuit, it won't retain any of this Circuit's
+        metadata (such as the compilable layer indices or occurrence id).
+
         Parameters
         ----------
         layers : int, slice, or list/tuple of ints
@@ -1300,8 +1351,6 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
-            Note that the returned circuit doesn't retain any original
-            metadata, such as the compilable layer indices or occurrence id.
         """
         nonint_layers = not isinstance(layers, int)
 
@@ -1322,7 +1371,10 @@ class Circuit(object):
                 if not nonint_layers:
                     return self.layertup[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+                    # copy the nested lists: the result is editable, and sharing them with
+                    # `self` lets an in-place editor on either circuit mutate the other (#759)
+                    return Circuit._fastinit(_copy_nested_label_lists(self._labels[layers]),
+                                             self._line_labels, not self._static)
         #otherwise assert both are not None:
 
 
@@ -1343,13 +1395,16 @@ class Circuit(object):
 
         for i in layers:
             ret_layer = []
-            for l in self._layer_components(i):  # loop over labels in this layer
+            # Equivalent to `layer_lbl = self.layertup[i]`
+            raw_layer = self._labels[i]
+            layer_lbl = raw_layer if isinstance(raw_layer, _Label) else _Label(raw_layer)
+
+            components = list(layer_lbl.components)
+
+            for l in components:
                 sslbls = get_sslbls(l)
                 if sslbls is None:
-                    ## add in special case of identity layer
-                    #if (isinstance(l,_Label) and l.name == self.identity): # ~ is_identity_layer(l)
-                    #    ret_layer.append(l); continue
-                    sslbls = set(self._line_labels)  # otherwise, treat None sslbs as *all* labels
+                    sslbls = set(self._line_labels)
                 else:
                     sslbls = set(sslbls)
                 if (strict and sslbls.issubset(lines)) or \
@@ -1894,7 +1949,12 @@ class Circuit(object):
                 if len(sslbls.intersection(lines)) == 0:
                     new_layer.append(l)
                 elif not clear_straddlers and not sslbls.issubset(lines):
-                    raise ValueError("Cannot operate on a block that is straddled by %s!" % str(_Label(l)))
+                    raise ValueError(
+                        ("Cannot operate on a block that is straddled by %s.  Pass"
+                         " `clear_straddlers=True` to remove straddling gates entirely --"
+                         " note that this removes the whole gate rather than restricting it"
+                         " to the lines that are not being cleared, which is not a"
+                         " well-defined operation in general.") % str(_Label(l)))
             self._labels[i] = new_layer
         self._compilable_layer_indices_tup = ()
 
@@ -1915,7 +1975,10 @@ class Circuit(object):
         clear_straddlers : bool, optional
             Whether or not gates which straddle cleared and non-cleared lines
             should be cleared.  If `False` and straddling gates exist, an error
-            will be raised.
+            will be raised.  If `True` a straddling gate is removed in its
+            entirety -- it is *not* restricted to the lines that were not
+            cleared, since an n-qubit gate generally has no meaningful
+            restriction to a subset of its qubits.
 
         Returns
         -------
@@ -2093,9 +2156,14 @@ class Circuit(object):
 
         serial_lbls = []
         for lbl in layertup:
-            if len(lbl.components) == 0:  # special case of an empty-layer label,
+            if isinstance(lbl, _CircuitLabel) and not expand_subcircuits:
+                serial_lbls.append(lbl) # Extending the components will create additional layers
+                                        # but we did not want to expand the subcircuit.
+
+            elif len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            serial_lbls.extend(list(lbl.components) * lbl.reps)
+            else:
+                serial_lbls.extend(list(lbl.components) * lbl.reps)
         return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
@@ -2290,6 +2358,10 @@ class Circuit(object):
         every qubit, but it should not contain more than one gate on
         a qubit.
 
+        Passing j=-1 does not append a layer; it inserts before the
+        current layer at position -1, which means it inserts to the
+        second-to-last position. Pass j=len(self) to append.
+
         Parameters
         ----------
         circuit_layer : Label
@@ -2316,6 +2388,10 @@ class Circuit(object):
         The input layer does not need to contain a gate that acts on
         every qubit, but it should not contain more than one gate on
         a qubit.
+
+        Passing j=-1 does not append a layer; it inserts before the
+        current layer at position -1, which means it inserts to the
+        second-to-last position. Pass j=len(self) to append.
 
         Parameters
         ----------
@@ -2476,7 +2552,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, 0)
 
-    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None):
+    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None, idle_gate_name: Union[str, _Label]='Gi'):
         """
         The tensor product of this circuit and `circuit`.
 
@@ -2539,6 +2615,10 @@ class Circuit(object):
         if len(overlap) > 0:
             raise ValueError(
                 "The line labels of `circuit` and this Circuit must be distinct, but overlap = %s!" % str(overlap))
+        if self._line_labels == ('*',):
+            raise ValueError("The line labels of 'self', are underspecified and are currently the placeholder labels.")
+        if circuit._line_labels == ('*',):
+            raise ValueError("The line labels of 'circuit', are underspecified and are currently the placeholder labels.")
 
         all_line_labels = set(self._line_labels + circuit._line_labels)
         if line_order is not None:
@@ -2558,11 +2638,49 @@ class Circuit(object):
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 
-        #Add circuit's labels into this circuit
-        self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
+        #Add circuit's labels into this circuit.
+        new_layers = []
+        ind = 0
+        common_len = min(len(self), len(circuit))
+        while ind < common_len:
+            lbl = self.layer_label(ind)
+            other_lbl = circuit.layer_label(ind)
+
+            # Convert to LabelTup-esque formats.
+            if isinstance(lbl, _LabelStr):
+                # These lbls have no qubits associated with them because of reasons.
+                # So we will assume that each line in the circuit of each has that gate applied.
+                lbl = _Label(lbl.name, self.line_labels)
+            if isinstance(other_lbl, _LabelStr):
+                other_lbl = _Label(other_lbl.name, circuit.line_labels)
+
+            new_layers.append(lbl.concat(other_lbl))
+            ind += 1
+
+        # One circuit may be longer than the other; walk the remaining layers of
+        # whichever one is longer. If such a layer has *explicit* sslbls we must
+        # also list the other (shorter, now-exhausted) circuit's lines as idling
+        # explicitly, via `idle_gate_name` -- otherwise those lines would be missing
+        # from the layer entirely. If the layer's sslbls are implicit (None, meaning
+        # it already applies contextually to *all* lines) it needs no change: it will
+        # automatically extend to cover the newly-added lines once merged.
+        if len(self) != common_len or len(circuit) != common_len:
+            long_circuit, short_line_labels = (
+                (circuit, self._line_labels) if len(circuit) > common_len else (self, circuit._line_labels)
+            )
+            while ind < len(long_circuit):
+                lbl = long_circuit.layer_label(ind)
+                if lbl.sslbls is not None:
+                    idle_lbls = [_Label(idle_gate_name, line) for line in short_line_labels]
+                    for idle_lbl in idle_lbls:
+                        lbl = lbl.concat(idle_lbl)
+                new_layers.append(lbl)
+                ind += 1
+
+        self._labels = new_layers
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
-    def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None) -> Circuit:
+    def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None, idle_gate_name: Union[str, _Label]='Gi') -> Circuit:
         """
         The tensor product of this circuit and `circuit`, returning a copy.
 
@@ -2585,10 +2703,54 @@ class Circuit(object):
         -------
         Circuit
         """
+
         cpy = self.copy(editable=True)
-        cpy.tensor_circuit_inplace(circuit, line_order)
+        cpy.tensor_circuit_inplace(circuit, line_order, idle_gate_name)
         if self._static: cpy.done_editing()
         return cpy
+
+    def _cache_tensor_lanes(self, sub_circuit_list: list[Circuit],
+                             lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
+        """
+        Store the tensor lanes in the circuit if appropriate.
+        Note that this should only be called in the case that `sub_circuit_list`
+        when tensored is equivalent to the current circuit.
+
+        This cache is only ever written to (or read from, see
+        `split_circuits_into_lanes.split_into_tensor_lanes`) when the circuit is
+        static (read-only). Editable circuits can be mutated in-place (e.g.
+        via `__setitem__`, `replace_gatename_inplace`, `tensor_circuit_inplace`,
+        etc.) without going through `done_editing()` or
+        `map_state_space_labels_inplace` -- the only two places that invalidate
+        this cache -- so trusting/populating a cache on an editable circuit
+        could silently return stale results after such a mutation. Restricting
+        the cache to static circuits is safe because a static circuit's
+        `_labels`/`_line_labels` cannot be changed in place (every in-place
+        mutator asserts `not self._static` before touching them).
+        """
+        if not self._static or len(self) == 0:
+            return self
+
+        # `saved_auxinfo["lanes"]` is populated lazily: if it hasn't been
+        # computed yet the key may simply be absent (or map to an empty/
+        # trivial single-lane dict), either of which we treat the same way as
+        # "not yet split into lanes".
+        current_lanes = self.saved_auxinfo.get("lanes")
+        if current_lanes is None or len(current_lanes) <= 1:
+            # We will update this because it is now believed that
+            # we are able to conduct the operation in cross talk free lanes.
+            qubits_used = set().union(*lane_to_qubits.values())
+
+            if len(qubits_used) != self.num_lines:
+                # Do not update.
+                return self
+
+            self.saved_auxinfo["lanes"] = {
+                tuple(sorted(qubit_labels)): sub_circuit_list[i]
+                for i, qubit_labels in lane_to_qubits.items()
+            }
+
+        return self
 
     def replace_layer_with_circuit_inplace(self, circuit: Circuit, j):
         """
@@ -3012,6 +3174,7 @@ class Circuit(object):
                 newobj = [map_sslbls(sub) for sub in obj]
             return newobj
         self._labels = map_sslbls(self._labels)
+        self.saved_auxinfo['lanes'] = {}
 
     def map_state_space_labels(self, mapper) -> Circuit:
         """
@@ -3467,21 +3630,29 @@ class Circuit(object):
 
     def layer_label(self, j: int):
         """
-        Returns the layer, as a :class:`Label`, at depth j.
+        Returns the layer, as a :class:`Label`, at index j.
 
         This label contains as components all the (non-identity) gates in the layer..
+
+        Note that `j` indexes *top-level* layers, so it is bounded by :meth:`num_layers`,
+        not by :meth:`depth`.  The two differ when the circuit retains a
+        :class:`CircuitLabel`, in which case this returns the box itself rather than
+        descending into it.  To iterate over every executed layer, call
+        :meth:`expand_subcircuits` first, after which the two agree.
 
         Parameters
         ----------
         j : int
-            The index (depth) of the layer to be returned
+            The index of the layer to be returned
 
         Returns
         -------
         Label
         """
         assert(j >= 0 and j < self.num_layers
-               ), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers)
+               ), "Circuit layer index {} out of range! Circuit has only {} layer(s). (Note that " \
+                  "`depth` is {}, and counts layers inside sub-circuit blocks; use " \
+                  "`expand_subcircuits()` to index those.)".format(j, self.num_layers, self.depth)
         return self[j]
 
     def layer_with_idles(self, j, idle_gate_name: Union[str, _Label]='I'):
@@ -3537,6 +3708,66 @@ class Circuit(object):
             if line_lbl not in layer_lbl.sslbls:
                 components.append(_Label(idle_gate_name, line_lbl))
         return _Label(components)
+
+    def insert_implicit_idles_inplace(self, layers: Optional[Iterable[int]] = None,
+                                      idle_gate_name: Union[str, _Label] = 'Gi'):
+        """
+        Materialize implicit identity operations as explicit idle gates, in place.
+
+        For each targeted layer, every line that isn't already acted on by that
+        layer's gates has `idle_gate_name` inserted onto it (see
+        :meth:`layer_label_with_idles`).  This is useful whenever a layer must be
+        able to stand on its own with an explicit gate on every line -- for
+        example before tensoring circuits together, so that a padded/idling
+        layer becomes a real gate label instead of an implicit (`sslbls=None`)
+        layer that would otherwise be interpreted as acting on *all* lines once
+        new lines are added.
+
+        Parameters
+        ----------
+        layers : iterable of int, optional
+            The layer indices to materialize idles for.  If `None` (the
+            default), every layer of the circuit is updated.
+
+        idle_gate_name : str or Label, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
+
+        Returns
+        -------
+        None
+        """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        if layers is None:
+            layers = range(self.num_layers)
+        for j in layers:
+            self[j] = self.layer_label_with_idles(j, idle_gate_name)
+
+    def insert_implicit_idles(self, layers: Optional[Iterable[int]] = None,
+                              idle_gate_name: Union[str, _Label] = 'Gi') -> Circuit:
+        """
+        Materialize implicit identity operations as explicit idle gates, returning a copy.
+
+        See :meth:`insert_implicit_idles_inplace` for details.
+
+        Parameters
+        ----------
+        layers : iterable of int, optional
+            The layer indices to materialize idles for.  If `None` (the
+            default), every layer of the circuit is updated.
+
+        idle_gate_name : str or Label, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_implicit_idles_inplace(layers, idle_gate_name)
+        if self._static: cpy.done_editing()
+        return cpy
 
     @property
     def num_layers(self):
@@ -3618,6 +3849,25 @@ class Circuit(object):
 
     @property
     def duration(self):
+        """
+        How long this circuit takes to execute.
+
+        The sum of the layers' durations, i.e. of their `time` attributes.  A
+        :class:`Label`'s `time` is a duration rather than a timestamp; see the
+        :class:`~pygsti.baseobjs.label.Label` class docstring for how durations
+        aggregate, including the `max` taken across a parallel layer's components.
+
+        Layers carrying no `time` contribute zero, so this is `0.0` for the
+        untimed circuits that most of pyGSTi deals in.
+
+        Note that this is unrelated to the timestamps on a
+        :class:`~pygsti.data.DataSet` row, which record *when* outcomes were
+        observed and are what the time-dependent forward simulators consume.
+
+        Returns
+        -------
+        float
+        """
         # similar to depth()
         if self._static:
             return sum([getattr(lbl, "time", 0) for lbl in self._labels])
@@ -4042,7 +4292,8 @@ class Circuit(object):
                         qubit_conversion: dict,
                         wait_duration=None,
                         gatename_conversion=None,
-                        idle_gate_name='Gi'):
+                        idle_gate_name='Gi',
+                        mcm_label='Iz'):
         """
         Converts this circuit to a Cirq circuit.
 
@@ -4062,9 +4313,17 @@ class Circuit(object):
             Cirq gates that will appear in the Cirq circuit. If only standard pyGSTi names
             are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
             be specified, and an automatic conversion to the standard Cirq names will be
-            implemented.
+            implemented. Entries may either be a fixed `cirq.Gate` object, or (for
+            parameterized gates, e.g. 'Gzr') a callable that is called with the gate label's
+            args (e.g. `theta -> cirq.ZPowGate(exponent=theta / np.pi)`) to produce the gate.
         idle_gate_name : str, optional
             Name to use for idle gates. Defaults to 'Gi'
+
+        mcm_label : str, optional
+            The pyGSTi instrument name (see :meth:`from_cirq`) that indicates a per-qubit
+            Z-basis mid-circuit measurement, which is converted to a `cirq.measure` operation
+            (with an automatically generated, layer- and qubit-unique key) rather than looked
+            up in `gatename_conversion`. Defaults to 'Iz'.
 
         Returns
         -------
@@ -4092,8 +4351,17 @@ class Circuit(object):
             layer = self.layer_with_idles(i, idle_gate_name)
             operations = []
             for gate in layer:
-                operation = gatename_conversion[gate.name]
-                qubits = map(qubit_conversion.get, gate.qubits)
+                qubits = tuple(map(qubit_conversion.get, gate.qubits))
+                if gate.name == mcm_label:
+                    assert len(qubits) == 1, \
+                        f"Mid-circuit measurement label '{mcm_label}' is only supported acting on a single qubit at a time, but got {gate}."
+                    #generate a key that is unique across both qubit and layer.
+                    operations.append(cirq.measure(*qubits, key=f'{gate.qubits[0]}_{i}'))
+                    continue
+                conversion_entry = gatename_conversion[gate.name]
+                #parameterized gate families (e.g. 'Gzr') are stored as a callable
+                #(args -> cirq gate) rather than a fixed cirq.Gate object.
+                operation = conversion_entry if isinstance(conversion_entry, cirq.Gate) else conversion_entry(*gate.args)
                 operations.append(operation.on(*qubits))
             moments.append(cirq.Moment(operations))
 
@@ -4101,9 +4369,33 @@ class Circuit(object):
 
     @staticmethod
     def from_cirq(circuit: CirqCircuit, qubit_conversion=None, cirq_gate_conversion=None,
-                  remove_implied_idles=True, global_idle_replacement_label='auto') -> Circuit:
+                  cirq_parameterized_gate_conversion=None,
+                  remove_implied_idles=True, global_idle_replacement_label='auto',
+                  drop_terminal_measurements=True, mcm_label='Iz',
+                  lossy: Literal['warn', 'ignore', 'raise'] = 'warn') -> Circuit:
         """
         Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
+
+        In addition to gates with an exact match in `cirq_gate_conversion` (see
+        :func:`pygsti.tools.internalgates.standard_gatenames_cirq_conversions`), operations
+        whose gate is a member of one of the following continuously parameterized gate families
+        are converted using the angle(s) computed from the cirq gate's parameters (see
+        :func:`pygsti.tools.internalgates.cirq_parameterized_gatenames_standard_conversions`;
+        `cirq.Rx`/`Ry`/`Rz` are subclasses of `X`/`Y`/`ZPowGate` in cirq, so are covered as well):
+
+        * `ZPowGate(exponent=t)` -> `Gzr`, args `(pi * t,)`
+        * `XPowGate(exponent=t)` -> `Gxr`, args `(pi * t,)`
+        * `YPowGate(exponent=t)` -> `Gyr`, args `(pi * t,)`
+        * `CZPowGate(exponent=t)` -> `Gczr`, args `(pi * t,)`
+        * `PhasedXZGate(a, x, z)` -> `Gu3`, args `(pi*x, pi*(z + a) - pi/2, pi/2 - pi*a)`
+
+        A `cirq.MeasurementGate` operation converts to one `mcm_label` instrument label per
+        measured qubit (see `drop_terminal_measurements` and `mcm_label` below); a nontrivial
+        `invert_mask` is not supported and raises `NotImplementedError`, and the measurement key
+        is discarded (see `lossy` below: a `CirqInteropWarning` by default). A
+        symbolically-parameterized (sympy) operation, or an operation with no associated gate
+        (e.g. a classically-controlled operation), raises a `ValueError`/`NotImplementedError`
+        respectively rather than being silently mishandled.
 
         Parameters
         ----------
@@ -4119,6 +4411,16 @@ class Circuit(object):
             If specified a dictionary with keys given by cirq gate objects,
             and values given by pygsti gate names which overrides the built-in
             conversion dictionary used by default.
+
+        cirq_parameterized_gate_conversion : list, optional (default None)
+            If specified, a list of `(cirq gate class, pygsti gate name, args function)`
+            tuples overriding the built-in dictionary
+            (:func:`pygsti.tools.internalgates.cirq_parameterized_gatenames_standard_conversions`)
+            used to convert cirq operations whose gate is a member of a continuously
+            parameterized gate family (e.g. `cirq.ZPowGate`, arbitrary exponent) and which
+            has no exact match in `cirq_gate_conversion`. Each tuple's gate class is checked
+            via `isinstance`, in list order, and the corresponding args function is called on
+            the cirq gate to compute the args of the resulting pyGSTi `Label`.
 
         remove_implied_idles : bool, optional (default True)
             A flag indicating whether to remove explicit idles
@@ -4138,6 +4440,30 @@ class Circuit(object):
             this does not check for compatibility so it is up to the user to ensure
             the labels are compatible.
 
+        drop_terminal_measurements : bool, optional (default True)
+            A cirq `cirq.MeasurementGate` operation is *terminal* if no later moment in the
+            circuit touches any of its qubits. If True (the default), terminal measurements
+            are dropped from the converted circuit (with a warning) rather than converted to
+            explicit `mcm_label` instrument labels, since a terminal Z-basis measurement is
+            exactly pyGSTi's implicit end-of-circuit POVM readout -- converting it as well
+            would double-count outcomes in a typical GST-style analysis. Non-terminal (i.e.,
+            genuinely mid-circuit) measurements are always converted, regardless of this flag.
+
+        mcm_label : str, optional (default 'Iz')
+            The pyGSTi instrument name used for each per-qubit label emitted for a (non-terminal,
+            or all measurements if `drop_terminal_measurements` is False) cirq Z-basis
+            mid-circuit measurement. Matches the label used by :meth:`convert_to_qiskit`.
+
+        lossy : {'warn', 'ignore', 'raise'}, optional (default 'warn')
+            Controls how lossy aspects of the conversion are reported. The conversion is lossy
+            when a measurement is dropped from the converted circuit (a terminal measurement,
+            see `drop_terminal_measurements`) or when a kept measurement's key is discarded (see
+            `mcm_label`). If 'warn', a CirqInteropWarning is emitted for each kind of loss. If
+            'ignore', the conversion silently proceeds. If 'raise', a ValueError is raised
+            instead -- note that with the default `drop_terminal_measurements=True`, this means
+            any circuit containing a terminal measurement raises, which is the intended semantics
+            of opting into 'raise'.
+
         Returns
         -------
         pygsti_circuit
@@ -4149,11 +4475,26 @@ class Circuit(object):
         except ImportError:
             raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
+        assert lossy in ('warn', 'ignore', 'raise'), \
+            f"'lossy' must be 'warn', 'ignore', or 'raise', not {lossy!r}"
+
+        def _lossy_notice(message):
+            if lossy == 'warn':
+                _warnings.warn(message, _CirqInteropWarning, stacklevel=4)
+            elif lossy == 'raise':
+                raise ValueError(message)
+
         #mapping between cirq gates and pygsti gate names:
         if cirq_gate_conversion is not None:
             cirq_to_gate_name_mapping = cirq_gate_conversion
         else:
             cirq_to_gate_name_mapping = _itgs.cirq_gatenames_standard_conversions()
+
+        #mapping between cirq parameterized-gate-family classes and pygsti (name, args) converters:
+        if cirq_parameterized_gate_conversion is not None:
+            cirq_to_parameterized_gate_name_mapping = cirq_parameterized_gate_conversion
+        else:
+            cirq_to_parameterized_gate_name_mapping = _itgs.cirq_parameterized_gatenames_standard_conversions()
 
         #get all of the qubits in the cirq Circuit
         all_cirq_qubits = circuit.all_qubits()
@@ -4184,6 +4525,58 @@ class Circuit(object):
         #cirq Circuits can be sliced and iterated over. Iterating returns each contained
         #Moment in sequence. Slicing returns a new circuit corresponding to the
         #selected layers.
+        moments = list(circuit)
+        num_moments = len(moments)
+
+        #one-time warning flags, so we don't spam a warning per-operation.
+        warned_measurement_keys = [False]
+        warned_dropped_terminal = [False]
+
+        def op_to_labels(op, is_terminal_measurement):
+            """Converts a single cirq Operation into a (possibly empty, usually length-1) list of pyGSTi Labels."""
+            if op.gate is None:
+                raise NotImplementedError(
+                    f'Cannot convert cirq operation {op!r} to a pyGSTi label: operations with no '
+                    'associated gate (e.g., classically-controlled operations) are not supported by from_cirq.')
+
+            if isinstance(op.gate, cirq.MeasurementGate):
+                if any(op.gate.full_invert_mask()):
+                    raise NotImplementedError(
+                        f'Cannot convert cirq measurement operation {op!r} to a pyGSTi label: a '
+                        'nontrivial invert_mask is not supported by from_cirq.')
+                if is_terminal_measurement:
+                    if not warned_dropped_terminal[0]:
+                        _lossy_notice(
+                            "Dropping terminal Z-basis measurement(s): these correspond to pyGSTi's "
+                            'implicit end-of-circuit readout. Pass drop_terminal_measurements=False '
+                            f"to instead convert them to explicit '{mcm_label}' instrument labels.")
+                        warned_dropped_terminal[0] = True
+                    return []
+                if not warned_measurement_keys[0]:
+                    _lossy_notice('pyGSTi circuit mapping discards Cirq measurement keys.')
+                    warned_measurement_keys[0] = True
+                return [_Label(mcm_label, (qubit_conversion[qubit],)) for qubit in op.qubits]
+
+            sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
+            try:
+                name = cirq_to_gate_name_mapping[op.gate]
+            except KeyError:
+                if cirq.is_parameterized(op):
+                    raise ValueError(
+                        f'Cannot convert symbolically-parameterized cirq operation {op!r} to a '
+                        'pyGSTi label. Resolve all symbols to numerical values first, e.g. via '
+                        'cirq.resolve_parameters.')
+                for gate_cls, pygsti_name, args_fn in cirq_to_parameterized_gate_name_mapping:
+                    if isinstance(op.gate, gate_cls):
+                        return [_Label(pygsti_name, sslbls, args=args_fn(op.gate))]
+                msg = 'Could not find matching standard gate name in provided dictionary, nor a matching' \
+                     +' parameterized gate family. Falling back to try and find a unitary from' \
+                     +' standard_gatename_unitaries which matches up to a global phase.'
+                _warnings.warn(msg, _CirqInteropWarning, stacklevel=3)
+                name = _itgs.unitary_to_standard_gatename(cirq.unitary(op.gate), up_to_phase=True)
+                assert name is not None, f'Could not find a matching standard gate name for {op!r}.'
+
+            return [_Label(name, state_space_labels=sslbls)]
 
         #initialize empty list of pygsti circuit layers
         circuit_layers = []
@@ -4192,88 +4585,63 @@ class Circuit(object):
         seen_global_idle = False
 
         #Iterate through each of the moments and build up layers Moment by Moment.
-        for moment in circuit:
-            #if the length of the tuple of operations for this moment in
-            #moment.operations is length 1, then we'll add the operation to
-            #the pygsti circuit as a bare gate label (i.e. not wrapped in a layer label
-            #indicating parallel gates). Otherwise, we'll iterate through and add them
-            #as a layer label.
-            if len(moment.operations) == 1:
-                op = moment.operations[0]
-                try:
-                    name = cirq_to_gate_name_mapping[op.gate]
-                except KeyError:
-                    msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
-                         +' unitary from standard_gatename_unitaries which matches up to a global phase.'
-                    _warnings.warn(msg)
-                    name = _itgs.unitary_to_standard_gatename(op.gate._unitary_(), up_to_phase=True)
-                    assert name is not None, 'Could not find a matching standard gate name for conversion.'
-                sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
-                #global idle handling:
-                if name == 'Gi' and global_idle_replacement_label:
-                    #set a flag indicating that we've seen a global idle to use later.
-                    seen_global_idle = True
-                    if isinstance(global_idle_replacement_label, str):
-                        if global_idle_replacement_label == 'auto':
-                            #append the default.
-                            circuit_layers.append(_Label(()))
-                        else:
-                            circuit_layers.append(_Label(global_idle_replacement_label,
-                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
-                    elif isinstance(global_idle_replacement_label, _Label):
-                        circuit_layers.append(global_idle_replacement_label)
-                else:
-                    circuit_layers.append(_Label(name, state_space_labels = sslbls))
+        for i, moment in enumerate(moments):
+            #resolve every operation in this moment to a (possibly empty) list of Labels, then
+            #assemble the (flattened) result into a single circuit layer uniformly -- regardless
+            #of how many raw cirq operations or resulting pygsti labels are involved.
+            layer_label_elems = []
+            for op in moment.operations:
+                is_terminal_measurement = (drop_terminal_measurements
+                                          and isinstance(op.gate, cirq.MeasurementGate)
+                                          and not any(moments[j].operates_on(op.qubits)
+                                                     for j in range(i + 1, num_moments)))
+                layer_label_elems.extend(op_to_labels(op, is_terminal_measurement))
 
-            else:
-                #initialize sublist for layer label elements
-                layer_label_elems = []
-                #iterate through each of the operations in this moment
-                for op in moment.operations:
-                    try:
-                        name = cirq_to_gate_name_mapping[op.gate]
-                    except KeyError:
-                        msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
-                            +' unitary from standard_gatename_unitaries which matches up to a global phase.'
-                        _warnings.warn(msg)
-                        name = _itgs.unitary_to_standard_gatename(op.gate._unitary_(), up_to_phase=True)
-                        assert name is not None, 'Could not find a matching standard gate name for conversion.'
-                    sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
-                    layer_label_elems.append(_Label(name, state_space_labels = sslbls))
+            #if every operation in this moment was dropped (e.g. only terminal measurements),
+            #there is nothing left to add as a circuit layer.
+            if not layer_label_elems:
+                continue
 
-                #add special handling for global idle circuits and implied idels based on flags.
-                layer_label_elem_names = [elem.name for elem in layer_label_elems]
-                all_idles = all([name == 'Gi' for name in layer_label_elem_names])
+            #add special handling for global idle layers and implied idles based on flags.
+            all_idles = all(elem.name == 'Gi' for elem in layer_label_elems)
 
-                if global_idle_replacement_label and all_idles:
-                    #set a flag indicating that we've seen a global idle to use later.
-                    seen_global_idle = True
-                    #if global idle is a string, replace this layer with the user specified one:
-                    if isinstance(global_idle_replacement_label, str):
-                        if global_idle_replacement_label == 'auto':
-                            #append the default.
-                            circuit_layers.append(_Label(()))
-                        else:
-                            circuit_layers.append(_Label(global_idle_replacement_label,
-                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
-                    elif isinstance(global_idle_replacement_label, _Label):
-                        circuit_layers.append(global_idle_replacement_label)
-                #check whether any of the elements are implied idles, and if so use flag
-                #to determine whether to include them. We have already checked if this layer
-                #is a global idle, so if not then we only need to check if any of the layer
-                #elements are implied idles.
-                elif remove_implied_idles and 'Gi' in layer_label_elem_names and not all_idles:
-                    stripped_layer_label_elems = [elem for elem in layer_label_elems
-                                                  if not elem.name == 'Gi']
-                    #if this is length one then add this to the circuit as a bare label, otherwise
-                    #add as a layer label.
-                    if len(stripped_layer_label_elems)==1:
-                        circuit_layers.append(stripped_layer_label_elems[0])
+            if global_idle_replacement_label and all_idles:
+                #set a flag indicating that we've seen a global idle to use later.
+                seen_global_idle = True
+                #if global idle is a string, replace this layer with the user specified one:
+                if isinstance(global_idle_replacement_label, str):
+                    if global_idle_replacement_label == 'auto':
+                        #append the default.
+                        circuit_layers.append(_Label(()))
                     else:
-                        circuit_layers.append(_Label(stripped_layer_label_elems))
-                #otherwise, just add this layer as-is.
+                        circuit_layers.append(_Label(global_idle_replacement_label,
+                                                     tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
+                elif isinstance(global_idle_replacement_label, _Label):
+                    circuit_layers.append(global_idle_replacement_label)
+            #check whether any of the elements are implied idles, and if so use flag
+            #to determine whether to include them. We have already checked if this layer
+            #is a global idle, so if not then we only need to check if any of the layer
+            #elements are implied idles. `not all_idles` together with the presence of a
+            #'Gi' element already implies len(layer_label_elems) > 1 (at least one 'Gi'
+            #and at least one non-'Gi'), so a lone idle in a layer -- the explicit gate for
+            #that layer, not an "implied" one -- never reaches this branch.
+            elif remove_implied_idles and not all_idles \
+                    and any(elem.name == 'Gi' for elem in layer_label_elems):
+                stripped_layer_label_elems = [elem for elem in layer_label_elems
+                                              if not elem.name == 'Gi']
+                #if this is length one then add this to the circuit as a bare label, otherwise
+                #add as a layer label.
+                if len(stripped_layer_label_elems)==1:
+                    circuit_layers.append(stripped_layer_label_elems[0])
                 else:
-                    circuit_layers.append(_Label(layer_label_elems))
+                    circuit_layers.append(_Label(stripped_layer_label_elems))
+            #a single remaining label is added to the circuit as a bare gate label (i.e., not
+            #wrapped in a layer label indicating parallel gates).
+            elif len(layer_label_elems) == 1:
+                circuit_layers.append(layer_label_elems[0])
+            #otherwise, just add this layer as-is.
+            else:
+                circuit_layers.append(_Label(layer_label_elems))
 
         #if any of the circuit layers are global idles, then we'll force the circuit line
         #labels to include all of the qubits appearing in the cirq circuit, otherwise
@@ -4289,6 +4657,7 @@ class Circuit(object):
                     qiskit_gate_conversion: Optional[Dict[str, str]] = None,
                     use_standard_gate_conversion_as_backup: bool = True,
                     allow_different_gates_in_same_layer: bool = True,
+                    lossy: Literal['warn', 'ignore', 'raise'] = 'warn',
                     verbose: bool = False
                     ) -> Tuple[Circuit, Dict[int, str]]:
         """
@@ -4322,6 +4691,15 @@ class Circuit(object):
             they will either be placed in the same layer (if True) or split into
             separate layers (if False).
 
+        lossy : {'warn', 'ignore', 'raise'}, optional (default 'warn')
+            Controls how lossy aspects of the conversion are reported. The conversion
+            is lossy when the Qiskit circuit contains structure that a pyGSTi Circuit
+            cannot represent: multiple quantum registers (qreg structure is flattened),
+            classical registers/bits (discarded), or measure instructions (dropped).
+            If 'warn', a QiskitInteropWarning is emitted for each kind of loss.
+            If 'ignore', the conversion silently proceeds.
+            If 'raise', a ValueError is raised instead.
+
         Returns
         -------
         Tuple:
@@ -4333,14 +4711,16 @@ class Circuit(object):
                 to the corresponding pyGSTi qubit.
         """
 
-        try:
-            import qiskit
-            if qiskit.__version__ != '2.1.1':
-                _warnings.warn("Circuit class method `from_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__,
-                               _QiskitInteropWarning)
-        except:
-            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+        _check_qiskit_version('Circuit.from_qiskit()')
+
+        assert lossy in ('warn', 'ignore', 'raise'), \
+            f"'lossy' must be 'warn', 'ignore', or 'raise', not {lossy!r}"
+
+        def _lossy_notice(message):
+            if lossy == 'warn':
+                _warnings.warn(message, _QiskitInteropWarning, stacklevel=3)
+            elif lossy == 'raise':
+                raise ValueError(message)
 
         # mapping between qiskit gates and pygsti gate names:
         if qiskit_gate_conversion is not None:
@@ -4355,12 +4735,10 @@ class Circuit(object):
 
         # get all of the qubits in the Qiskit circuit
         if len(circuit.qregs) > 1:
-            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.',
-                           _QiskitInteropWarning)
+            _lossy_notice('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
 
-        if len(circuit.cregs):
-            _warnings.warn('pyGSTi circuit mapping discards classical registers.',
-                           _QiskitInteropWarning)
+        if len(circuit.clbits):
+            _lossy_notice('pyGSTi circuit mapping discards classical registers and classical bits.')
 
         qubits = circuit.qubits
 
@@ -4369,14 +4747,12 @@ class Circuit(object):
             unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
             assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits}'
 
-            qubit_idx_conversion = {i: qubit_conversion[circuit._qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
+            qubit_idx_conversion = {i: qubit_conversion[circuit.qubits[i]] for i in range(circuit.num_qubits)}
 
         #if it is None, build a default mapping.
         else:
             # default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
-            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)}
-            # ^ in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell),
-            #   the method is called _qbit_argument_conversion.
+            qubit_conversion = {circuit.qubits[i]: f'Q{i}' for i in range(circuit.num_qubits)}
 
             qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
 
@@ -4418,7 +4794,8 @@ class Circuit(object):
             pygsti_gate_qubits = [qubit_conversion[qubit] for qubit in instruction.qubits]
 
             if name == 'measure':
-                _warnings.warn('skipping measure')
+                _lossy_notice('Circuit.from_qiskit() drops measure instructions; measurement '
+                              'outcomes are not represented in the pyGSTi circuit.')
                 continue
 
             if name == 'barrier':
@@ -4643,7 +5020,6 @@ class Circuit(object):
 
         return quil
 
-
     def convert_to_qiskit(self,
                           num_qubits: Optional[int] = None,
                           qubit_conversion: Union[None, str, Dict[str, Union[int, qiskit.circuit.Qubit]]] = None,
@@ -4691,14 +5067,7 @@ class Circuit(object):
             a Qiskit QuantumCircuit corresponding to the pyGSTi circuits.
         """
 
-        try:
-            import qiskit
-            if qiskit.__version__ != '2.1.1':
-                _warnings.warn("Circuit class method `convert_to_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__,
-                               _QiskitInteropWarning)
-        except:
-            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+        qiskit = _check_qiskit_version('Circuit.convert_to_qiskit()')
 
         depth = self.depth
 
@@ -4790,7 +5159,6 @@ class Circuit(object):
                               'ordered_data_indices': ordered_data_indices}
 
         return qiskit_qc
-
 
     def convert_to_openqasm(self, num_qubits=None,
                             standard_gates_version='u3',
@@ -5100,6 +5468,8 @@ class Circuit(object):
         self._str = self.str
         # ^ the accessor on the right-hand side sees that self._str
         #   is None, and so returns a value computed from scratch.
+        if 'lanes' in self.saved_auxinfo:
+            self.saved_auxinfo['lanes'] = {}
         return
 
 

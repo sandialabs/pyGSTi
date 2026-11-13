@@ -492,7 +492,9 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
 
             elif to_type == "full TP":
-                converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                # TPPOVM requires dense FullPOVMEffects, so always flatten (e.g. the
+                # ComposedPOVMEffects of a ComposedPOVM) regardless of `flatten_structure`.
+                converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), True))
                                      for lbl, vec in povm.items()]
                 return TPPOVM(converted_effects, povm.evotype, povm.state_space)
 

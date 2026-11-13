@@ -95,7 +95,7 @@ NOTE: In notebook display of report figures does not work in jupyterlab due to r
 ```{code-cell} ipython3
 # Create a workspace to show plots
 w = pygsti.report.Workspace()
-w.init_notebook_mode(connected=False, autodisplay=True) 
+w.init_notebook_mode(enable_offline_mode=True, autodisplay=True) 
 ```
 
 ### 1. Instability Detection Results : Power Spectra and the Frequencies of Instabilities

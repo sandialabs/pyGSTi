@@ -284,7 +284,6 @@ class Basis(_NicelySerializable):
 
     @classmethod
     def cast(cls, arg, dim=None, sparse: Optional[bool] = None) -> Basis:
-        #print("DB: CAST = ", arg, dim)
         if isinstance(arg, Basis):
             return cls.cast_from_basis(arg, dim, sparse)
         if isinstance(arg, str):
@@ -605,7 +604,6 @@ class Basis(_NicelySerializable):
         if to_basis.sparse:
             return to_basis.from_std_transform_matrix.dot(self.to_std_transform_matrix)
         elif self.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
             return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix.toarray())
         else:
             return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix)
@@ -635,7 +633,6 @@ class Basis(_NicelySerializable):
         if self.sparse:
             return self.from_std_transform_matrix.dot(from_basis.to_std_transform_matrix)
         elif from_basis.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
             return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix.toarray())
         else:
             return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix)
@@ -1178,7 +1175,6 @@ class ExplicitBasis(Basis):
         else:
             els_to_hash = tuple((_np.round(el, 6).tobytes() for el in self.elements))
         return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
-        # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
@@ -1190,8 +1186,10 @@ class BuiltinBasis(LazyBasis):
 
     Parameters
     ----------
-    name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
-        Name of the basis to be created.
+    name : {"pp", "PP", "gm", "GM", "gm_unnormalized", "std", "qt", "id", "cl", "sv"}
+        Name of the basis to be created. ``pp`` and ``gm`` have unit Frobenius
+        norm; ``PP`` and ``GM`` have squared Frobenius norm equal to the
+        Hilbert-space dimension, with the identity as their first element.
 
     dim_or_statespace : int or StateSpace
         The dimension of the basis to be created or the state space for which a
@@ -1696,6 +1694,14 @@ class TensorProdBasis(LazyBasis):
     longname : str, optional
         A longer description of this basis.  If `None`, then a long name is
         automatically generated.
+
+    Notes
+    -----
+    Transform matrices to and from a TensorProdBasis (:meth:`create_transform_matrix`,
+    :meth:`to_std_transform_matrix` and friends) do not exploit the tensor-product structure,
+    under which the transform from another TensorProdBasis with the same component dimensions
+    is a Kronecker product of the component transforms, and the transform to the standard basis
+    is a Kronecker product up to a fixed permutation.
     """
 
     def __init__(self, component_bases, name: Optional[str] = None, longname: Optional[str] = None):
@@ -1736,8 +1742,6 @@ class TensorProdBasis(LazyBasis):
 
         real = all([c.real for c in self._component_bases])
         sparse = all([c.sparse for c in self._component_bases])
-        #assert (all([c.real == real for c
-        #            in self._component_bases])), "Inconsistent `real` value among component bases!"
         assert (all([c.sparse == sparse for c
                      in self._component_bases])), "Inconsistent sparsity among component bases!"
 
@@ -1918,14 +1922,6 @@ class TensorProdBasis(LazyBasis):
         -------
         Basis
         """
-        #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
-        #    equiv_components = []
-        #    for c in self._component_bases:
-        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))
-        #        # c.create_simple_equivalent('clmx'))
-        #        else: equiv_components.append(c.create_simple_equivalent('std'))
-        #    expanded_basis = TensorProdBasis(equiv_components)
-        #    return BuiltinBasis('std', expanded_basis.elsize, sparse=expanded_basis.sparse)
 
         if builtin_basis_name is None:
             builtin_basis_name = self.name  # default

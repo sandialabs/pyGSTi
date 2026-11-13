@@ -50,27 +50,21 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         #Create representation object
         rep_type_order = ('dense', '1+L') if evotype.prefer_dense_reps else ('1+L', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', '1+L': 'identitypluserrorgen'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == '1+L':
-                    rep = evotype.create_identitypluserrorgen_rep(self.errorgen._rep)
-                    self._ident = None  # not needed
-                elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, self.errorgen.matrix_basis,
-                                                           state_space)  # None => init to identity
-                    self._ident = _np.identity(state_space.dim, 'd')
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == '1+L':
+            rep = evotype.create_identitypluserrorgen_rep(self.errorgen._rep)
+            self._ident = None  # not needed
+        else:
+            rep = evotype.create_dense_superop_rep(None, self.errorgen.matrix_basis,
+                                                   state_space)  # None => init to identity
+            self._ident = _np.identity(state_space.dim, 'd')
+        self._rep_type = rep_type
 
         # Caches in case terms are used
         self.terms = {}

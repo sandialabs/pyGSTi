@@ -120,7 +120,7 @@ flowchart TD
 
 - **`stdtarget.py` is on the way out.** [pygsti/modelpacks/stdtarget.py:13](../pygsti/modelpacks/stdtarget.py#L13) is marked for deprecation. Skip unless you're specifically touching the calc-cache system.
 
-- **`target_model(gate_type=...)` returns a *copy*, not the cached singleton.** Mutating the returned model is safe; the cached one is untouched. But if you call `target_model` repeatedly with the same arguments, you'll rebuild from cached pickled state each time — fine for occasional use, mildly wasteful inside a loop.
+- **`target_model(gate_type=...)` returns a *copy*, not the cached singleton.** Mutating the returned model is safe; the cached one is untouched. But if you call `target_model` repeatedly with the same arguments, you'll deep-copy the cached in-memory Model each time — fine for occasional use, mildly wasteful inside a loop.
 
 - **Modelpacks ship `germs_lite` *and* `germs`.** `germs_lite` is a reduced, faster-to-converge set for quick experiments; `germs` is the larger, more rigorous set. `StandardGSTDesign` accepts either. Pick based on whether you want fast iteration or experimental rigor.
 
@@ -129,7 +129,6 @@ flowchart TD
 ## Architectural debt
 
 - [`modelpacks/legacy/`](known-debt.md#5-modelpackslegacy--19-old-style-std-files) — 19 old-style files.
-- `tools/leakage.py` contains a complete leakage-aware model construction path that arguably belongs alongside modelpack/processor infrastructure; see [known-debt.md #2](known-debt.md#2-toolsleakagepy--pygstileakage-move).
 - General subpackage restructuring threads — [#715](https://github.com/sandialabs/pyGSTi/issues/715).
 
 ## Canonical examples

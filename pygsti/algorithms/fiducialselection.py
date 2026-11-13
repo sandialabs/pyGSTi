@@ -1308,8 +1308,6 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         printer.log("Total number of fiducial sets to be checked is%s"
                     % numFidLists, 1)
         printer.warning("If this is very large, you may wish to abort.")
-#        print "Num bits:", numBits
-#        print "Num Fid Options:", hammingWeight
         # Now a non auxiliary function:
         bitVecMat = build_bitvec_mx(numBits, hammingWeight)
 
@@ -1324,7 +1322,6 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
             # If scores are within machine precision, we want the fiducial set
             # that requires fewer total button operations.
             if abs(temp_score - best_score) < 1e-8:
-                #                print "Within machine precision!"
                 bestFidList = []
                 for index, val in enumerate(best_weights):
                     if val == 1:
@@ -1335,8 +1332,6 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
                         tempFidList.append(fid_list[index])
                 tempLen = sum(len(i) for i in tempFidList)
                 bestLen = sum(len(i) for i in bestFidList)
-#                print tempLen, bestLen
-#                print temp_score, best_score
                 if tempLen < bestLen:
                     best_score = temp_score
                     best_weights = weights
@@ -1865,7 +1860,6 @@ def construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigen
         sqrteU_dict[fiducial]= U@_np.diag(_np.sqrt(e))  
         
         #check reconstruction:
-        #print('Norm to reconstruction: ', _np.linalg.norm(fid_mat_gramian- (U@_np.diag(_np.sqrt(e)))@(U@_np.diag(_np.sqrt(e))).conj().T))
     return sqrteU_dict        
     
 def add_penalties_greedy(unpenalized_score, fid_list, l1_penalty=0, op_penalty=0, gate_penalty=None):

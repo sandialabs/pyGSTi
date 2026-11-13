@@ -364,19 +364,23 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         Frees an array allocated by :meth:`allocate_local_array`.
 
-        This method should always be paired with a call to
-        :meth:`allocate_local_array`, since the allocated array
-        may utilize shared memory, which must be explicitly de-allocated.
+        This layout allocates plain NumPy arrays, so there are no external
+        shared-memory handles to release.  This method is intentionally a
+        no-op, but exists so callers can pair every
+        :meth:`allocate_local_array` call with a matching free call without
+        checking the concrete layout type.
 
         Parameters
         ----------
-        local_array : numpy.ndarray or LocalNumpyArray
-            The array to free, as returned from `allocate_local_array`.
+        local_array : numpy.ndarray
+            The NumPy array to free, as returned from `allocate_local_array`.
 
         Returns
         -------
         None
         """
+        # See pyGSTi issue #698.  Distributed layouts may need explicit shared-memory
+        # cleanup; this local layout does not.
         pass
 
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0,

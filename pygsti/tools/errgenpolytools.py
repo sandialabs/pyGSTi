@@ -31,7 +31,7 @@ from pygsti.models import (ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel 
                           LocalNoiseModel as _LocalNoiseModel)
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than as _bel_less_than
 
 from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -252,6 +252,12 @@ def _truncate_lse_support(errorgen: _LSE, qubit_indices: Iterable[int], validate
             if not all([pauli_index==0 for qubit_idx, pauli_index in enumerate(pauli_index_list) if qubit_idx not in qubit_indices]):
                 msg = 'Some paulis outside of specified qubit indices are not identities, violating requested locality constraint.'
                 raise RuntimeError(msg)
+    # Restricting to the gate's qubits in the gate's own order can put the two basis element
+    # labels of a C/A label out of canonical (string-sorted) order; restore it. The truncated
+    # label only serves as an equivalence-class key (the errorgens of one gate parameter), so
+    # the sign flip that a reordered A label would carry on a rate is irrelevant here.
+    if len(new_bels) == 2 and not _bel_less_than(new_bels[0], new_bels[1]):
+        new_bels.reverse()
     new_errorgen = _LSE(errorgen.errorgen_type, new_bels)
     return new_errorgen
 
@@ -468,7 +474,7 @@ def magnus_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, in
 
 def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, int], tuple[_LSE, complex]]], 
                                                   errorgen_to_var_map: dict[tuple[_LSE, int], int], 
-                                                  identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
+                                                  identity: Optional[str]=None) -> dict[_LSE, _Polynomial]:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -486,11 +492,9 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[
         and whose value is an integer corresponding to the corresponding variable index to use in constructed
         Polynomials.
 
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. Built if not given.
 
     Returns
     -------
@@ -508,7 +512,7 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[
     if identity is None and errorgen_transform_maps:
         for layer in errorgen_transform_maps:
             if layer:
-                identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
+                identity = 'I'*len(next(iter(layer))[0].basis_element_labels[0])
                 break
     
     # compute second-order BCH correction for each pair of error generators in the
@@ -534,7 +538,7 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
                                                                    errorgen_layer_2: dict[tuple[_LSE, int], tuple[_LSE, complex]], 
                                                                    errorgen_to_var_map: dict[tuple[_LSE, int], int], 
                                                                    addl_weight: float=1.0, 
-                                                                   identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
+                                                                   identity: Optional[str]=None) -> dict[_LSE, _Polynomial]:
     """
     Helper function for computing the pairwise commutator of two error generator layers symbolically, i.e. returning a data 
     structure which expresses the rates as polynomials in the original generators. 
@@ -557,11 +561,9 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     addl_weight : float
         An additional weight to add to the coefficients of the returned commutator polynomials.
         
-    identity : stim.PauliString
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. Built if not given.
         
     Returns
     -------
@@ -574,6 +576,13 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     var_list = []
     coeff_list = []
     
+    # TODO (when this function is next refactored): skip pairs of error generators with disjoint
+    # supports before calling error_generator_commutator, as
+    # errgenproptools._accumulate_layer_pairwise_commutators does, i.e.
+    #     if final_error1[0].support_mask & final_error2[0].support_mask == 0: continue
+    # Such pairs commute exactly; their commutation relations still emit 2-4 terms per pair that
+    # only cancel in the polynomial coefficients below. At large qubit counts they are ~98% of the
+    # pairs and dominate both the runtime of this loop and the size of the intermediate lists.
     for initial_error1, final_error1 in errorgen_layer_1.items():
         for initial_error2, final_error2 in errorgen_layer_2.items():
             # get the list of error generator labels

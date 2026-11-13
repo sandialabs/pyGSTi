@@ -13,9 +13,10 @@ Defines the ImplicitOpModel class and supporting functionality.
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
-import numpy as _np
 
 from pygsti.models import model as _mdl
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict, LabelLike as _LabelLike
+from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
@@ -58,6 +59,11 @@ class ImplicitOpModel(_mdl.OpModel):
         represented, allowing compatibility checks with (super)operator
         objects.
     """
+    # Declares this model's member dictionaries as (attribute name, inner key, accepted
+    # prefix or prefixes) triples, consumed by `_init_member_dicts`.  A prefix of `None`
+    # leaves the corresponding dictionary's keys unconstrained.
+    _member_prefixes = ()
+
     def __init__(self,
                  state_space,
                  layer_rules,
@@ -71,6 +77,27 @@ class ImplicitOpModel(_mdl.OpModel):
         self.factories = _collections.OrderedDict()
 
         super(ImplicitOpModel, self).__init__(state_space, basis, evotype, layer_rules, simulator)
+
+    def _init_member_dicts(self, modelmembers=None):
+        """Build the member dictionaries declared by `_member_prefixes`.
+
+        Parameters
+        ----------
+        modelmembers : dict, optional
+            Members to populate the dictionaries with, keyed as in the serialization
+            format (e.g. `'operation_blks|gates'`).  Used when deserializing; when
+            `None` every dictionary starts empty.
+        """
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
+                 'match_parent_evotype': True, 'cast_to_type': None}
+        if modelmembers is None:
+            modelmembers = {}
+
+        for attr_name, inner_key, prefix in self._member_prefixes:
+            outer_dict: dict[str, _OrderedMemberDict] = getattr(self, attr_name)
+            serialization_key = f'{attr_name}|{inner_key}'
+            items = modelmembers.get(serialization_key, [])
+            outer_dict[inner_key] = _OrderedMemberDict(self, None, prefix, flags, items)
 
     @property
     def _primitive_prep_label_dict(self):
@@ -89,6 +116,30 @@ class ImplicitOpModel(_mdl.OpModel):
     @property
     def _primitive_instrument_label_dict(self):
         return self.instrument_blks['layers']
+
+    def __getitem__(self, key: _LabelLike) -> _ModelMember:
+        """
+        Search for `key` among this ImplicitOpModel's OrderedMemberDict objects for
+        gates, SPAM, instruments, and factories. Return the `value` from the first
+        match, or raise a KeyError if no matches are found.
+        """
+        key_label = _Label(key)
+        # Sort dicts by length as a heuristic for search efficiency (e.g. SPAM is usually O(1)).
+        dicts = []
+        for outer_dict in [self.prep_blks, self.povm_blks, self.operation_blks, self.instrument_blks, self.factories]:
+            for inner_dict in outer_dict.values():
+                if isinstance(inner_dict, _OrderedMemberDict) and inner_dict:
+                    dicts.append((len(inner_dict), inner_dict))
+        dicts.sort(key=lambda k: k[0])
+        for _, d in dicts:
+            try:
+                out = d[key_label]
+                return out
+            except KeyError:
+                continue
+        msg = f"Key {key} does not appear in any OrderedMemberDict\n"
+        msg += "belonging to this ImplicitOpModel."
+        raise KeyError(msg)
 
     #Functions required for base class functionality
 
@@ -151,55 +202,9 @@ class ImplicitOpModel(_mdl.OpModel):
             fdict.parent = self
             for o in fdict.values(): o.relink_parent(self)
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
-        """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
-
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
-
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
-
-        Returns
-        -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
-        """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
-
-        srep_dict = {}
-
+    def _iter_ops_for_clifford_symplectic_reps(self):
         for gl in self.primitive_op_labels:
-            gate = self.operation_blks['layers'][gl]
-            if (gfilter is not None) and (gl not in gfilter): continue
-
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
-
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+            yield gl, self.operation_blks['layers'][gl]
 
     def to_explicit_model(self):
         """

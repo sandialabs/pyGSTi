@@ -51,10 +51,10 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from pygsti.tools.edesigntools import CircuitSelection as _CircuitSelection
+from pygsti.tools.edesigntools import DesignReducer as _DesignReducer
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
-from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
-from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 
 ObjectiveType = _objfns.ObjectiveFunctionBuilder.ObjectiveType
 
@@ -124,10 +124,100 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         when `all_circuits_needing_data` is given).
     """
 
+    # Storage for `selection`. Declared on the class so designs loaded from directories
+    # written without it have it. It must not be named `selection`: `from_dir` restores
+    # attributes through `__dict__`, where the property below would shadow that name.
+    _selection = None
+
     def __init__(self, processorspec_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False, remove_duplicates=True):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
+        self.selection = None
+        self.auxfile_types['_selection'] = 'serialized-object'
+
+    @property
+    def selection(self) -> Optional[_CircuitSelection]:
+        """The :class:`~pygsti.tools.edesigntools.CircuitSelection` that reduced this design, or None.
+
+        The selection stays in the qubit labels of the design it was made from, which it
+        records as `selection.qubit_labels`: :meth:`map_qubit_labels` does not relabel it.
+        Pairing those with this design's `qubit_labels`, position by position, relates the
+        two. For example, to run the recorded reducer again on `full`, a design in this
+        design's labels::
+
+            label_map = dict(zip(design.selection.qubit_labels, design.qubit_labels))
+            inverse = {new: old for old, new in label_map.items()}
+            rerun = design.selection.reducer.reduce(full.map_qubit_labels(inverse), num_circuits)
+            rerun = rerun.map_qubit_labels(label_map)
+
+        Assigning a selection checks that every circuit in this design corresponds to one
+        of its circuits under that pairing, and raises `ValueError` if not.
+        """
+        return self._selection
+
+    @selection.setter
+    def selection(self, selection: Optional[_CircuitSelection]) -> None:
+        if selection is not None:
+            if not isinstance(selection, _CircuitSelection):
+                raise TypeError(f"selection must be a CircuitSelection or None, not {type(selection).__name__}.")
+            old, new = selection.qubit_labels, self.qubit_labels
+            if old is None:
+                raise ValueError("This CircuitSelection does not record the qubit labels it was made on. "
+                                 "DesignReducer.select records them; for a selection built by hand, "
+                                 "pass qubit_labels=design.qubit_labels.")
+            if isinstance(new, str) or len(old) != len(new):
+                raise ValueError(f"A selection made on qubits {old} cannot describe a design on qubits {new}.")
+            label_map = dict(zip(old, new))
+            if len(label_map) != len(old) or len(set(label_map.values())) != len(old):
+                raise ValueError(f"The selection's qubits {old} do not correspond one-to-one with "
+                                 f"this design's qubits {new}.")
+            selected = set(selection.circuits)
+            if any(k != v for k, v in label_map.items()):
+                selected = {c.map_state_space_labels(lambda q: label_map.get(q, q)) for c in selected}
+            missing = [c for c in self.all_circuits_needing_data if c not in selected]
+            if missing:
+                raise ValueError(
+                    f"{len(missing)} of this design's circuits are not in the selection, once its "
+                    f"qubits {old} are matched with this design's {new}; e.g. {missing[0]}. "
+                    "A design can only hold the selection that describes it.")
+            self.auxfile_types['_selection'] = 'serialized-object'
+        self._selection = selection
+
+    def reduce_with(self, reducer: _DesignReducer, num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
+        """A copy of this design keeping only the circuits `reducer` selects.
+
+        Equivalent to `reducer.reduce(self, num_circuits)`; see
+        :meth:`~pygsti.tools.edesigntools.DesignReducer.reduce`.
+
+        Parameters
+        ----------
+        reducer : DesignReducer
+            The selection rule.  Wrap a function in
+            :class:`~pygsti.tools.edesigntools.CallableReducer`.
+
+        num_circuits : int, optional
+            The budget, clamped to the number of circuits available.  None asks the
+            reducer to choose for itself.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+            Of the same class as `self`, with `selection` set.
+
+        Notes
+        -----
+        Truncation does not rebuild any structural metadata that described the *original*
+        circuit set.  On a :class:`StandardGSTDesign` in particular, `germs`,
+        `prep_fiducials`, `meas_fiducials`, `fiducial_pairs` and `maxlengths` are carried
+        over unchanged and will over-describe the reduced design.  The circuits are
+        correct; those members are a record of how the original was generated, not an
+        index of what survived.
+        """
+        if not isinstance(reducer, _DesignReducer):
+            raise TypeError(f"reducer must be a DesignReducer, not {type(reducer).__name__}. "
+                            "Wrap a function in CallableReducer.")
+        return reducer.reduce(self, num_circuits)
 
     def map_qubit_labels(self, mapper):
         """
@@ -149,8 +239,12 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
                                 for circuit_list in self.circuit_lists]
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
-                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+        mapped = GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                         mapped_qubit_labels, self.nested, remove_duplicates=False)
+        # Relabelling renames qubits; it does not re-select circuits. The selection keeps
+        # its own labels, and the setter checks it against the relabelled circuits.
+        mapped.selection = self.selection
+        return mapped
 
 
 class StandardGSTDesign(GateSetTomographyDesign):
@@ -392,11 +486,33 @@ class StandardGSTDesign(GateSetTomographyDesign):
                                        " and/or aliases is not implemented yet."))
 
         dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
-        return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
-                                 germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
-                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
-                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
-                                 verbosity, add_default_protocol=False)
+        mapped = StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
+                                   germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
+                                   self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                   self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
+                                   verbosity, add_default_protocol=False)
+
+        # The constructor above *regenerates* the circuit lists from germs, fiducials and
+        # max lengths, which describe the design as originally generated -- not as it
+        # stands if circuits have since been dropped by `reduce_with`, `truncate_to_circuits`
+        # or another truncation route. Left alone, relabelling a reduced design silently
+        # restores every circuit that was removed.
+        #
+        # So when the reconstruction disagrees with what this design actually holds,
+        # install the real lists instead, relabelled: renaming qubits is not a reason to
+        # regenerate an experiment. Regenerating cannot be trusted to reproduce the
+        # binning either -- `nested` is a *generation* option to this constructor but
+        # only a description on an existing design, and truncation clears it.
+        mapped_all = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        if set(mapped_all) != set(mapped.all_circuits_needing_data):
+            mapped.circuit_lists = [_CircuitList.cast([c.map_state_space_labels(mapper)
+                                                       for c in circuit_list])
+                                    for circuit_list in self.circuit_lists]
+            mapped.all_circuits_needing_data = _CircuitList.cast(mapped_all)
+            mapped.nested = self.nested
+
+        mapped.selection = self.selection
+        return mapped
 
 
 class GSTInitialModel(_NicelySerializable):
@@ -1242,6 +1358,20 @@ class GSTGaugeOptSuite(_NicelySerializable):
         return cls(state['gaugeopt_suite_names'], gaugeopt_argument_dicts, gaugeopt_target)
 
 
+def _release_comm_bound_stores(results, resource_alloc):
+    """
+    Detach `results`' estimates from `resource_alloc`'s communicator, if it has more than one rank.
+
+    Call on every rank at the end of a protocol's `run`; see
+    :meth:`Estimate._release_comm_bound_stores`. A serial run keeps its stores for reuse.
+    """
+    comm = resource_alloc.comm
+    if comm is None or comm.Get_size() == 1:
+        return
+    for estimate in results.estimates.values():
+        estimate._release_comm_bound_stores()
+
+
 class GateSetTomography(_proto.Protocol):
     """
     The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set.
@@ -1291,22 +1421,9 @@ class GateSetTomography(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
-        # compute, and set if needed, a default "first iteration # of fintite-difference iters"
-        from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-        mdl = self.initial_model.model
-        default_first_fditer = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
-
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
-            if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                self.optimizer.first_fditer = default_first_fditer
         else:
-            if optimizer is None:
-                optimizer = {}
-            if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                optimizer['first_fditer'] = default_first_fditer
             self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
@@ -1413,7 +1530,7 @@ class GateSetTomography(_proto.Protocol):
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
         else:
-            optimizers = _validate_and_extend_optimizers(self.optimizer, len(circuit_lists), mdl_start)
+            optimizers = _validate_and_extend_optimizers(optimizers, len(circuit_lists))
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -1555,7 +1672,8 @@ class GateSetTomography(_proto.Protocol):
             #generation looks at to determine the names of the gauge optimized models).
             #Set the value to None as a placeholder.
             ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
-        
+
+        _release_comm_bound_stores(ret, resource_alloc)
         return ret
 
 
@@ -1734,6 +1852,7 @@ class LinearGateSetTomography(_proto.Protocol):
             #Set the value to None as a placeholder.
             ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
 
+        _release_comm_bound_stores(ret, resource_alloc)
         return ret
 
 
@@ -1826,11 +1945,6 @@ class StandardGST(_proto.Protocol):
         self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
-
-        if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
-           and 'first_fditer' not in optimizer:  # then a dict was cast into an Optimizer above.
-            # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
-            self.optimizer.first_fditer = None
 
         self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
@@ -2625,62 +2739,41 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 
     return circuit_weights  # contains *global* circuits as keys
 
-def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _SimplerLMOptimizer,dict, list[_CustomLMOptimizer],list[_SimplerLMOptimizer], list[dict]], size, model: _Model) -> Union[list[_CustomLMOptimizer], list[_SimplerLMOptimizer]]:
+def _validate_and_extend_optimizers(optimizers: Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]],
+                                    size: int) -> list[_opt.Optimizer]:
     """
     GST allows for the user to provide a single optimizer,
     or a list of optimizers to be used in every different
     GST iteration. This function validates the optimizer
-    provided is an acceptable format, and if it is a single
-    optimizer, it generates a list of "size" copies of it.
+    provided is an acceptable format, and returns a list
+    of `size` optimizers, one per GST iteration.
 
     Parameters
     ----------
     optimizers: Union[_Optimizer, dict, list[_Optimizer], list[dict]]
         Either a single optimizer or the settings to create an optimizer to be used in all GST iterations
         or a list of optimizers or settings to create optimizers to be used in each different
-        GST iteration
+        GST iteration.  A list must have length 1 or `size`.
 
     size: int
         The number of GST iterations. This is equal to the length of circuit_lists to be considered
         for GST.
 
-    model: _Model
-        The starting model used within a GST run
-
     Returns
     -------
     optimizers: list[_Optimizer]
+        Copies of the given optimizers (so the caller's objects are not modified), with any
+        dictionaries cast to :class:`SimplerLMOptimizer`.
     """
-    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+    optimizers = _alg.validate_and_extend_optimizer(optimizers, size)
+    validated = []
+    for opt in optimizers:
+        opt = _copy.deepcopy(opt)  # don't modify the caller's optimizer
+        if not isinstance(opt, _opt.Optimizer):
+            opt = _opt.SimplerLMOptimizer.cast(opt)
+        validated.append(opt)
+    return validated
 
-    if isinstance(optimizers, (_opt.Optimizer, dict)):    
-        optimizers = [optimizers]*size
-    if isinstance(optimizers, list):
-        if len(optimizers) == 1:
-            optimizers = optimizers*size
-    else:
-        if not isinstance(optimizers, (list, dict)):
-            raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
-        temp_optimizers = []
-        default_first_fditer = 1 if model and isinstance(model.sim, _MatrixFSim) else 0
-        for optimizer in optimizers:
-            if isinstance(optimizer, _SimplerLMOptimizer) or isinstance(optimizer, _CustomLMOptimizer):
-                temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                    # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                    temp_optimizer.first_fditer = default_first_fditer
-
-            else:
-                if optimizer is None:
-                    temp_optimizer = {}
-                else:
-                    temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                    temp_optimizer['first_fditer'] = default_first_fditer
-                temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
-        optimizers = temp_optimizers
-    return optimizers
-    
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
@@ -3453,6 +3546,12 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
     # ^ That can convert to whatever parameterization it wants
     #   It'll write to est._gaugeopt_suite.
     for gop_name, gop_dictorlist in est._gaugeopt_suite.gaugeopt_argument_dicts.items():
+        if gop_dictorlist is None:
+            # e.g. 'trivial_gauge_opt' (inserted for instrument-bearing models):
+            # no gauge transformation, so the parameterization-preserving result
+            # is the final iteration estimate itself.
+            est.models[gop_name] = est.models['final iteration estimate']
+            continue
         if isinstance(gop_dictorlist, list):
             ggel_mx = _np.eye(seed_mdl.basis.dim)
             for sub_gopdict in gop_dictorlist:

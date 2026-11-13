@@ -1444,7 +1444,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         if self.depths == 'all':
             depths = list(data_per_depth.keys())
         else:
-            depths = filter(lambda d: d in data_per_depth, self.depths)
+            depths = [d for d in self.depths if d in data_per_depth]
 
         nqubits = len(design.qubit_labels)
 

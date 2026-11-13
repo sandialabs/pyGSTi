@@ -18,6 +18,7 @@ import scipy.sparse as _sps
 
 import itertools as _itertools
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 from ...tools import optools as _ot
 from ...tools import matrixtools as _mt
 from ...tools import basistools as _bt
@@ -92,7 +93,7 @@ cdef class OpRepDenseSuperop(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return self.to_dense_superop()
@@ -156,7 +157,7 @@ cdef class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'HilbertSchmidt'):
             return self.to_dense_superop()
         else:  # 'Hilbert'
@@ -217,7 +218,7 @@ cdef class OpRepSparse(OpRep):
     def __reduce__(self):
         return (OpRepSparse, (self.data, self.indices, self.indptr, self.state_space))
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
 
@@ -227,29 +228,6 @@ cdef class OpRepSparse(OpRep):
 
     def copy(self):
         return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy(), self.state_space.copy())
-
-
-cdef class OpRepStandard(OpRepDenseSuperop):
-    cdef public object name
-
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        superop = _ot.unitary_to_superop(U, basis)
-        state_space = _StateSpace.cast(state_space)
-        assert(superop.shape[0] == state_space.dim)
-
-        super(OpRepStandard, self).__init__(superop, basis, state_space)
-
-    def __reduce__(self):
-        return (OpRepStandard, (self.name, self.basis, self.state_space))
-
-    def __setstate__(self, state):
-        pass  # must define this becuase base class does - need to override it
 
 
 cdef class OpRepKraus(OpRep):
@@ -277,7 +255,7 @@ cdef class OpRepKraus(OpRep):
     def copy(self):
         return OpRepKraus(self.basis, [k.copy() for k in self.kraus_reps], self.state_space)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt')), \
             'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
@@ -315,85 +293,9 @@ cdef class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
-
-#    def __setstate__(self, state):
-#        pass  # must define this becuase base class does - need to override it
-
-
-# NEEDED? TODO REMOVE
-#cdef class OpRepDenseKraus(OpRepDenseSuperop):  
-#    cdef public object basis
-#    cdef public object kraus_rates
-#    cdef public object kraus_superops
-#
-#    def __init__(self, basis, kraus_ops, kraus_rates, seed_or_state, state_space):
-#        self.basis = basis
-#        self.kraus_ops = kraus_ops
-#        self.kraus_superops = [_ot.unitary_to_superop(kraus_op, self.basis) for kraus_op in kraus_ops]
-#        if kraus_rates is None:
-#            self.kraus_rates = _np.ones(len(self.kraus_ops), 'd')
-#        else:
-#            assert(len(kraus_rates) == len(self.kraus_ops))
-#            self.kraus_rates = _np.array(kraus_rates)
-#
-#        state_space = _StateSpace.cast(state_space)
-#        assert(self.basis.dim == state_space.dim)
-#
-#        super(OpRepKraus, self).__init__(None, state_space)
-#        self._update_base()
-#
-#    def _update_base(self):
-#        errormap = _np.zeros((self.basis.dim, self.basis.dim),
-#                             self.kraus_superops[0].dtype if (len(self.kraus_superops) > 0) else 'd')
-#        for rate, superop in zip(self.kraus_rates, self.kraus_superops):
-#            errormap += rate * superop
-#        self.base[:, :] = errormap
-#
-#    def update_kraus_rates(self, kraus_rates):
-#        self.kraus_rates[:] = kraus_rates
-#        self._update_base()
-#
-#    def update_kraus_ops(self, kraus_ops, kraus_rates):
-#        assert(len(kraus_ops) == len(self.kraus_ops))
-#        for i, kraus_op in enumerate(kraus_ops):
-#            self.kraus_op[i][:, :] = kraus_op
-#            self.kraus_superops[:, :] = _ot.unitary_to_superop(kraus_op, self.basis)
-#
-#        if kraus_rates is not None:
-#            self.update_kraus_rates(kraus_rates)
-#        else:
-#            self._update_base()
-#
-#    def __reduce__(self):
-#        return (OpRepKraus, (self.basis, self.kraus_ops, self.kraus_rates, self.state_space))
-#
-#    def __setstate__(self, state):
-#        pass  # must define this becuase base class does - need to override it
-#
-#
-#cdef class OpRepStandardKraus(OpRepKraus):
-#    cdef public object basis
-#    cdef public object kraus_rates
-#    cdef public object kraus_superops
-#
-#    def __init__(self, basis, kraus_op_std_names, kraus_rates, seed_or_state, state_space):
-#        self.kraus_op_std_names = kraus_op_std_names  # a list w/elements == std name or tuple of standard names
-#
-#        std_unitaries = _itgs.standard_gatename_unitaries()
-#        kraus_ops = []
-#        for std_name_tup in kraus_op_std_names:
-#            if isinstance(std_name_tup, str): std_name_tup = (std_name_tup,)
-#            kraus_ops.append(_functools.reduce(_np.dot, (std_unitaries[nm] for nm in std_name_tup)))
-#        super(OpRepStandardKraus, self).__init__(basis, kraus_ops, kraus_rates, seed_or_state, state_space)
-#
-#    def __reduce__(self):
-#        return (OpRepStandardKraus, (self.basis, self.kraus_op_std_names, self.kraus_rates, self.state_space))
-#
-#    def __setstate__(self, state):
-#        pass  # must define this becuase base class does - need to override it
 
 
 cdef class OpRepStochastic(OpRepRandomUnitary):

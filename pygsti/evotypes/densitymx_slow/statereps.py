@@ -51,7 +51,7 @@ class StateRep:
         # a probability/amplitude by POVM effect reps.
         return self  # for most classes, the rep itself is actionable
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return self.data

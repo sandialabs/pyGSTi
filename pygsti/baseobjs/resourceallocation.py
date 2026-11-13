@@ -108,7 +108,6 @@ class ResourceAllocation(object):
         my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
         self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
         self.host_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
-        #print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
 
         hostnames_by_rank = self.comm.allgather(my_hostname)  # ~"node id" of each processor in self.comm
         ranks_by_hostname = _collections.OrderedDict()
@@ -319,7 +318,6 @@ class ResourceAllocation(object):
             result[slice_of_global] = local
         else:
             if all_gather:
-                #OLD: gathered_data = gather_comm.allgather(local)  # could change this to Allgatherv (?)
                 slices = gather_comm.allgather(slice_of_global if participating else None)
                 shapes = gather_comm.allgather(local.shape if participating else (0,))
                 sizes = [_np.prod(shape) for shape in shapes]
@@ -327,7 +325,6 @@ class ResourceAllocation(object):
                 gather_comm.Allgatherv(local.flatten() if participating
                                        else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
             else:
-                #OLD: gathered_data = gather_comm.gather(local, root=0)  # could change this to Gatherv (?)
                 shapes = gather_comm.gather(local.shape if participating else (0,), root=0)
                 slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 

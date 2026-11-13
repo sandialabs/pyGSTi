@@ -10,12 +10,10 @@ The ConjugatedStatePOVMEffect class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
-from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 

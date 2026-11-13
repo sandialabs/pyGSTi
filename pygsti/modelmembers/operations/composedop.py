@@ -9,6 +9,10 @@ The ComposedOp class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
 import collections as _collections
 import itertools as _itertools
@@ -19,6 +23,7 @@ import numpy as _np
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpErrorgenOp
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs import _compatibility as _compat
@@ -31,7 +36,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti import SpaceT
 
 
-class ComposedOp(_LinearOperator):
+class ComposedOp(_LinearOperator, _Torchable):
     """
     An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`).
 
@@ -87,28 +92,22 @@ class ComposedOp(_LinearOperator):
     def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
-        rep = None
+        supports_key = {'dense': 'dense superop', 'composed': 'composed'}
         for rep_type in rep_type_order:
-            try:
-                if rep_type == 'composed':
-                    factor_op_reps = [op._rep for op in self.factorops]
-                    rep = evotype.create_composed_rep(factor_op_reps, state_space)
-                elif rep_type == 'dense':
-                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
-                    #  and should be replaced with the basis of contained ops (if any) once we establish
-                    #  a common .basis or ._basis attribute of representations (which could still be None)
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)
-                else:
-                    assert(False), "Logic error!"
-
-                self._rep_type = rep_type
+            if evotype.supports(supports_key[rep_type]):
                 break
-
-            except AttributeError:
-                pass  # just go to the next rep_type
-
-        if rep is None:
+        else:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
+
+        if rep_type == 'composed':
+            factor_op_reps = [op._rep for op in self.factorops]
+            rep = evotype.create_composed_rep(factor_op_reps, state_space)
+        else:
+            # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+            #  and should be replaced with the basis of contained ops (if any) once we establish
+            #  a common .basis or ._basis attribute of representations (which could still be None)
+            rep = evotype.create_dense_superop_rep(None, None, state_space)
+        self._rep_type = rep_type
         return rep
 
     def _update_denserep(self):
@@ -300,6 +299,28 @@ class ComposedOp(_LinearOperator):
             for op in self.factorops[1:]:
                 mx = _np.dot(op.to_dense(on_space), mx)
             return mx
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        """
+        Returns `factors` where each entry is `(type(factor), factor.stateless_data(...), inds)` and
+        `inds` are the factor's local parameter indices (from `_submember_rpindices`, the same arrays
+        `to_vector`/`from_vector` use).  Every factor must itself be `Torchable` -- including the
+        static ideal/target prefactor, which is handled by `StaticTorchable`.
+        """
+        factors = []
+        for op, inds in zip(self.factorops, self._submember_rpindices):
+            sld = (type(op), op.stateless_data(real_dtype, device), _slct.to_array(inds))
+            factors.append(sld)
+        return tuple(factors)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable process matrix = product of the factors' `torch_base` outputs."""
+        mats = [ftype.torch_base(fsd, t_param[inds]) for (ftype, fsd, inds) in sd]
+        mx = mats[0]
+        for m in mats[1:]:
+            mx = m @ mx
+        return mx
 
     @property
     def parameter_labels(self):

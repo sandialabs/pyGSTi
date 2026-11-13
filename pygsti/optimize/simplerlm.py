@@ -12,6 +12,7 @@ Custom implementation of the Levenberg-Marquardt Algorithm (but simpler than cus
 
 import os as _os
 import time as _time
+import warnings as _warnings
 
 import numpy as _np
 import scipy as _scipy
@@ -21,14 +22,22 @@ from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.objectivefns.objectivefns import Chi2Function, TimeIndependentMDCObjectiveFunction
-from typing import Callable
 
 from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
 _install_sigint_handler()
 
 #constants
 _MACH_PRECISION = 1e-12
+
+#: Shift applied to the coordinates of a degenerate starting point (see `simplish_leastsq`). A forward
+#: difference with step 1e-7 along e_j is a central difference at x + 5e-8 e_j, so this value recovers
+#: the old behavior of finite differences at the initial (degenerate) point with step size 1e-7.
+JAC_SHIFT = 5e-8
+
+#: A Jacobian column whose norm is at most this fraction of the largest column norm counts as zero.
+ZERO_COLUMN_RTOL = 1e-10
 
 
 class OptimizerResult(object):
@@ -126,15 +135,13 @@ class SimplerLMOptimizer(Optimizer):
         all keys; missing keys take the values a float `tol` would
         have produced with `tol=1e-6`.
 
-    fditer : int optional
-        Internally compute the Jacobian using a finite-difference method
-        for the first `fditer` iterations.  This is useful when the initial
-        point lies at a special or singular point where the analytic Jacobian
-        is misleading.
+    fditer : int, optional
+        Deprecated and ignored. A starting point whose Jacobian has zero
+        columns is handled by evaluating the first iteration's Jacobian at a
+        shifted point (see :func:`simplish_leastsq`).
 
     first_fditer : int, optional
-        Number of finite-difference iterations applied to the first
-        stage of the optimization (only).  Unused.
+        Deprecated and ignored, like `fditer`.
 
     init_munu : tuple, optional
         If not None, a (mu, nu) tuple of 2 floats giving the initial values
@@ -184,18 +191,19 @@ class SimplerLMOptimizer(Optimizer):
         if isinstance(obj, cls):
             return obj
         if obj:
-            try:
-                return cls(**obj)
-            except:
-                from pygsti.optimize.customlm import CustomLMOptimizer
-                return CustomLMOptimizer(**obj)
+            return cls(**obj)
         return cls()
 
-    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, init_munu="auto", oob_check_interval=0,
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=None, first_fditer=None, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal",
                  linesearch=None):
 
         super().__init__()
+        for name, value in (('fditer', fditer), ('first_fditer', first_fditer)):
+            if value is not None:
+                _warnings.warn(f"SimplerLMOptimizer's `{name}` argument is deprecated and ignored: when the "
+                               "starting point's Jacobian has zero columns, the first iteration now evaluates the "
+                               "Jacobian at a slightly shifted point instead.", _pyGSTiDeprecationWarning)
         if isinstance(tol, float):
             tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         else:
@@ -209,8 +217,6 @@ class SimplerLMOptimizer(Optimizer):
         self.maxiter = maxiter
         self.maxfev = maxfev
         self.tol = tol
-        self.fditer = fditer
-        self.first_fditer = first_fditer
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
@@ -227,8 +233,6 @@ class SimplerLMOptimizer(Optimizer):
             'maximum_iterations': self.maxiter,
             'maximum_function_evaluations': self.maxfev,
             'tolerance': self.tol,
-            'number_of_finite_difference_iterations': self.fditer,
-            'number_of_first_stage_finite_difference_iterations': self.first_fditer,
             'initial_mu_and_nu': self.init_munu,
             'out_of_bounds_check_interval': self.oob_check_interval,
             'out_of_bounds_action': self.oob_action,
@@ -246,8 +250,6 @@ class SimplerLMOptimizer(Optimizer):
         return cls(maxiter=state['maximum_iterations'],
                    maxfev=state['maximum_function_evaluations'],
                    tol=state['tolerance'],
-                   fditer=state['number_of_finite_difference_iterations'],
-                   first_fditer=state['number_of_first_stage_finite_difference_iterations'],
                    init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
                    oob_action=state['out_of_bounds_action'],
@@ -303,7 +305,6 @@ class SimplerLMOptimizer(Optimizer):
         opt_x, converged, msg, mu, nu, norm_f, f = simplish_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
-            num_fd_iters=self.fditer,
             f_norm2_tol=self.tol['f'],
             jac_norm_tol=self.tol['jac'],
             rel_ftol=self.tol['relf'],
@@ -365,32 +366,9 @@ def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
     return mu, nu, msg
 
 
-def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f, ari, global_x, fdJac_work):
-    if k >= num_fd_iters:
-        Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
-    else:
-        # Note: x holds only number of "fine"-division params - need to use global_x, and
-        # Jac only holds a subset of the derivative and element columns and rows, respectively.
-        f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
-
-        pslice = ari.jac_param_slice(only_if_leader=True)
-        eps = 1e-7
-        #Don't do this: for ii, i in enumerate(range(pslice.start, pslice.stop)): (must keep procs in sync)
-        for i in range(len(global_x)):
-            x_plus_dx = global_x.copy()
-            x_plus_dx[i] += eps
-            fd = (obj_fn(x_plus_dx) - f_fixed) / eps
-            if pslice.start <= i < pslice.stop:
-                fdJac_work[:, i - pslice.start] = fd
-            #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
-        Jac = fdJac_work
-    return Jac
-
-
-
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
+    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None,
@@ -435,12 +413,6 @@ def simplish_leastsq(
 
     max_iter : int, optional
         The maximum number of (outer) iterations.
-
-    num_fd_iters : int optional
-        Internally compute the Jacobian using a finite-difference method
-        for the first `num_fd_iters` iterations.  This is useful when `x0`
-        lies at a special or singular point where the analytic Jacobian is
-        misleading.
 
     max_dx_scale : float, optional
         If not None, impose a limit on the magnitude of the step, so that
@@ -502,8 +474,8 @@ def simplish_leastsq(
         - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
           only searches when a trigger fires (the `max_dx_scale` clip activated, the step
           is large relative to `|x|`, or the trial's objective norm is non-finite).
-          `'always'` searches on every trial step.  `'none'` never searches and is
-          bit-identical to the legacy behavior.  The primary motivation is robustness
+          `'always'` searches on every trial step.  `'none'` never searches (except on a
+          degenerate first iteration; see Notes).  The primary motivation is robustness
           against a full LM step leaving the good basin, not speed.
         - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
           in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
@@ -521,6 +493,14 @@ def simplish_leastsq(
         Whether the solution converged.
     msg : str
         A message indicating why the solution converged (or didn't).
+
+    Notes
+    -----
+    A degenerate `x0`, whose Jacobian has zero columns (e.g. the Cholesky coordinates of a
+    Lindblad generator at zero noise), would leave those coordinates stuck. The first iteration
+    therefore computes its step from the Jacobian and objective at `x0` shifted by `JAC_SHIFT`
+    along those coordinates, and always line-searches that step from `x0`, whatever
+    `linesearch['mode']` says.
     """
     linesearch = dict(linesearch) if linesearch else {}
     linesearch.setdefault('mode', 'guarded')
@@ -559,7 +539,6 @@ def simplish_leastsq(
     dx = ari.allocate_jtf()
     new_x = ari.allocate_jtf()
     optional_jtj_buff = ari.allocate_jtj_shared_mem_buf()
-    fdJac = ari.allocate_jac() if num_fd_iters > 0 else None
 
     global_x = x0.copy()
     ari.allscatter_x(global_x, x)
@@ -660,7 +639,7 @@ def simplish_leastsq(
 
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
-            Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
+            Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
 
             if profiler:
                 jac_gb = Jac.nbytes/(1024.0**3) if hasattr(Jac, 'nbytes') else _np.nan
@@ -677,6 +656,37 @@ def simplish_leastsq(
             ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
             ari.fill_jtf(Jac, f, minus_JTf)  # 'P'-type
             minus_JTf *= -1
+
+            force_linesearch = False
+            if k == 0:
+                # Zero columns of J at x0 (e.g. Cholesky coordinates of a Lindblad generator at
+                # zero noise) leave those coordinates stuck. Compute the step from J and f at
+                # x0 + JAC_SHIFT on just those coordinates, then line-search it from x0 itself.
+                jtj_diag = JTJ[ari.jtj_diag_indices(JTJ)]
+                zero_cols = jtj_diag <= ZERO_COLUMN_RTOL**2 * ari.max_x(jtj_diag)
+                num_zero_cols = int(round(ari.norm2_x(zero_cols.astype('d'))))
+                if num_zero_cols > 0:
+                    shift = ari.allocate_jtf()
+                    shift[:] = JAC_SHIFT * zero_cols
+                    global_shifted_x = global_x.copy()
+                    ari.allgather_x(shift, global_shifted_x)
+                    ari.deallocate_jtf(shift)
+                    global_shifted_x += global_x
+                    if x_limits is not None:
+                        global_shifted_x = _np.clip(global_shifted_x, x_limits[:, 0], x_limits[:, 1])
+                    shifted_f = obj_fn(global_shifted_x).copy()  # jac_fn may reuse obj_fn's memory
+                    resource_alloc.host_comm_barrier()
+                    Jac = jac_fn(global_shifted_x)
+                    resource_alloc.host_comm_barrier()
+                    ari.fill_jtj(Jac, JTJ, optional_jtj_buff)
+                    ari.fill_jtf(Jac, shifted_f, minus_JTf)
+                    minus_JTf *= -1
+                    resource_alloc.host_comm_barrier()
+                    f = obj_fn(global_x)  # restores the model, and obj_fn's memory, to x0
+                    force_linesearch = True
+                    printer.log("    %d of %d Jacobian columns are zero at the initial point; using the "
+                                "Jacobian at a point shifted by %g in those coordinates"
+                                % (num_zero_cols, len(global_x), JAC_SHIFT), 2)
 
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
 
@@ -770,7 +780,7 @@ def simplish_leastsq(
 
                 norm_new_f = ari.norm2_f(new_f)
 
-                if ls_mode == 'always':
+                if ls_mode == 'always' or force_linesearch:
                     do_linesearch = True
                 elif ls_mode == 'guarded':
                     do_linesearch = step_clipped or norm_dx > (ls_kappa**2) * norm_x or not _np.isfinite(norm_new_f)
@@ -927,9 +937,6 @@ def simplish_leastsq(
 
     ari.deallocate_jtf(dx)
     ari.deallocate_jtf(new_x)
-
-    if fdJac is not None:
-        ari.deallocate_jac(fdJac)
 
     ari.allgather_x(best_x, global_x)
     ari.deallocate_jtf(best_x)

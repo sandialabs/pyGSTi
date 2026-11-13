@@ -217,7 +217,13 @@ def test_is_similar_distinguishes_eeg_subsets():
 def _std_superop_from_terms(blk, params):
     """Reconstruct the std-basis error-generator superop from create_lindblad_term_objects.
     Each term acts rho -> coeff * A rho B^dag; with row-major vec the superop is kron(A, conj(B))."""
-    terms = blk.create_lindblad_term_objects(0, 100, 'statevec', QubitSpace(1))
+    evotype = 'statevec'
+    try:
+        from pygsti.evotypes.evotype import Evotype
+        Evotype('statevec')
+    except (ImportError, ModuleNotFoundError):
+        evotype = 'statevec_slow'
+    terms = blk.create_lindblad_term_objects(0, 100, evotype, QubitSpace(1))
     d = blk._basis.elements[0].shape[0]
     S = np.zeros((d * d, d * d), complex)
     pt = {i: params[i] for i in range(len(params))}
@@ -292,7 +298,12 @@ def test_term_objects_reconstruct_dense_errorgen_1q():
     S = _std_superop_from_terms(blk, v)
     dense_std = _bt.change_basis(_errorgen_dense(blk), 'pp', 'std')
     assert np.allclose(S, dense_std, atol=1e-9)
-    # sanity: every monomial references only this block's own parameters
-    terms = blk.create_lindblad_term_objects(0, 100, 'statevec', QubitSpace(1))
+    evotype = 'statevec'
+    try:
+        from pygsti.evotypes.evotype import Evotype
+        Evotype('statevec')
+    except (ImportError, ModuleNotFoundError):
+        evotype = 'statevec_slow'
+    terms = blk.create_lindblad_term_objects(0, 100, evotype, QubitSpace(1))
     var_indices = {int(i) for t in terms for k in t.coeff.coeffs for i in k}
     assert all(0 <= i < blk.num_params for i in var_indices)

@@ -884,6 +884,34 @@ class CircuitLabelTester(BaseCase):
         self.assertEqual(l.args, ())
         self.assertEqual(l.depth, 5)
 
+    def test_circuitlabel_inferred_time_is_a_duration(self):
+        # A label's `time` is a duration, so an inferred CircuitLabel time is the sum
+        # of its layers' durations (they run in sequence) scaled by `reps` (the whole
+        # block runs that many times).  This tracks `depth`, which scales the same way.
+        layers = [L('Gx', (0,), time=2.0), L('Gy', (0,), time=5.0)]
+        for reps in (1, 2, 3):
+            l = CircuitLabel('', layers, (0,), reps)  # time=None -> inferred
+            self.assertEqual(l.time, reps * 7.0)
+            self.assertEqual(l.depth, reps * 2)
+
+        # an explicit time is taken as given, not scaled
+        self.assertEqual(CircuitLabel('', layers, (0,), 3, 1.5).time, 1.5)
+
+        # untimed layers still give a zero duration at any reps
+        untimed = CircuitLabel('', [L('Gx', (0,)), L('Gy', (0,))], (0,), 4)
+        self.assertEqual(untimed.time, 0.0)
+
+    def test_circuit_duration_sums_layer_durations(self):
+        # Circuit.duration is the circuit-level counterpart: the sum of layer times.
+        c = Circuit([L('Gx', (0,), time=2.0), L('Gy', (0,), time=5.0)], line_labels=(0,))
+        c.done_editing()
+        self.assertEqual(c.duration, 7.0)
+
+        # and it sees through to a retained CircuitLabel's (reps-scaled) duration
+        boxed = Circuit([c.to_label(nreps=3)], line_labels=(0,), editable=True)
+        boxed.done_editing()
+        self.assertEqual(boxed.duration, 21.0)
+
     def test_circuitlabel_expand_subcircuits(self):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 2, 1.2)
         self.assertEqual(l.expand_subcircuits(), (L('Gx', 0), L('Gx', 0)))
@@ -1237,3 +1265,17 @@ class LabelConcateTester(BaseCase):
             for result in (cl1.concat(other), other.concat(cl1)):
                 self.assertIsInstance(result, LabelTupTup)
                 self.assertFalse(has_circuitlabel(result))
+
+    def test_concat_unwraps_single_component(self):
+        # Concatenation resulting in 1 component should return the component itself (LabelTup/LabelTupWithTime)
+        # instead of wrapping it in a LabelTupTup.
+        l1 = L(('Gx', 0))
+        empty = LabelTupTup.init(())
+        res1 = l1.concat(empty)
+        self.assertIsInstance(res1, LabelTup)
+        self.assertEqual(res1, l1)
+
+        res2 = empty.concat(l1)
+        self.assertIsInstance(res2, LabelTup)
+        self.assertEqual(res2, l1)
+

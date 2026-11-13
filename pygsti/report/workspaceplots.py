@@ -635,9 +635,11 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         #to same some computation (the rendering for size checking takes non-trivial time).
         hover_label_widths = []
         #create a PIL ImageFont object which will be used as a helper for estimating the
-        #rendered width of the hover labels/annotations below.
+        #rendered width of the hover labels/annotations below. The basic layout engine is
+        #enough for a width estimate, and unlike raqm (which Pillow uses when libraqm is
+        #available) it accepts labels containing newlines, e.g. from str(Circuit).
         font_path = str(Path(__file__).parent / 'fonts'/ 'NotoSansMono-Regular.ttf')
-        font = _ImageFont.truetype(font_path, 12)
+        font = _ImageFont.truetype(font_path, 12, layout_engine=_ImageFont.Layout.BASIC)
         if hover_labels: #if not None or empty list:
             for j, label_row in enumerate(hover_labels): 
                 for i in range(len(label_row)-nIXs, len(label_row)):
@@ -1673,7 +1675,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     #then change the width to this value.
     if title is not None:
         font_path = str(Path(__file__).parent / 'fonts'/ 'OpenSans-Regular.ttf')
-        font = _ImageFont.truetype(font_path, 10)
+        font = _ImageFont.truetype(font_path, 10, layout_engine=_ImageFont.Layout.BASIC)
         split_title= title.split('<br>')
         max_title_width = max([font.getlength(subtitle) for subtitle in split_title])
         width = max(width, max_title_width)

@@ -28,20 +28,18 @@ from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
 
-#from cpython.ref cimport PyObject
-#cdef extern from "Python.h":
-#    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
-
 from ...baseobjs import label as _lbl
+
+# Shared with the pure-Python parser rather than reimplemented here.  Neither helper
+# has anything Cython can type -- both are generic operations on Python objects, so a
+# compiled copy runs no faster than the imported one and only invites the two
+# definitions to drift apart.
+from .slowcircuitparser import _layer_is_canonical, _to_int_or_strip
 
 
 #Use 64-bit integers
 ctypedef long long INT
 ctypedef unsigned long long UINT
-
-
-def _to_int_or_strip(x):
-    return int(x) if x.strip().isdigit() else x.strip()
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -74,10 +72,6 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
     result = []; interlayer_marker_inds = []
     code = code.replace(u'*',u'')  # multiplication is implicit (no need for '*' ops)
     i = 0; end = len(code); segment = 0
-    #print "DB -FASTPARSE: ", code
-
-    #cdef Py_UCS4* codep = PyUnicode_4BYTE_DATA(<PyObject*>code)
-
     while i < end:
         if code[i] == interlayer_marker:
             interlayer_marker_inds.append(len(result) - 1); i += 1
@@ -175,6 +169,12 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
             time = max([lbl.time if hasattr(lbl, 'time') else 0.0 for lbl in lbls_list], default=0.0)
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)  # create a layer label - a label of the labels within square brackets
+            # Canonicalize here rather than leaving it to the caller: `Circuit._fastinit`
+            # applies no sort, and io/stdinput.py builds every parsed circuit through it,
+            # so source order would otherwise decide equality and hash (issue #757).
+            # Must stay in lockstep with slowcircuitparser.py.
+            if not _layer_is_canonical(lbls_list):
+                to_exponentiate = to_exponentiate.with_sorted_inner_labels()
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment, ()
@@ -192,7 +192,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     cdef Py_UCS4 c
     cdef double time
     cdef bool is_int
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     i = start
     c = s[i]
@@ -321,7 +320,6 @@ cdef parse_exponent(unicode s, INT i, INT end):
     cdef Py_UCS4 c
     cdef INT last
     cdef INT exponent = 1
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     if i < end and s[i] == u'^':
         i += 1

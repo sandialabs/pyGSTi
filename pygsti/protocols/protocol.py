@@ -1647,7 +1647,8 @@ class CircuitListsDesign(ExperimentDesign):
         super()._truncate_to_circuits_inplace(circuits_to_keep)
 
     def _truncate_to_design_inplace(self, other_design):
-        self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
+        self.circuit_lists = [_circuits.CircuitList.cast(my_circuit_list).truncate(other_circuit_list)
+                              for my_circuit_list, other_circuit_list
                               in zip(self.circuit_lists, other_design.circuit_lists)]
         super()._truncate_to_design_inplace(other_design)
 

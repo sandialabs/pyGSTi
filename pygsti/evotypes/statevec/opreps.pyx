@@ -17,6 +17,7 @@ import copy as _copy
 
 import itertools as _itertools
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 from ...tools import internalgates as _itgs
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
@@ -104,7 +105,7 @@ cdef class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
@@ -142,32 +143,6 @@ cdef class OpRepDenseUnitary(OpRep):
 
     def copy(self):
         return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
-
-
-cdef class OpRepStandard(OpRepDenseUnitary):
-    cdef public object name
-
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        state_space = _StateSpace.cast(state_space)
-        assert(U.shape[0] == state_space.udim)
-        super(OpRepStandard, self).__init__(U, basis, state_space)
-
-    def __reduce__(self):
-        return (OpRepStandard, (self.name, self.basis, self.state_space))
-
-    def __setstate__(self, state):
-        pass  # must define this becuase base class does - need to override it
-
-
-#class OpRepStochastic(OpRepDense):
-# - maybe we could add this, but it wouldn't be a "dense" op here,
-#   perhaps we need to change API?
 
 
 cdef class OpRepComposed(OpRep):
@@ -449,7 +424,7 @@ cdef class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space == 'HilbertSchmidt')  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 

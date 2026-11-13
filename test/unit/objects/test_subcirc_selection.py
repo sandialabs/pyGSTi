@@ -6,6 +6,7 @@ from pygsti.tools.exceptions import MissingDependencyWarning
 
 import numpy as _np
 import networkx as _nx
+import unittest
 import warnings
 
 from collections import defaultdict
@@ -275,7 +276,8 @@ class TestSubcircuitSelection(BaseCase):
 
         backend = qiskit_ibm_runtime.fake_provider.FakeFez()
 
-        qk_circ = qiskit.circuit.library.QFT(4)
+        qk_circ = qiskit.QuantumCircuit(4)
+        qk_circ.append(qiskit.circuit.library.QFTGate(4), range(4))
         qk_circ = qiskit.transpile(qk_circ, backend=backend)
 
         ps_circ, _ = C.from_qiskit(qk_circ)
@@ -452,3 +454,139 @@ class TestSubcircuitSelection(BaseCase):
         self.assertListEqual(sorted(reshaped_width_depths), sorted(created_width_depths.keys()))
         self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth
                             for k in reshaped_width_depths))
+
+
+    def _five_qubit_u3_cx_cz_circuit(self):
+        line_labels = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5']
+
+        I_args = [0, 0, 0]
+        X_args = [_np.pi, 0, _np.pi]
+        Y_args = [_np.pi, _np.pi/2, _np.pi/2]
+        Z_args = [0, 0, _np.pi]
+
+        layers = [
+            [L('Gu3', ['Q1'], args=Z_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=X_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=I_args)],
+            [L('Gcnot', ['Q1', 'Q2'], args=None), L('Gcnot', ['Q4', 'Q3'], args=None)],
+            [L('Gu3', ['Q1'], args=Y_args), L('Gu3', ['Q2'], args=Z_args), L('Gu3', ['Q3'], args=X_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=X_args)],
+            [L('Gcnot', ['Q2', 'Q3'], args=None), L('Gcnot', ['Q4', 'Q5'], args=None)],
+            [L('Gcphase', ['Q1', 'Q2'], args=None), L('Gcphase', ['Q3', 'Q4'], args=None)],
+            [L('Gcnot', ['Q3', 'Q2'], args=None), L('Gcnot', ['Q4', 'Q5'], args=None)],
+            [L('Gu3', ['Q1'], args=X_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=I_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=Y_args)],
+            [L('Gu3', ['Q1'], args=X_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=I_args), L('Gu3', ['Q4'], args=Y_args), L('Gu3', ['Q5'], args=Y_args)],
+            [L('Gu3', ['Q1'], args=Y_args), L('Gu3', ['Q2'], args=X_args), L('Gu3', ['Q3'], args=Z_args), L('Gu3', ['Q4'], args=Y_args), L('Gu3', ['Q5'], args=I_args)],
+            [L('Gcphase', ['Q1', 'Q2'], args=None), L('Gcphase', ['Q4', 'Q5'], args=None)]
+        ]
+
+        return C(layers, line_labels=line_labels)
+
+
+    def test_greedy_growth_subcirc_selection(self):
+        rand_state = _np.random.RandomState(0)
+        circ = self._five_qubit_u3_cx_cz_circuit()
+
+        num_subcircs = 2
+        width = 3
+        depth = 4
+
+        subcircs, drops, depths, start_ends = _subcircsel.greedy_growth_subcirc_selection(
+            circ, width, depth, num_subcircs=num_subcircs, num_test_subcircs=100,
+            rand_state=rand_state, verbosity=0, return_depth_info=True)
+
+        self.assertEqual(len(subcircs), num_subcircs)
+        self.assertEqual(len(drops), num_subcircs)
+        self.assertEqual(len(depths), num_subcircs)
+        self.assertEqual(len(start_ends), num_subcircs)
+
+        for subcirc, subcirc_depth, (start, end) in zip(subcircs, depths, start_ends):
+            self.assertEqual(subcirc.width, width)
+            # candidates whose physical depth misses the target are pruned
+            self.assertEqual(subcirc_depth, depth)
+            self.assertTrue(set(subcirc.line_labels).issubset(set(circ.line_labels)))
+            self.assertTrue(0 <= start <= end < circ.depth)
+
+        # results are sorted so the best (fewest dropped gates) come first
+        self.assertTrue(all(drops[i] <= drops[i + 1] for i in range(len(drops) - 1)))
+
+        # reproducibility
+        subcircs_2, _, _, _ = _subcircsel.greedy_growth_subcirc_selection(
+            circ, width, depth, num_subcircs=num_subcircs, num_test_subcircs=100,
+            rand_state=_np.random.RandomState(0), verbosity=0, return_depth_info=True)
+        self.assertEqual(subcircs, subcircs_2)
+
+
+    def test_greedy_strategy_via_sample_subcircuits(self):
+        class NoDelayInstructions(object):
+            def get(self, *args):
+                return 0.0
+
+        rand_state = _np.random.RandomState(0)
+        circ = self._five_qubit_u3_cx_cz_circuit()
+
+        width_depths = {3: [4]}
+        num_subcircs_per_width_depth = 2
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(
+                circ, width_depths=width_depths,
+                instruction_durations=NoDelayInstructions(),
+                coupling_map='linear',
+                num_samples_per_width_depth=num_subcircs_per_width_depth,
+                strategy='greedy',
+                rand_state=rand_state)
+
+        flat_aux = [aux for auxlist in design.aux_info.values() for aux in auxlist]
+        self.assertEqual(len(flat_aux), num_subcircs_per_width_depth)
+        for subcirc, auxlist in design.aux_info.items():
+            self.assertEqual(subcirc.width, 3)
+            for aux in auxlist:
+                self.assertEqual(aux['width'], 3)
+                self.assertEqual(aux['depth'], 4)
+
+
+    # The stochastic-2q-drops path is currently broken: it re-adds dangling gates
+    # whose support extends outside the selected qubit subset, then constructs the
+    # subcircuit with line_labels=sorted(qubit_subset), which raises
+    # "ValueError: line labels must contain at least {...}" whenever any dangling
+    # gate is retained. This test describes the intended behavior and should start
+    # passing once the line-label handling for retained dangling gates is fixed.
+    @unittest.expectedFailure
+    def test_stochastic_2q_drops(self):
+        class NoDelayInstructions(object):
+            def get(self, *args):
+                return 0.0
+
+        rand_state = _np.random.RandomState(0)
+        circ = self._five_qubit_u3_cx_cz_circuit()
+
+        num_subcircs = 4
+        width = 3
+        depth = 4
+
+        subcircs, drops, compiled_depths, start_ends, dangling_counts, added_layers = \
+            _subcircsel.simple_weighted_subcirc_selection(
+                circ, width, depth, num_subcircs=num_subcircs,
+                coupling_map='linear',
+                instruction_durations=NoDelayInstructions(),
+                rand_state=rand_state,
+                return_depth_info=True,
+                stochastic_2q_drops=True,
+                verbosity=0)
+
+        self.assertEqual(len(subcircs), num_subcircs)
+        self.assertEqual(len(drops), num_subcircs)
+        self.assertEqual(len(compiled_depths), num_subcircs)
+        self.assertEqual(len(start_ends), num_subcircs)
+        self.assertEqual(len(dangling_counts), num_subcircs)
+        self.assertEqual(len(added_layers), num_subcircs)
+
+        for subcirc, drop_count, dangling_count, added in zip(subcircs, drops, dangling_counts,
+                                                              added_layers):
+            self.assertEqual(subcirc.width, width)
+            self.assertTrue(set(subcirc.line_labels).issubset(set(circ.line_labels)))
+            self.assertTrue(drop_count >= 0)
+            # each retained dangling gate is counted twice (in-layer + added layer)
+            self.assertEqual(dangling_count % 2, 0)
+            # every added layer index must be a valid layer of the subcircuit
+            for layer_idx in added:
+                self.assertTrue(0 <= layer_idx < subcirc.depth)

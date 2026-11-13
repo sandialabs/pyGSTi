@@ -17,6 +17,7 @@ import numpy as _np
 import numpy.linalg as _nla
 import random as _random
 import scipy.linalg as _sla
+from scipy.sparse.csgraph import connected_components as _connected_components
 import itertools
 from math import floor
 
@@ -781,8 +782,6 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
     major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
-    #DEBUG: ret.extra = {'opScore': opScore,
-    #    'sum(germ_lengths)': _np.sum(germ_lengths), 'l1': l1Score}
     return ret
 
 
@@ -1190,35 +1189,20 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type: _np.dtype, tol=1e-12):
         wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
         wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
-    #calculate the dimensions of the eigenspaces:
-    subspace_idx_list=[]
-    subspace_eval_list=[]
-    
-    unseen_indices= list(range(len(wrtEvals)))
-    while unseen_indices:
-        current_idx= unseen_indices.pop()
-        current_eval= wrtEvals[current_idx]
-        
-        existing_subspace_found=False
-        
-        for i,sublist in enumerate(subspace_eval_list):
-            for evals in sublist:
-                if abs(current_eval-evals)<=eps:
-                    existing_subspace_found=True
-                    subspace_eval_list[i].append(current_eval)
-                    subspace_idx_list[i].append(current_idx)
-                    break
-                    
-        if not existing_subspace_found:
-            subspace_eval_list.append([current_eval])
-            subspace_idx_list.append([current_idx])
-    
+    #Group the eigenvalues into eps-degenerate eigenspaces: the connected components
+    #of the graph that joins eigenvalues within eps of each other. Unlike a greedy
+    #pass, this grouping doesn't depend on the order the eigensolver returns the
+    #eigenvalues in (which differs between LAPACK builds), and for real-valued wrt it
+    #sends conjugate eigenvalues to conjugate groups, which keeps SuperOp real.
+    adjacency = _np.abs(wrtEvals[:, None] - wrtEvals[None, :]) <= eps
+    _, subspace_labels = _connected_components(adjacency.astype(_np.int8), directed=False)
+
     #Now use these to construct the projectors onto each of the subspaces
-    for idx_list in subspace_idx_list:
+    for label in _np.unique(subspace_labels):
         #Instead of actually constructing the projector, this is equivalent
         #to simply picking out the requisite rows from wrtEvecsInv and
         #columns from wrtEvecs.
-        idx_array= _np.asarray(idx_list)
+        idx_array = _np.flatnonzero(subspace_labels == label)
         A = _np.dot(wrtEvecs[:,idx_array], wrtEvecsInv[idx_array, :])
         SuperOp += fast_kron(A, A.T)
     
@@ -4132,6 +4116,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         printer.log('Testing initial germ list for AC.', 2)
         initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
                                                                      score_func, threshold,
+                                                                     num_gauge_params=numGaugeParams,
                                                                      float_type=float_type,
                                                                      comm=comm)
         if initial_germ_set_completeness == -1:
@@ -4146,7 +4131,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             first_outer_iter_log= True
             printer.log('Initial germ list is not AC, beginning greedy search loop.', 2)
     else:
-        initN=None
+        initN = 1
         first_outer_iter_log= True
     
     while _np.any(weights == 0):
@@ -5111,7 +5096,6 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
     
     #Note: we only actually need to calculate the diagonal elements of the G matrix. 
     if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
-        #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
         vw_term_diag = (-2/norm_w**2)*(v*w)
@@ -5125,7 +5109,6 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
         rank_increase_flag = True
     
     elif (norm_w<1e-10) and (beta>1e-10):
-        #print('Case 3/5')
         G_diag = (-beta/_np.abs(beta)**2)*(v**2)
         
         rank_increase_flag = False
@@ -5176,7 +5159,6 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     #Note: we only actually need to calculate the diagonal elements of the G matrix. 
     if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
-        #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
         vw = v@w.T
@@ -5191,7 +5173,6 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         rank_increase_flag = True
     
     elif (norm_w<1e-10) and (beta>1e-10):
-        #print('Case 3/5')
         G = (-beta/_np.abs(beta)**2)*(v@v.T)
         
         rank_increase_flag = False

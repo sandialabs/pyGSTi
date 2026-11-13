@@ -65,7 +65,7 @@ When constructing a DataSet whose circuits use one naming convention but the Mod
 ### Other dataset types (briefly)
 
 - [`MultiDataSet`](../pygsti/data/multidataset.py) — a container of several `DataSet`s sharing the same circuit list (e.g., Monday's vs. Tuesday's data on the same experimental design). Specialized.
-- [`FreeDataSet`](../pygsti/data/freedataset.py) — sparser, time-dependent data layout. Specialized.
+- [`FreeformDataSet`](../pygsti/data/freedataset.py) — maps each `Circuit` to an arbitrary dict of per-circuit values rather than outcome counts. Specialized.
 - [`datacomparator.py`](../pygsti/data/datacomparator.py), [`hypothesistest.py`](../pygsti/data/hypothesistest.py) — statistical comparison utilities for two datasets.
 
 For everything else, assume `DataSet`.
@@ -129,7 +129,7 @@ Both LM optimizers are damped least-squares solvers ("trust-region with Marquard
 
 Other optimization and algorithm modules:
 
-- [`gaugeopt.py`](../pygsti/algorithms/gaugeopt.py) — gauge optimization. See [AGENTS.md cross-cutting](AGENTS.md#gauge-freedom-and-gauge-optimization).
+- [`gaugeopt.py`](../pygsti/algorithms/gaugeopt.py) — gauge optimization. See [AGENTS.md cross-cutting](../AGENTS.md#gauge-freedom-and-gauge-optimization).
 - [`germselection.py`](../pygsti/algorithms/germselection.py), [`fiducialselection.py`](../pygsti/algorithms/fiducialselection.py), [`fiducialpairreduction.py`](../pygsti/algorithms/fiducialpairreduction.py) — experiment-design helpers.
 - [`grasp.py`](../pygsti/algorithms/grasp.py), [`scoring.py`](../pygsti/algorithms/scoring.py) — combinatorial search support for germ/fiducial selection.
 - [`compilers.py`](../pygsti/algorithms/compilers.py), [`mirroring.py`](../pygsti/algorithms/mirroring.py), [`randomcircuit.py`](../pygsti/algorithms/randomcircuit.py) — circuit compilation, mirror circuits, random circuits.
@@ -173,15 +173,15 @@ flowchart TD
 
 - **Layout sharing across iterations.** `run_iterative_gst` constructs many `MDCObjectiveFunction`s in sequence over a growing circuit family. Use `precomp_layout` (or the higher-level kwargs that pass it through) to avoid repeatedly rebuilding the Layout. See doc 02.
 
-- **`LogLOptions`-style parameter bundling not yet implemented.** Likelihood-function signatures still pass `min_prob_clip`, `prob_clip_interval`, `radius`, `op_label_aliases`, `comm` individually. Refactoring this is tracked at [known-debt.md #13](known-debt.md#13-logloptions-style-parameter-bundling-not-yet-implemented).
+- **`LogLOptions`-style parameter bundling not yet implemented.** Likelihood-function signatures still pass `min_prob_clip`, `prob_clip_interval`, `radius`, `op_label_aliases`, `comm` individually. Refactoring this is tracked at [known-debt.md #11](known-debt.md#11-logloptions-style-parameter-bundling-not-yet-implemented).
 
-- **Gauge optimization is *not* part of the fit kernel.** `run_gst_fit` returns an un-gauge-optimized Model. Gauge opt is layered on top by `protocols/` (or, if you're calling the algorithms layer directly, by calling `gaugeopt_to_target(...)` yourself). See [AGENTS.md cross-cutting](AGENTS.md#gauge-freedom-and-gauge-optimization).
+- **Gauge optimization is *not* part of the fit kernel.** `run_gst_fit` returns an un-gauge-optimized Model. Gauge opt is layered on top by `protocols/` (or, if you're calling the algorithms layer directly, by calling `gaugeopt_to_target(...)` yourself). See [AGENTS.md cross-cutting](../AGENTS.md#gauge-freedom-and-gauge-optimization).
 
 ## Architectural debt
 
 - [`MDCObjectiveFunction` multi-inheritance](known-debt.md#4-mdcobjectivefunction-multi-inheritance-smell).
 - [`CustomLMOptimizer` is legacy-only](known-debt.md#9-customlmoptimizer-is-legacy-only).
-- [`LogLOptions`-style parameter bundling](known-debt.md#13-logloptions-style-parameter-bundling-not-yet-implemented).
+- [`LogLOptions`-style parameter bundling](known-debt.md#11-logloptions-style-parameter-bundling-not-yet-implemented).
 - [`tools/chi2fns.py` deprecated function names](known-debt.md#7-toolschi2fnspy-deprecated-function-names) — when refactoring chi-squared call sites, you'll trip on this.
 
 ## Canonical examples

@@ -56,7 +56,6 @@ from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
 
-
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -250,16 +249,25 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary', 'local tp', 'local unitary'],
+                                               _GaugeGroup]) -> None:
         """
         The default gauge group.
+
+        Strings select a standard group built from this model's state space and basis:
+        ``'unitary'``, ``'tp'``, and their per-subsystem versions ``'local unitary'`` and
+        ``'local tp'`` (see :class:`TensorProductGaugeGroup`).
         """
         if isinstance(value, str):
             lower = value.lower()
             if lower == 'unitary':
                 value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
             elif lower == 'tp':
-                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif lower == 'local unitary':
+                value = _gg.TensorProductGaugeGroup.local_unitary(self.state_space, self.basis, self.evotype)
+            elif lower == 'local tp':
+                value = _gg.TensorProductGaugeGroup.local_tp(self.state_space, self.basis, self.evotype)
             else:
                 msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
                 raise ValueError(msg)
@@ -496,6 +504,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+
         spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
@@ -522,12 +531,13 @@ class ExplicitOpModel(_mdl.OpModel):
 
         try:
             self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
             self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
             self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
                 "try providing an ideal_model to avoid possible branch cuts.") from e
+        # Instrument conversion ignores ideal_model, so the hint above would mislead; its errors say what to do instead.
+        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
         
         self.set_default_gauge_group_for_member_type(typ)
 
@@ -1526,54 +1536,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #Note: does not alter instruments!
         return kicked_gs
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
-        """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
-
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
-
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
-
-        Returns
-        -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
-        """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
-
-        srep_dict = {}
-
-        for gl, gate in self.operations.items():
-            if (gfilter is not None) and (gl not in gfilter): continue
-
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
-
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        return self.operations.items()
 
     @_deprecated_fn
     def print_info(self):
@@ -1912,7 +1876,12 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
     # reverse order. For example, ComposedOp([X,Y,Z]) is applied to
     # a vector v as Z @ Y @ X @ v.
 
-    for key, rho in oldmdl.preps.items():
+    # NOTE: we rebuild from the members of `mdl` (the copy) rather than those of `oldmdl`.
+    # A rebuilt member holds a *reference* to the member it wraps, so wrapping `oldmdl`'s
+    # members would leave the returned model sharing parameterized objects with its input:
+    # calling `from_vector` on either model would then silently mutate the other.
+
+    for key, rho in list(mdl.preps.items()):
         # replace each ComposedState superket `rhoVec` with `invU @ rhoVec`;
         # do this by packing invU into a new ComposedState's error map.
         assert isinstance(rho, ComposedState)
@@ -1920,16 +1889,16 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         errmap  = ComposedOp([rho.error_map, invU], state_space=mdl.state_space) # type: ignore
         mdl.preps[key] = ComposedState(static_rho, errmap)
 
-    for key, povm in oldmdl.povms.items():
+    for key, povm in list(mdl.povms.items()):
         # replace each ComposedPOVM `p` with another ComposedPOVM `q`, where
-        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U` 
+        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U`
         # belonging to `q`. Do this by packing U into the error map of `q`.
         assert isinstance(povm, ComposedPOVM)
         static_povm = povm.base_povm
         errmap = ComposedOp([U, povm.error_map], state_space=mdl.state_space) # type: ignore
         mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
 
-    for key, op in oldmdl.operations.items():
+    for key, op in list(mdl.operations.items()):
         # replace each operation `G` with `invU @ G @ U`.
         op_s = ComposedOp([U, op, invU])
         mdl.operations[key] = op_s

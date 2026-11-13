@@ -664,17 +664,17 @@ class CliffordCompilationRules(CompilationRules):
         def to_real_label(template_label):
             """ Convert a "template" operation label (which uses integer qubit labels
                 0 to N) to a "real" label for a potential gate in self.processor_spec. """
-            qlabels = [oplabel.sslbls[i] for i in template_label.sslbls]
-            return _Label(template_label.name, qlabels)
+            return self.processor_spec.map_gate_label_state_space(template_label, lambda sslbl: oplabel.sslbls[sslbl])
 
         def to_template_label(real_label):
             """ The reverse (qubits in template == oplabel.qubits) """
-            qlabels = [oplabel.sslbls.index(lbl) for lbl in real_label.sslbls]
-            return _Label(real_label.name, qlabels)
+            return self.processor_spec.map_gate_label_state_space(real_label, lambda sslbl: oplabel.sslbls.index(sslbl))
 
         def is_local_compilation_feasible(allowed_gatenames):
             """ Whether template_labels can possibly be enough
                 gates to compile a template for op_label with """
+            if len(allowed_gatenames) == 0:
+                return False
             if oplabel.num_qubits <= 1:
                 return len(allowed_gatenames) > 0  # 1Q gates, anything is ok
             elif oplabel.num_qubits == 2:
@@ -701,8 +701,15 @@ class CliffordCompilationRules(CompilationRules):
             available_srep_dict = self.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
 
             if is_local_compilation_feasible(available_gatenames):
-                available_gatelabels = [to_template_label(gl) for gn in available_gatenames
-                                        for gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls)]
+                available_gatelabels = []
+                for gn in available_gatenames:
+                    for real_gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls):
+                        template_gl = to_template_label(real_gl)
+                        try:
+                            available_srep_dict[template_gl] = self.processor_spec.clifford_symplectic_rep_of(real_gl)
+                        except (KeyError, TypeError, ValueError):
+                            continue
+                        available_gatelabels.append(template_gl)
                 template_to_use = self.add_clifford_compilation_template(
                     oplabel.name, oplabel.num_qubits, unitary, srep,
                     available_gatelabels, available_srep_dict,

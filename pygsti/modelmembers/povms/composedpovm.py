@@ -9,21 +9,29 @@ Defines the ComposedPOVM class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
 import collections as _collections
 from typing import Optional
 
+import numpy as _np
+from pygsti.tools._static_tls import import_torch as _import_torch
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.basis import BasisLike as _BasisLike, Basis as _Basis
 
 
-class ComposedPOVM(_POVM):
+class ComposedPOVM(_POVM, _Torchable):
     """
     A parameterized POVM that is effectively a *single* parameterized gate followed by
     a static (usually, computational basis) POVM.
@@ -74,13 +82,10 @@ class ComposedPOVM(_POVM):
         
         self.base_povm : _POVM = povm
 
-        if mx_basis is None:
-            if hasattr(errormap, 'errorgen') and isinstance(errormap.errorgen, _op.LindbladErrorgen): # type: ignore
-                mx_basis = errormap.errorgen.matrix_basis # type: ignore
-            else:
-                raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
-
-        self.matrix_basis = _Basis.cast(mx_basis, state_space)
+        # `matrix_basis` is constructed lazily (see the property below): casting a basis to
+        # the full state space overflows for very large (e.g. 100-qubit) error maps, and the
+        # basis is only needed by a few dense-matrix code paths and by serialization.
+        self._matrix_basis = mx_basis
 
         self.errormap = errormap
         items = []  # init as empty (lazy creation of members)
@@ -111,7 +116,15 @@ class ComposedPOVM(_POVM):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
+        # Only serialize the matrix basis when it can be given as an explicit basis (an
+        # explicitly passed `mx_basis` or one already constructed). Forcing construction here
+        # would overflow for very large state spaces; on load, a missing entry is re-derived
+        # lazily from the error map.
+        matrix_basis = self._matrix_basis
+        if isinstance(matrix_basis, _Basis):
+            mm_dict['matrix_basis'] = matrix_basis.to_nice_serialization()
+        elif isinstance(matrix_basis, str):
+            mm_dict['matrix_basis'] = matrix_basis
 
         return mm_dict
 
@@ -119,8 +132,29 @@ class ComposedPOVM(_POVM):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         errormap = serial_memo[mm_dict['submembers'][0]]
         base_povm = serial_memo[mm_dict['submembers'][1]] if len(mm_dict['submembers']) > 1 else None
-        mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
+        mx_basis = mm_dict.get('matrix_basis', None)
+        if isinstance(mx_basis, dict):
+            mx_basis = _Basis.from_nice_serialization(mx_basis)
         return cls(errormap, base_povm, mx_basis)
+
+    @property
+    def matrix_basis(self) -> _Basis:
+        """
+        The matrix basis of this POVM's state space.
+
+        Taken from the `mx_basis` constructor argument if given, otherwise from the error
+        map's Lindblad error generator. Constructed on first access rather than in
+        `__init__` so that very large composed POVMs (whose full-dimension Basis cannot be
+        built) remain usable on code paths that never need it.
+        """
+        if self._matrix_basis is None:
+            errormap = self.error_map
+            if isinstance(errormap, _ErrorGeneratorContainer) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
+                mx_basis = errormap.errorgen.matrix_basis
+            else:
+                raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
+            self._matrix_basis = _Basis.cast(mx_basis, self.state_space)
+        return self._matrix_basis
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -172,7 +206,7 @@ class ComposedPOVM(_POVM):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
+        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self._matrix_basis),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
     def submembers(self):
@@ -271,6 +305,30 @@ class ComposedPOVM(_POVM):
         """
         # Recall self.base_povm.num_params == 0
         return self.error_map.to_vector()
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        """
+        Returns `(base_povm, error_map_type, error_map_sd)`.  All parameters belong to the
+        (Torchable) error map; the base POVM is static (0 params).  The rows of base_povm
+        are ordered according to self.keys().
+        """
+        _torch = _import_torch()
+        base_effects = [self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]
+        base_povm_np = _np.ascontiguousarray(_np.stack(base_effects))
+        base_povm    = _torch.from_numpy(base_povm_np).to(dtype=real_dtype, device=device)
+        assert isinstance(self.error_map, _Torchable)
+        err_sld = self.error_map.stateless_data(real_dtype, device)
+        return (base_povm, type(self.error_map), err_sld)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable POVM matrix `base_povm @ error_map_superop` from the parameter tensor."""
+        t_base_rows, emap_type, emap_sd = sd
+        superop = emap_type.torch_base(emap_sd, t_param)
+        assert not superop.is_complex(), \
+            "ComposedPOVM.torch_base assumes a real-valued error map superoperator; got a complex " \
+            "dtype instead."
+        return t_base_rows @ superop
 
     def from_vector(self, v, close=False, dirty_value=True):
         """

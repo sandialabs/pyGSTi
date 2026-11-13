@@ -1,5 +1,9 @@
+from unittest import mock
+
+import networkx
 import numpy as np
 
+import pygsti
 from pygsti.baseobjs import Label as L
 from pygsti.processors import QubitProcessorSpec as QPS
 from ..util import BaseCase
@@ -95,3 +99,313 @@ class LayerSamplerTester(BaseCase):
         l3 = _rc.sample_circuit_layer_by_q_elimination(pspec3, qubit_labels=q_set, two_q_prob=0.5)
 
         l4 = _rc.sample_circuit_layer_by_q_elimination(pspec3, qubit_labels=q_set, two_q_prob=0.5)
+
+
+QS = ['Q0', 'Q1', 'Q2', 'Q3']
+INFEASIBLE_RE = r'xi of at most 2/3 always fits'
+QS5 = ['Q0', 'Q1', 'Q2', 'Q3', 'Q4']
+
+# Outputs of create_random_circuit_with_fixed_feature_values at commit aa92fed01, keyed by
+# (geometry, width, xi, seed), at depth 8. Every call that succeeded there must return the
+# same circuit for the same rand_state, so a change meant to alter the draw order must
+# regenerate these. Only even widths reach the maximum-matching upgrade, so the width-4
+# cases are the ones that guard it.
+PR_HEAD_CIRCUITS = {
+    ('line', 3, 0.5, 0): (
+        '[Gcphase:Q0:Q1Gxpi2:Q2][Gypi2:Q0Gcphase:Q2:Q1][Gypi2:Q0Gi:Q1Gxpi2:Q2]'
+        '[Gcphase:Q0:Q1Gxpi2:Q2][Gxpi2:Q0Gcphase:Q2:Q1][Gxpi2:Q0Gi:Q1Gxpi2:Q2][Gi:Q0Gcphase:Q2:Q1]'
+        '[Gi:Q0Gcphase:Q2:Q1]@(Q0,Q1,Q2)'),
+    ('line', 3, 0.5, 1): (
+        '[Gi:Q0Gypi2:Q1Gxpi2:Q2][Gypi2:Q0Gi:Q1Gi:Q2][Gcphase:Q0:Q1Gypi2:Q2][Gcphase:Q0:Q1Gi:Q2]'
+        '[Gxpi2:Q0Gcphase:Q2:Q1][Gcphase:Q1:Q0Gypi2:Q2][Gypi2:Q0Gcphase:Q2:Q1][Gcphase:Q1:Q0Gi:Q2]@(Q0,Q1,Q2)'),
+    ('line', 4, 0.5, 0): (
+        '[Gi:Q0Gxpi2:Q1Gcphase:Q2:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gi:Q0Gcphase:Q2:Q1Gi:Q3]'
+        '[Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3][Gi:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3][Gxpi2:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gxpi2:Q0Gxpi2:Q1Gcphase:Q3:Q2][Gcphase:Q1:Q0Gcphase:Q2:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('line', 4, 0.5, 2): (
+        '[Gcphase:Q0:Q1Gcphase:Q3:Q2][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gxpi2:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gi:Q0Gi:Q1Gypi2:Q2Gypi2:Q3][Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2]'
+        '[Gi:Q0Gcphase:Q1:Q2Gi:Q3][Gypi2:Q0Gi:Q1Gypi2:Q2Gi:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('line', 5, 0.8, 0): (
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gxpi2:Q4][Gcphase:Q0:Q1Gcphase:Q3:Q2Gypi2:Q4]'
+        '[Gi:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3][Gypi2:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3]'
+        '[Gcphase:Q1:Q0Gi:Q2Gcphase:Q4:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2Gxpi2:Q4]'
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gxpi2:Q4][Gcphase:Q0:Q1Gypi2:Q2Gcphase:Q3:Q4]@(Q0,Q1,Q2,Q3,Q4)'),
+    ('ring', 4, 0.25, 3): (
+        '[Gypi2:Q0Gypi2:Q1Gypi2:Q2Gi:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3]'
+        '[Gxpi2:Q0Gi:Q1Gypi2:Q2Gxpi2:Q3][Gxpi2:Q0Gypi2:Q1Gi:Q2Gypi2:Q3][Gi:Q0Gxpi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gi:Q0Gypi2:Q1Gxpi2:Q2Gxpi2:Q3][Gypi2:Q0Gcphase:Q2:Q1Gi:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('ring', 5, 0.75, 0): (
+        '[Gcphase:Q0:Q1Gcphase:Q2:Q3Gi:Q4][Gypi2:Q0Gcphase:Q1:Q2Gcphase:Q4:Q3]'
+        '[Gi:Q0Gcphase:Q1:Q2Gcphase:Q4:Q3][Gxpi2:Q0Gcphase:Q2:Q1Gxpi2:Q3Gypi2:Q4]'
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gi:Q4][Gxpi2:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3]'
+        '[Gcphase:Q0:Q1Gcphase:Q3:Q2Gxpi2:Q4][Gcphase:Q1:Q2Gxpi2:Q3Gcphase:Q4:Q0]@(Q0,Q1,Q2,Q3,Q4)'),
+}
+
+
+def two_qubit_gates_by_layer(circuit):
+    """The two-qubit gate labels of each layer of `circuit`, as a list of lists."""
+    return [[g for g in layer.components if len(g.sslbls) == 2] for layer in circuit]
+
+
+class FixedFeatureValueCircuitTest(BaseCase):
+
+    def setUp(self):
+        self.line = QPS(4, ['Gi', 'Gxpi2', 'Gypi2', 'Gcphase'], geometry='line', qubit_labels=QS)
+        self.oneway_pairs = [('Q0', 'Q1'), ('Q1', 'Q2'), ('Q2', 'Q3')]
+        self.oneway = QPS(4, ['Gi', 'Gxpi2', 'Gypi2', 'Gcnot'], availability={'Gcnot': self.oneway_pairs},
+                          qubit_labels=QS)
+        self.f = _rc.create_random_circuit_with_fixed_feature_values
+
+    def test_gate_args_lists(self):
+        pspec = QPS(4, ['Gczr', 'Gxpi2', 'Gzr'], availability={'Gczr': self.oneway_pairs}, qubit_labels=QS)
+        args = {'Gzr': [('0.1',), ('0.2',)], 'Gczr': [('0.3',)]}
+        seen_zr, n_czr = set(), 0
+        for seed in range(10):
+            c = self.f(pspec, 4, 4, 0.5, rand_state=np.random.RandomState(seed), gate_args_lists=args)
+            for layer in c:
+                for lbl in layer.components:
+                    if lbl.name == 'Gzr':
+                        self.assertIn(tuple(lbl.args), args['Gzr'])
+                        seen_zr.add(tuple(lbl.args))
+                    elif lbl.name == 'Gczr':
+                        self.assertEqual(tuple(lbl.args), ('0.3',))
+                        n_czr += 1
+                    elif lbl.name == 'Gxpi2':
+                        self.assertEqual(len(lbl.args), 0)
+            if seed == 0:
+                pygsti.models.create_crosstalk_free_model(pspec).probabilities(c)
+        self.assertEqual(seen_zr, set(args['Gzr']))
+        self.assertGreater(n_czr, 0)
+
+    def test_full_density_fits_on_even_line(self):
+        for pspec in (self.line, self.oneway):
+            for seed in range(20):
+                c = self.f(pspec, 4, 10, 1.0, rand_state=np.random.RandomState(seed))
+                layers = two_qubit_gates_by_layer(c)
+                self.assertEqual(len(layers), 10)
+                for gates in layers:
+                    self.assertEqual(len(gates), 2)
+                    self.assertEqual({frozenset(g.sslbls) for g in gates},
+                                     {frozenset(['Q0', 'Q1']), frozenset(['Q2', 'Q3'])})
+                    if pspec is self.oneway:
+                        for g in gates:
+                            self.assertIn(tuple(g.sslbls), self.oneway_pairs)
+
+    def test_transition_zone_succeeds(self):
+        for xi in (0.8, 0.9, 1.0):
+            target = xi * 4 * 20 / 2
+            for seed in range(20):
+                c = self.f(self.line, 4, 20, xi, rand_state=np.random.RandomState(seed))
+                n = sum(len(gates) for gates in two_qubit_gates_by_layer(c))
+                self.assertIn(n, (int(np.floor(target)), int(np.ceil(target))))
+
+    def test_infeasible_density_raises(self):
+        for seed in range(5):
+            with self.assertRaisesRegex(ValueError, INFEASIBLE_RE):
+                self.f(self.line, 3, 4, 1.0, qubit_labels=['Q0', 'Q1', 'Q2'],
+                       rand_state=np.random.RandomState(seed))
+
+    def test_rounding_past_the_limit(self):
+        outcomes = set()
+        for seed in range(20):
+            try:
+                c = self.f(self.line, 3, 1, 0.9, qubit_labels=['Q0', 'Q1', 'Q2'],
+                           rand_state=np.random.RandomState(seed))
+            except ValueError as err:
+                self.assertRegex(str(err), INFEASIBLE_RE)
+                outcomes.add('raised')
+            else:
+                self.assertEqual(sum(len(gates) for gates in two_qubit_gates_by_layer(c)), 1)
+                outcomes.add('returned')
+        self.assertEqual(outcomes, {'raised', 'returned'})
+
+    def test_limit_checks_the_drawn_count(self):
+        # The greedy layer can fall short (picking only Q1-Q2) and the target 2.25 exceeds the
+        # limit 2, so a draw of 2 must upgrade and return; checking the target would raise.
+        pspec = QPS(5, ['Gi', 'Gxpi2', 'Gypi2', 'Gcnot'], availability={'Gcnot': self.oneway_pairs},
+                    qubit_labels=QS + ['Q4'])
+        outcomes = set()
+        with mock.patch.object(_rc, '_sample_maximum_matching', wraps=_rc._sample_maximum_matching) as spy:
+            for seed in range(20):
+                spy.reset_mock()
+                try:
+                    c = self.f(pspec, 5, 1, 0.9, rand_state=np.random.RandomState(seed))
+                except ValueError as err:
+                    self.assertRegex(str(err), r'xi of at most 4/5 always fits')
+                    outcomes.add('raised')
+                else:
+                    self.assertEqual(sum(len(gates) for gates in two_qubit_gates_by_layer(c)), 2)
+                    outcomes.add('returned after upgrade' if spy.called else 'returned')
+        self.assertEqual(outcomes, {'raised', 'returned', 'returned after upgrade'})
+
+    def test_max_feasible_density_on_odd_line(self):
+        for seed in range(10):
+            c = self.f(self.line, 3, 4, 2 / 3, qubit_labels=['Q0', 'Q1', 'Q2'],
+                       rand_state=np.random.RandomState(seed))
+            layers = two_qubit_gates_by_layer(c)
+            self.assertEqual(len(layers), 4)
+            for gates in layers:
+                self.assertEqual(len(gates), 1)
+
+    def test_low_density_uses_every_edge(self):
+        pairs = set()
+        for seed in range(20):
+            c = self.f(self.line, 4, 10, 0.5, rand_state=np.random.RandomState(seed))
+            for gates in two_qubit_gates_by_layer(c):
+                pairs.update(frozenset(g.sslbls) for g in gates)
+        self.assertEqual(pairs, {frozenset(['Q0', 'Q1']), frozenset(['Q1', 'Q2']), frozenset(['Q2', 'Q3'])})
+
+    def test_reproducible_with_seed(self):
+        for seed in range(5):
+            c1 = self.f(self.line, 4, 10, 1.0, rand_state=np.random.RandomState(seed))
+            c2 = self.f(self.line, 4, 10, 1.0, rand_state=np.random.RandomState(seed))
+            self.assertEqual(c1, c2)
+
+    def test_independent_of_matching_order(self):
+        orig = networkx.max_weight_matching
+
+        def reversed_and_flipped(*args, **kwargs):
+            return [(v, u) for (u, v) in reversed(list(orig(*args, **kwargs)))]
+
+        for depth, xi in ((10, 1.0), (20, 0.9)):
+            for seed in range(5):
+                expected = self.f(self.line, 4, depth, xi, rand_state=np.random.RandomState(seed))
+                with mock.patch('networkx.max_weight_matching', side_effect=reversed_and_flipped):
+                    actual = self.f(self.line, 4, depth, xi, rand_state=np.random.RandomState(seed))
+                self.assertEqual(actual, expected)
+
+    def test_maximum_matching_helper_is_random(self):
+        q3 = ['Q0', 'Q1', 'Q2']
+        edges = [e for e in self.line.compute_2Q_connectivity().edges() if all(q in q3 for q in e)]
+        self.assertEqual(edges, [('Q0', 'Q1'), ('Q1', 'Q0'), ('Q1', 'Q2'), ('Q2', 'Q1')])
+        graph = networkx.Graph()
+        graph.add_nodes_from(q3)
+        graph.add_edges_from(edges)
+        seen = set()
+        for seed in range(10):
+            matching = _rc._sample_maximum_matching(graph, edges, np.random.RandomState(seed))
+            self.assertEqual(len(matching), 1)
+            self.assertIn(matching[0], edges)
+            seen.add(matching[0])
+        self.assertEqual({frozenset(e) for e in seen}, {frozenset(['Q0', 'Q1']), frozenset(['Q1', 'Q2'])})
+        self.assertTrue(any((v, u) in seen for (u, v) in seen))
+
+    def test_matches_pr_head_output(self):
+        pspecs = {geometry: QPS(5, ['Gi', 'Gxpi2', 'Gypi2', 'Gcphase'], geometry=geometry, qubit_labels=QS5)
+                  for geometry in ('line', 'ring')}
+        for key, expected in PR_HEAD_CIRCUITS.items():
+            geometry, width, xi, seed = key
+            c = self.f(pspecs[geometry], width, 8, xi, rand_state=np.random.RandomState(seed))
+            self.assertEqual(c.str, expected, msg=f"circuit for {key} differs from the stored output")
+
+    def test_rejects_width_mismatch(self):
+        with self.assertRaisesRegex(ValueError, 'is larger than the number of qubits in the processor spec'):
+            self.f(self.line, 5, 4, 0.5, rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, 'qubit_labels has 2 qubits, but width is 3'):
+            self.f(self.line, 3, 4, 0.5, qubit_labels=['Q0', 'Q1'], rand_state=np.random.RandomState(0))
+
+
+class EdgegrabOneQubitGateTest(BaseCase):
+
+    def setUp(self):
+        ring = [('Q0', 'Q1'), ('Q1', 'Q2'), ('Q2', 'Q3')]
+        # Gypi2 is available on Q0 and Q1 only.
+        self.het = QPS(4, ['Gcphase', 'Gxpi2', 'Gypi2', 'Gzpi2'],
+                       availability={'Gcphase': ring, 'Gypi2': [('Q0',), ('Q1',)]}, qubit_labels=QS)
+        self.rot = QPS(4, ['Gczr', 'Gxpi2', 'Gzr'], availability={'Gczr': ring}, qubit_labels=QS)
+        self.eg = _rc.sample_circuit_layer_by_edgegrab
+
+    def test_distribution_uses_only_available_gates(self):
+        seen = {'Q0': set(), 'Q1': set()}
+        for seed in range(20):
+            layer = self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2'],
+                            one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(seed))
+            self.assertEqual(sorted(lbl.qubits[0] for lbl in layer), QS)
+            for lbl in layer:
+                self.assertEqual(len(lbl.qubits), 1)
+                q = lbl.qubits[0]
+                if q in ('Q2', 'Q3'):
+                    self.assertEqual(lbl.name, 'Gxpi2')
+                else:
+                    seen[q].add(lbl.name)
+        self.assertEqual(seen, {'Q0': {'Gxpi2', 'Gypi2'}, 'Q1': {'Gxpi2', 'Gypi2'}})
+
+    def test_distribution_renormalized_over_available_gates(self):
+        names = []
+        for seed in range(500):
+            layer = self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2', 'Gzpi2'],
+                            one_q_gate_distribution=[0.1, 0.6, 0.3], rand_state=np.random.RandomState(seed))
+            names.extend(lbl.name for lbl in layer if lbl.qubits[0] in ('Q2', 'Q3'))
+        self.assertEqual(len(names), 1000)
+        self.assertAlmostEqual(names.count('Gzpi2') / len(names), 0.75, delta=0.06)
+
+    def test_raises_when_qubit_has_no_usable_gate(self):
+        cases = [(['Gypi2'], [1.0]), (['Gxpi2', 'Gypi2'], [0.0, 1.0]), (['Gypi2'], None)]
+        for names, dist in cases:
+            with self.assertRaisesRegex(ValueError, 'Cannot sample a one-qubit gate for qubit Q2'):
+                self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=names,
+                        one_q_gate_distribution=dist, rand_state=np.random.RandomState(0))
+
+    def test_one_qubit_gate_args(self):
+        allowed = [('0.1',), ('0.2',)]
+        for dist in (None, [0.5, 0.5]):
+            args_seen = []
+            for seed in range(10):
+                layer = self.eg(self.rot, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gzr'],
+                                gate_args_lists={'Gzr': allowed}, one_q_gate_distribution=dist,
+                                rand_state=np.random.RandomState(seed))
+                args_seen.extend(tuple(lbl.args) for lbl in layer if lbl.name == 'Gzr')
+            self.assertGreater(len(args_seen), 0)
+            for args in args_seen:
+                self.assertIn(args, allowed)
+            self.assertEqual(set(args_seen), set(allowed))
+
+    def test_samplerargs_positional_order(self):
+        czr_args = [('0.1',), ('-0.1',)]
+        num_czr = 0
+        for seed in range(5):
+            c = _rc.create_random_circuit(self.rot, 3, sampler='edgegrab',
+                                          samplerargs=[0.5, ['Gxpi2'], {'Gczr': czr_args}],
+                                          rand_state=np.random.RandomState(seed))
+            for layer in c:
+                for lbl in layer.components:
+                    if len(lbl.qubits) == 1:
+                        self.assertEqual(lbl.name, 'Gxpi2')
+                    else:
+                        self.assertEqual(lbl.name, 'Gczr')
+                        self.assertIn(tuple(lbl.args), czr_args)
+                        num_czr += 1
+        self.assertGreater(num_czr, 0)
+
+        for seed in range(5):
+            c = _rc.create_random_circuit(self.rot, 3, sampler='edgegrab',
+                                          samplerargs=[0.5, ['Gxpi2', 'Gzr'],
+                                                       {'Gczr': [('0.1',)], 'Gzr': [('0.3',)]}, [0.0, 1.0]],
+                                          rand_state=np.random.RandomState(seed))
+            for layer in c:
+                for lbl in layer.components:
+                    if len(lbl.qubits) == 1:
+                        self.assertEqual(lbl.name, 'Gzr')
+                        self.assertEqual(tuple(lbl.args), ('0.3',))
+
+    def test_rejects_bad_distribution(self):
+        # Gxpi is a standard gate name, but self.het doesn't have it.
+        with self.assertRaisesRegex(ValueError, "the processor spec has no gate named 'Gxpi'"):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gxpi'],
+                    one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, "'Gcphase' is not a one-qubit gate"):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gcphase'],
+                    one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(0))
+        for dist in ([0.5, 0.6], [1.5, -0.5]):
+            with self.assertRaisesRegex(ValueError, 'must be non-negative and sum to 1'):
+                self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gzpi2'],
+                        one_q_gate_distribution=dist, rand_state=np.random.RandomState(0))
+
+    def test_distribution_without_matching_names_raises(self):
+        with self.assertRaisesRegex(ValueError, 'can only be given together with one_q_gate_names'):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_distribution=[1.0],
+                    rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, 'they must have the same length'):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2'],
+                    one_q_gate_distribution=[1.0], rand_state=np.random.RandomState(0))

@@ -38,7 +38,7 @@ class EffectRepConjugatedState(EffectRep):
     def __str__(self):
         return str(self.state_rep.data)
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         return self.state_rep.to_dense(on_space)
 
     def amplitude(self, state):
@@ -118,7 +118,7 @@ class EffectRepTensorProduct(EffectRep):
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    def to_dense(self, on_space: SpaceT, scratch=None):
+    def to_dense(self, on_space: SpaceT = 'minimal', scratch=None):
         #OLD & SLOW:
         #if len(self.factors) == 0: return _np.empty(0, complex)
         #factorPOVMs = self.factors

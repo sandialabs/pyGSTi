@@ -1925,7 +1925,8 @@ class OpModel(Model):
         unique_layers = unique_layers.union(*unique_layers_by_circuit)
 
         #Now pre-compute the gpindices for all of these unique layers
-        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        unique_layers_gpindices_dict = {layer: self.circuit_layer_operator(layer).gpindices_as_array().tolist()
+                                        for layer in unique_layers}
         
         #loop through the circuit layers and get the circuit layer operators.
         #from each of the circuit layer operators we'll get their gpindices. 
@@ -1996,6 +1997,69 @@ class OpModel(Model):
     @property
     def primitive_instrument_labels(self):
         return tuple(self._primitive_instrument_label_dict.keys())
+
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        """Iterate over operation-label, operation pairs to inspect for Clifford symplectic reps."""
+        raise NotImplementedError("Derived classes must implement this!")
+
+    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
+        """
+        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+
+        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
+        from the returned dictionary.
+
+        Parameters
+        ----------
+        oplabel_filter : iterable, optional
+            A list, tuple, or set of operation labels whose symplectic
+            representations should be returned (if they exist).
+
+        Returns
+        -------
+        dict
+            keys are operation labels and/or just the root names of gates
+            (without any state space indices/labels).  Values are
+            `(symplectic_matrix, phase_vector)` tuples.
+        """
+        gfilter = set(oplabel_filter) if oplabel_filter is not None else None
+        exact_filter_names = {label.name for label in gfilter if isinstance(label, _Label)} \
+            if gfilter is not None else set()
+
+        srep_dict = {}
+        sreps_by_name = _collections.defaultdict(list)
+
+        def include_label(label):
+            return gfilter is None or label in gfilter or label.name in gfilter
+
+        def sreps_equal(srep1, srep2):
+            return _np.array_equal(srep1[0], srep2[0]) and _np.array_equal(srep1[1], srep2[1])
+
+        for gl, gate in self._iter_ops_for_clifford_symplectic_reps():
+            if not include_label(gl):
+                continue
+
+            if isinstance(gate, _op.EmbeddedOp):
+                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
+                    "EmbeddedCliffordOp contains a non-StaticCliffordOp!"
+                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
+            elif isinstance(gate, _op.StaticCliffordOp):
+                srep = (gate.smatrix, gate.svector)
+            else:
+                srep = None
+
+            if srep is not None:
+                sreps_by_name[gl.name].append((gl, srep))
+
+        for name, entries in sreps_by_name.items():
+            first_srep = entries[0][1]
+            if name not in exact_filter_names and all((sreps_equal(first_srep, srep) for _, srep in entries[1:])):
+                srep_dict[name] = first_srep
+            else:
+                for label, srep in entries:
+                    srep_dict[label] = srep
+
+        return srep_dict
 
     def _is_primitive_prep_layer_lbl(self, lbl):
         """
@@ -2094,11 +2158,22 @@ class OpModel(Model):
         Label or None
         """
         if len(self._primitive_povm_label_dict) == 1 and \
-           (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_product_blocks == 1
-                                                   and self.state_space.tensor_product_block_labels(0) == sslbls)):
+           (sslbls is None or sslbls == ('*',) or self._sslbls_within_single_block(sslbls)):
             return next(iter(self._primitive_povm_label_dict.keys()))
         else:
             return None
+
+    def _sslbls_within_single_block(self, sslbls):
+        """
+        Whether `sslbls` lie within the model's state space, when it has a single tensor product block.
+
+        A circuit on a subset of the model's lines (e.g. on qubit 0 of a 2-qubit model) leaves
+        the other lines idle, so the model's only POVM can still be applied to it.
+        """
+        if self.state_space.num_tensor_product_blocks != 1:
+            return False
+        block_labels = self.state_space.tensor_product_block_labels(0)
+        return len(sslbls) > 0 and set(sslbls).issubset(block_labels)
 
     def _has_primitive_preps(self):
         """
@@ -2551,8 +2626,8 @@ class OpModel(Model):
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
-            elif isinstance(op, _op.StaticStandardOp):
-                op_mx = op.to_dense()
+            elif isinstance(op, (_op.StaticStandardOp, _op.StaticArbitraryOp, _op.StaticUnitaryOp, _op.DenseOperator)):
+                op_mx = op.to_dense(on_space='HilbertSchmidt')
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect

@@ -119,7 +119,6 @@ def minimize(fn, x0, method='cg', callback=None,
     elif method == 'brute':
         ranges = [(0.0, 1.0)] * len(x0); Ns = 4  # params for 'brute' algorithm
         xmin, _ = _spo.brute(fn, ranges, (), Ns)  # jac=jac
-        #print "DEBUG: Brute fmin = ",fmin
         solution = _spo.minimize(fn, xmin, method="Nelder-Mead", options={}, tol=tol, callback=callback, jac=jac)
 
     elif method == 'basinhopping':
@@ -130,12 +129,6 @@ def minimize(fn, x0, method='cg', callback=None,
             return False
         solution = _spo.basinhopping(fn, x0, niter=maxiter, T=2.0, stepsize=1.0,
                                      callback=_basin_callback, minimizer_kwargs={'method': "L-BFGS-B", 'jac': jac})
-
-        #DEBUG -- follow with Nelder Mead to make sure basinhopping found a minimum. (It seems to)
-        #print "DEBUG: running Nelder-Mead:"
-        #opts = { 'maxfev': maxiter, 'maxiter': maxiter }
-        #solution = _spo.minimize(fn, solution.x, options=opts, method="Nelder-Mead", tol=1e-8, callback=callback)
-        #print "DEBUG: done: best f = ",solution.fun
 
         solution.success = True  # basinhopping doesn't seem to set this...
 
@@ -444,65 +437,12 @@ def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, 
     gbest = particles[0]; ibest = 0
     # bDoLocalFitnessOpt = False
 
-    #DEBUG
-    #if False:
-    #    import pickle as _pickle
-    #    bestGaugeMx = _pickle.load(open("bestGaugeMx.debug"))
-    #    lbfgsbGaugeMx = _pickle.load(open("lbfgsbGaugeMx.debug"))
-    #    cgGaugeMx = _pickle.load(open("cgGaugeMx.debug"))
-    #    initialGaugeMx = x0.reshape( (4,4) )
-    #
-    #    #DEBUG: dump line cut to plot
-    #    nPts = 100
-    #    print "DEBUG: best offsets = \n", bestGaugeMx - initialGaugeMx
-    #    print "DEBUG: lbfgs offsets = \n", lbfgsbGaugeMx - initialGaugeMx
-    #    print "DEBUG: cg offsets = \n", cgGaugeMx - initialGaugeMx
-    #
-    #    print "# DEBUG plot"
-    #    #fDebug = open("x0ToBest.dat","w")
-    #    #fDebug = open("x0ToLBFGS.dat","w")
-    #    fDebug = open("x0ToCG.dat","w")
-    #    #fDebug = open("LBFGSToBest.dat","w")
-    #    #fDebug = open("CGToBest.dat","w")
-    #    #fDebug = open("CGToLBFGS.dat","w")
-    #
-    #    for i in range(nPts+1):
-    #        alpha = float(i) / nPts
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*lbfgsbGaugeMx
-    #        matM = (1.0-alpha) * initialGaugeMx + alpha*cgGaugeMx
-    #        #matM = (1.0-alpha) * lbfgsbGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*lbfgsbGaugeMx
-    #        print >> fDebug, "%g %g" % (alpha, f(matM.flatten()))
-    #    exit()
-    #
-    #
-    #    fDebug = open("lineDataFromX0.dat","w")
-    #    min_offset = -1; max_offset = 1
-    #    for i in range(nPts+1):
-    #        offset = min_offset + float(i)/nPts * (max_offset-min_offset)
-    #        print >> fDebug, "%g" % offset,
-    #
-    #        for k in range(len(x0)):
-    #            x = x0.copy(); x[k] += offset
-    #            try:
-    #                print >> fDebug, " %g" % f(x),
-    #            except:
-    #                print >> fDebug, " nan",
-    #        print >> fDebug, ""
-    #
-    #    print >> fDebug, "#END DEBUG plot"
-    #    exit()
-    #END DEBUG
-
     #err = 1e10
     for iter_num in range(iter_max):
         w = 1.0  # - i/iter_max
 
         #bDoLocalFitnessOpt = bool(iter_num > 20 and abs(lastBest-gbest.fitness) < 0.001 and iter_num % 10 == 0)
         # lastBest = gbest.fitness
-        # minDistToBest = 1e10; minV = 1e10; maxV = 0 #DEBUG
 
         for (ip, p) in enumerate(particles):
             fitness = f(p.params)
@@ -526,16 +466,6 @@ def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, 
             for (i, pv) in enumerate(p.params):
                 p.params[i] = ((pv + 1) % 2) - 1  # periodic b/c on box between -1 and 1
 
-            #from .. import tools as tools_
-            #matM = p.params.reshape( (4,4) )  #DEBUG
-            #minDistToBest = min(minDistToBest, _tools.frobeniusdist(
-            #                                    bestGaugeMx,matM)) #DEBUG
-            #minV = min( _np.linalg.norm(v), minV)
-            #maxV = max( _np.linalg.norm(v), maxV)
-
-        #print "DB: min diff from best = ", minDistToBest #DEBUG
-        #print "DB: min,max v = ", (minV,maxV)
-
         #if False: #bDoLocalFitnessOpt:
         #    opts = {'maxiter': 100, 'maxfev': 100, 'disp': False }
         #    print "initial fun = ",gbest.fitness,
@@ -547,10 +477,6 @@ def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, 
         printer.log("Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest))
 
         #if err < err_crit:  break  #TODO: stopping condition
-
-    ## Uncomment to print particles
-    #for p in particles:
-    #    print 'params: %s, fitness: %s, best: %s' % (p.params, p.fitness, p.best)
 
     solution = _optResult()
     solution.x = gbest.params; solution.fun = gbest.fitness
@@ -724,15 +650,10 @@ def _fwd_diff_jacobian(f, x0, eps=1e-10):
     jac = _np.empty((M, N), 'd')
 
     for j in range(N):
-        #print('Adding eps to {}'.format(j))
         xj = x0.copy(); xj[j] += eps
         yj = f(xj).copy()
-        #print('y0, yj')
-        #print(y0[48:52])
-        #print(yj[48:52])
         df = (yj - y0) / eps  # df_dxj
         jac[:, j] = df
-        #print(df[48:52])
 
     return jac
 
