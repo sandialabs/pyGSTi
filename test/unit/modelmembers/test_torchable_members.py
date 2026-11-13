@@ -99,7 +99,7 @@ def test_embeddederrorgen_torch_base():
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-def test_mixed_qudit_embeddedop_torch(targets):
+def test_mixed_qudit_embeddedop_torch(targets: tuple[str, str]) -> None:
     ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])
     sub = ss.create_subspace(targets)
     mx = np.random.default_rng(25).normal(size=(36, 36))
@@ -110,7 +110,7 @@ def test_mixed_qudit_embeddedop_torch(targets):
     direction[37] = 1
     value, tangent = torch.func.jvp(lambda p: EmbeddedOp.torch_base(sd, p), (params,), (direction,))
 
-    def reference(local, derivative=False):
+    def reference(local: np.ndarray, derivative: bool = False) -> np.ndarray:
         if targets[0] == 'Q2':
             local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
         result = np.zeros((ss.dim, ss.dim))

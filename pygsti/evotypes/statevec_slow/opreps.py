@@ -10,13 +10,16 @@ Operation representation classes for the `statevec_slow` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
+from collections.abc import Sequence as _Sequence
 import copy as _copy
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
 from numpy.random import RandomState as _RandomState
 
-from .statereps import StateRepDensePure as _StateRepDensePure
+from .statereps import StateRep as _StateRep, StateRepDensePure as _StateRepDensePure
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
@@ -164,7 +167,8 @@ class OpRepSum(OpRep):
 
 class OpRepEmbedded(OpRep):
 
-    def __init__(self, state_space, target_labels, embedded_rep):
+    def __init__(self, state_space: _StateSpace.Castable, target_labels: _Sequence[str | int],
+                 embedded_rep: OpRep) -> None:
 
         state_space = _StateSpace.cast(state_space)
         iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
@@ -190,7 +194,7 @@ class OpRepEmbedded(OpRep):
         offset = sum(blocksizes[:iTensorProdBlk])
         multipliers = _np.append(_np.cumprod(numBasisEls[:0:-1])[::-1], 1).astype(_np.int64)
 
-        def _flat_offsets(label_inds):
+        def _flat_offsets(label_inds: _Sequence[int]) -> _np.ndarray:
             offsets = _np.zeros(1, _np.int64)
             for i in label_inds:
                 offsets = (offsets[:, None] + multipliers[i] * _np.arange(numBasisEls[i])[None, :]).ravel()
@@ -203,7 +207,7 @@ class OpRepEmbedded(OpRep):
         self._embedded_rel_inds = _flat_offsets(labelIndices)
         super(OpRepEmbedded, self).__init__(state_space)
 
-    def _apply(self, state, adjoint):
+    def _apply(self, state: _StateRep, adjoint: bool) -> _StateRepDensePure:
         # Read the current matrix on every action: embedded parameters may have changed.
         if isinstance(self.embedded_rep, OpRepDenseUnitary):
             mx = self.embedded_rep.to_dense('Hilbert')
@@ -219,13 +223,14 @@ class OpRepEmbedded(OpRep):
         out[inds] = state.data[inds] @ mx.T
         return _StateRepDensePure(out, state.state_space, state.basis)
 
-    def acton(self, state):
+    def acton(self, state: _StateRep) -> _StateRepDensePure:
         return self._apply(state, False)
 
-    def adjoint_acton(self, state):
+    def adjoint_acton(self, state: _StateRep) -> _StateRepDensePure:
         return self._apply(state, True)
 
-    def _apply_random(self, state, rand_state, adjoint):
+    def _apply_random(self, state: _StateRep, rand_state: _RandomState | _np.random.Generator | None,
+                      adjoint: bool) -> _StateRepDensePure:
         # Preserve one random draw per untouched-index block, in its original order.
         action = self.embedded_rep.adjoint_acton_random if adjoint else self.embedded_rep.acton_random
         out = state.data.copy()
@@ -235,10 +240,12 @@ class OpRepEmbedded(OpRep):
             out[inds] = action(substate, rand_state).data
         return _StateRepDensePure(out, state.state_space, state.basis)
 
-    def acton_random(self, state, rand_state):
+    def acton_random(self, state: _StateRep,
+                     rand_state: _RandomState | _np.random.Generator | None) -> _StateRepDensePure:
         return self._apply_random(state, rand_state, False)
 
-    def adjoint_acton_random(self, state, rand_state):
+    def adjoint_acton_random(self, state: _StateRep,
+                             rand_state: _RandomState | _np.random.Generator | None) -> _StateRepDensePure:
         return self._apply_random(state, rand_state, True)
 
 

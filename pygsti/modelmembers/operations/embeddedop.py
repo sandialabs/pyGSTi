@@ -11,9 +11,11 @@ The EmbeddedOp class and supporting functionality.
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Tuple, Any, TYPE_CHECKING
+from collections.abc import Iterator, Sequence
+from typing import Tuple, Any, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
+    from pygsti.models.model import Model as _Model
 
 import numpy as _np
 from pygsti.tools._static_tls import import_torch as _import_torch
@@ -50,7 +52,8 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         that specifies the only non-trivial action of the EmbeddedOp.
     """
 
-    def __init__(self, state_space, target_labels, operation_to_embed, allocated_to_parent=None):
+    def __init__(self, state_space: _StateSpace.Castable, target_labels: Sequence[str | int],
+                 operation_to_embed: _LinearOperator, allocated_to_parent: _Model | None = None) -> None:
         self.target_labels = tuple(target_labels) if (target_labels is not None) else None
         self.embedded_op = operation_to_embed
         self._matrix_elements_cache = {}
@@ -111,7 +114,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # Don't pickle 'instancemethod' or parent (see modelmember implementation)
         return _modelmember.ModelMember.__getstate__(self)
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: dict[str, Any]) -> None:
         if "dirty" in d:  # backward compat: .dirty was replaced with ._dirty in ModelMember
             d['_dirty'] = d['dirty']; del d['dirty']
         self.__dict__.update(d)
@@ -144,7 +147,8 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         """
         self.embedded_op.set_time(t)
 
-    def _matrix_element_indices(self, on_space, rel_to_block=False):
+    def _matrix_element_indices(self, on_space: Literal['Hilbert', 'HilbertSchmidt'],
+                                rel_to_block: bool = False) -> Sequence[_np.ndarray]:
         """Return broadcast index arrays mapping embedded matrix entries into this operation."""
         key = (on_space, rel_to_block)
         if key in self._matrix_elements_cache:
@@ -159,7 +163,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         untouched = [i for i in range(len(labels)) if i not in targets]
         strides = _np.append(_np.cumprod(dims[:0:-1])[::-1], 1).astype(_np.int64)
 
-        def _flat_offsets(label_inds):
+        def _flat_offsets(label_inds: Sequence[int]) -> _np.ndarray:
             offsets = _np.zeros(1, _np.int64)
             for i in label_inds:
                 offsets = (offsets[:, None] + strides[i] * _np.arange(dims[i])[None, :]).ravel()
@@ -174,11 +178,12 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         self._matrix_elements_cache[key] = indices
         return indices
 
-    def _iter_matrix_elements(self, on_space, rel_to_block=False):
+    def _iter_matrix_elements(self, on_space: Literal['Hilbert', 'HilbertSchmidt'],
+                              rel_to_block: bool = False) -> Iterator[tuple[_np.int64, _np.int64, _np.int64, _np.int64]]:
         """Iterate over (row, column, embedded row, embedded column) in row/column/block order."""
         return zip(*(index.flat for index in self._matrix_element_indices(on_space, rel_to_block)))
 
-    def to_sparse(self, on_space: SpaceT='minimal'):
+    def to_sparse(self, on_space: SpaceT = 'minimal') -> _sps.csr_matrix:
         """
         Return the operation as a sparse matrix
 
@@ -200,7 +205,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def to_dense(self, on_space: SpaceT='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal') -> _np.ndarray:
         """
         Return the operation as a dense matrix
 
@@ -322,7 +327,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.
         return _torch.zeros_like(t_bg).index_put((i, j), A[gi, gj]) + t_bg
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def deriv_wrt_params(self, wrt_filter: Sequence[int] | _np.ndarray | None = None) -> _np.ndarray:
         """
         The element-wise derivative this operation.
 

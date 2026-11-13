@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from pygsti.baseobjs import Basis
-from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace
+from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace, StateSpace
 from pygsti.evotypes.statevec_slow.opreps import (
     OpRepComposed, OpRepDenseUnitary, OpRepEmbedded, OpRepRandomUnitary)
 from pygsti.evotypes.statevec_slow.statereps import StateRepDensePure
@@ -16,7 +16,7 @@ from pygsti.modelmembers.operations import EmbeddedOp, StaticUnitaryOp
                         [(2,), (2, 3, 2), (2,)]), ['T1', 'Q2']),
 ])
 @pytest.mark.parametrize('composed', [False, True])
-def test_statevec_embedded_actions(ss, targets, composed):
+def test_statevec_embedded_actions(ss: StateSpace, targets: list[str | int], composed: bool) -> None:
     sub = ss.create_subspace(targets)
     rng = np.random.default_rng(90)
     mx = np.linalg.qr(rng.normal(size=(sub.udim, sub.udim))
@@ -42,7 +42,7 @@ def test_statevec_embedded_actions(ss, targets, composed):
 
 @pytest.mark.parametrize('adjoint', [False, True])
 @pytest.mark.parametrize('internal_rng', [False, True])
-def test_statevec_embedded_random_draws_per_block(adjoint, internal_rng):
+def test_statevec_embedded_random_draws_per_block(adjoint: bool, internal_rng: bool) -> None:
     ss = QubitSpace(4)
     targets = [3, 1]
     sub = ss.create_subspace(targets)

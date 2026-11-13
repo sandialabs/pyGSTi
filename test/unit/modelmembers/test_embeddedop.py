@@ -130,7 +130,7 @@ def test_mixed_qudit_embedding_derivatives(targets: tuple[str, str]) -> None:
 
 @pytest.mark.parametrize('relative_first', [False, True])
 @pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
-def test_embedding_indices_relative_and_absolute(relative_first, on_space):
+def test_embedding_indices_relative_and_absolute(relative_first: bool, on_space: str) -> None:
     from pygsti.modelmembers.operations import StaticUnitaryOp
 
     ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])
