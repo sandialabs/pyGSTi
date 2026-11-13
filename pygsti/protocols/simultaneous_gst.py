@@ -59,8 +59,9 @@ def make_simultaneous_gst_design(
     Note that the coloring stream is frequently unused: "auto" detects the canonical
     topologies produced by ``ProcessorSpec(geometry=...)`` (line/ring/grid/torus) and
     coloring those is a deterministic closed form using the optimal number of colors.
-    The seed reaches the coloring only on the randomized bipartite path; the generic
-    (deg+1)-color fallback is deterministic too.
+    The seed reaches the coloring only on bipartite graphs outside those topologies, where
+    it picks one of the optimal (deg-color) colorings; the generic (deg+1)-color fallback
+    for non-bipartite graphs is deterministic too.
 
     ``verbosity`` is forwarded to the design's circuit stitcher; anything greater
     than 0 displays a progress bar over germ powers while stitching.
@@ -74,6 +75,9 @@ def make_simultaneous_gst_design(
     edge_coloring = switchboard_find_edge_coloring(
         "auto", deg, vertices, edges, neighbors, seed=coloring_seed
     )
+    if not edge_coloring:
+        # No 2Q edges: one empty patch, in which every qubit runs 1Q GST.
+        edge_coloring = {0: []}
     out = SimultaneousGSTDesign(
         nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=stitcher_seed,
         verbosity=verbosity
@@ -195,6 +199,14 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.neighbors = find_neighbors(self.vertices, self.edges)
         self.deg = max([len(self.neighbors[v]) for v in self.vertices])
         self.color_patches = _normalize_coloring(edge_coloring)
+        empty = [patch for patch, edge_set in self.color_patches.items() if not edge_set]
+        if empty and len(empty) < len(self.color_patches):
+            # A patch with no edges is still padded to the length of the longer design,
+            # and adds no coverage: every qubit already runs 1Q GST in the other patches.
+            _warnings.warn(f"edge_coloring has empty color classes {empty}; dropping them. "
+                           "Each would have added a full patch of circuits that test no edge.")
+            self.color_patches = {patch: edge_set for patch, edge_set in self.color_patches.items()
+                                  if edge_set}
         if circuit_stitcher is None:
             circuit_stitcher = RandomizedPatchStitcher()
         if not isinstance(circuit_stitcher, CircuitStitcher):

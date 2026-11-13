@@ -30,7 +30,7 @@ import numpy as np
 from typing import List, Dict, Set, Optional, Union
 
 from .._common import Vertex, Edge, NeighborMap, order
-from ._definitions import Color, Coloring
+from ._definitions import Color, Coloring, drop_empty_colors
 
 
 class _VizingChainState:
@@ -229,11 +229,17 @@ class _VizingFamilyEdgeColoring(_VizingChainState):
         the order given; override (e.g.) to randomize."""
         return self.unique_edges
 
+    def _color_fallback(self, u: Vertex, v: Vertex) -> None:
+        """Color the edge (u, v) when `_try_direct` could not. Defaults to one
+        Vizing-chain step."""
+        self.color_edge_vizing_chain(u, v)
+
     def color(self) -> Coloring:
         for u, v in self._ordered_edges():
             if not self._try_direct(u, v):
-                self.color_edge_vizing_chain(u, v)
-        return self.color_patches
+                self._color_fallback(u, v)
+        # The palette has deg+1 colors and often only deg of them get used.
+        return drop_empty_colors(self.color_patches)
 
 
 class _MisraGriesEdgeColoring(_VizingFamilyEdgeColoring):
@@ -288,24 +294,25 @@ def vizing_edge_coloring(
 
 class _BipartiteEdgeColoring(_VizingFamilyEdgeColoring):
     """
-    Randomised (Delta+1)-edge coloring that always returns a complete, valid
-    coloring. Edges are processed in a random order (`_ordered_edges`); for
-    each edge, Case 1 (`_try_direct`) assigns a color missing at both
-    endpoints directly, else Case 2 falls back to a Vizing-chain step
-    (inherited).
+    Edge coloring of a bipartite graph with exactly deg colors, the optimum
+    by König's edge-coloring theorem. Raises RuntimeError on a graph that is
+    not bipartite; `auto_edge_coloring` only calls it on bipartite graphs.
 
-    On bipartite graphs the random ordering lets Case 1 fire often, so the
-    result frequently uses only deg colors (the bipartite optimum); every
-    simple graph is still guaranteed a valid coloring.
-
-    Case 1 here is the same fast path as `_VizingEdgeColoring._try_direct`
-    (just via set-intersection instead of a scan) -- this class differs from
-    `_VizingEdgeColoring` only in `_ordered_edges` (randomized vs. identity).
+    Edges are processed in a random order (`_ordered_edges`, seeded by
+    `seed`). For each edge (u, v), a color missing at both endpoints is
+    used directly when there is one (`_try_direct`). Otherwise
+    (`_color_fallback`) pick a color a missing at u and b missing at v, and
+    swap a and b along the a/b-alternating path that starts at v. In a
+    bipartite graph that path cannot reach u, so afterwards a is missing at
+    both endpoints.
     """
 
     def __init__(self, deg: int, edges: List[Edge], neighbors: NeighborMap,
                  seed: Optional[Union[int, np.random.Generator]] = None) -> None:
         super().__init__(deg, edges, neighbors)
+        # deg colors, not the deg+1 the Vizing chain needs.
+        self.all_colors = list(range(deg))
+        self.color_patches = {c: [] for c in self.all_colors}
         self.rng = np.random.default_rng(seed)
 
     def _ordered_edges(self) -> List[Edge]:
@@ -314,9 +321,18 @@ class _BipartiteEdgeColoring(_VizingFamilyEdgeColoring):
     def _try_direct(self, u: Vertex, v: Vertex) -> bool:
         common = self.missing_colors(u) & self.missing_colors(v)
         if common:
-            self.set_edge_color(u, v, next(iter(common)))
+            self.set_edge_color(u, v, min(common))
             return True
         return False
 
-
-
+    def _color_fallback(self, u: Vertex, v: Vertex) -> None:
+        # Each endpoint has at most deg-1 colored edges (the edge (u, v) is
+        # still uncolored), so each is missing at least one of the deg colors.
+        a = min(self.missing_colors(u))
+        b = min(self.missing_colors(v))
+        path = self.cd_path(v, b, a)
+        if any(u in edge for edge in path):
+            raise RuntimeError("_BipartiteEdgeColoring was given a graph that is not bipartite.")
+        for x, y in path:
+            self.set_edge_color(x, y, b if self.edge_colors[(x, y)] == a else a)
+        self.set_edge_color(u, v, a)

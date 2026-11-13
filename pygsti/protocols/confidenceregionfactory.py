@@ -429,6 +429,10 @@ class ConfidenceRegionFactory(_NicelySerializable):
         else:
             raise ValueError("Invalid objective '%s'" % obj)
 
+        if comm is not None:
+            # logl_hessian assembles the Hessian on rank 0 only; every rank needs it to project it.
+            hessian = comm.bcast(hessian, root=0)
+
         self.hessian = hessian
         self.jacobian = jacobian
         self.nonMarkRadiusSq = nonMarkRadiusSq

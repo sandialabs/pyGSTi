@@ -1358,6 +1358,20 @@ class GSTGaugeOptSuite(_NicelySerializable):
         return cls(state['gaugeopt_suite_names'], gaugeopt_argument_dicts, gaugeopt_target)
 
 
+def _release_comm_bound_stores(results, resource_alloc):
+    """
+    Detach `results`' estimates from `resource_alloc`'s communicator, if it has more than one rank.
+
+    Call on every rank at the end of a protocol's `run`; see
+    :meth:`Estimate._release_comm_bound_stores`. A serial run keeps its stores for reuse.
+    """
+    comm = resource_alloc.comm
+    if comm is None or comm.Get_size() == 1:
+        return
+    for estimate in results.estimates.values():
+        estimate._release_comm_bound_stores()
+
+
 class GateSetTomography(_proto.Protocol):
     """
     The core gate set tomography protocol, which optimizes a parameterized model to (best) fit a data set.
@@ -1658,7 +1672,8 @@ class GateSetTomography(_proto.Protocol):
             #generation looks at to determine the names of the gauge optimized models).
             #Set the value to None as a placeholder.
             ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
-        
+
+        _release_comm_bound_stores(ret, resource_alloc)
         return ret
 
 
@@ -1837,6 +1852,7 @@ class LinearGateSetTomography(_proto.Protocol):
             #Set the value to None as a placeholder.
             ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
 
+        _release_comm_bound_stores(ret, resource_alloc)
         return ret
 
 

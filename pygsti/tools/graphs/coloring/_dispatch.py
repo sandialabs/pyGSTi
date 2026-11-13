@@ -46,7 +46,7 @@ def switchboard_find_edge_coloring(
         The special name 'auto' first checks whether the graph matches one of the canonical
         topologies produced by `ProcessorSpec(geometry=...)` ('line', 'ring', 'grid', 'torus')
         and, if so, uses a cheap closed-form coloring for it; next checks if the graph is
-        bipartite, and if so, uses an internal bipartite-optimal randomized coloring (using `seed`);
+        bipartite, and if so, uses an internal coloring with exactly deg colors (its edge order uses `seed`);
         otherwise it falls back to `vizing_edge_coloring`. See `detect_topology` and `auto_edge_coloring`.
     deg (int): The maximum degree of the graph, or the number of colors to use.
     vertices (list): A list of vertices in the graph.
