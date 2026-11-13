@@ -1,8 +1,16 @@
+""" Stim-to-pyGSTi circuit conversion and pyGSTi model builders for DEM construction """
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as np
 import stim
 import pygsti
-import re
 
 from pygsti.baseobjs import Label, QubitSpace, BuiltinBasis
 
@@ -13,38 +21,7 @@ from pygsti.models import LocalNoiseModel
 from pygsti.modelmembers.operations import ComposedOp, LindbladErrorgen, ExpErrorgenOp, StaticCliffordOp, EmbeddedErrorgen, ComposedErrorgen
 from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
 from pygsti.modelmembers.povms import ComposedPOVM, ComputationalBasisPOVM
-
-
-def pygsti_c_to_stim(pyg_c, include_measurement=True):
-    gatenames_to_stim = {}
-    gatenames_to_stim['Gh'] = 'H'
-    gatenames_to_stim['Gzpi'] = 'Z'
-    gatenames_to_stim['Gypi'] = 'Y'
-    gatenames_to_stim['Gxpi'] = 'X'
-    gatenames_to_stim['Gypi2'] = 'SQRT_Y'
-    gatenames_to_stim['Gympi2'] = 'SQRT_Y_DAG'
-    gatenames_to_stim['Gcnot'] = 'CX'
-    gatenames_to_stim['Gh'] = 'H'
-    gatenames_to_stim['Gcphase'] = 'CZ'
-    gatenames_to_stim['Gxpi2'] = 'SQRT_X'
-    gatenames_to_stim['Gxmpi2'] = 'SQRT_X_DAG'
-    gatenames_to_stim['Gi'] = 'I'
-    
-    qs = [str(q) for q in pyg_c.line_labels]
-    stim_cstr= 'I '+' '.join(q for q in qs)+'\n'
-    for gate in pyg_c:
-        #assume serialized
-        stim_name = gatenames_to_stim[gate.name]
-        stim_qs = ' '.join([str(q) for q in list(gate.qubits)])
-        stim_cstr += (stim_name+' '+stim_qs+'\n')
-    #add measurement of all qubits
-    if include_measurement:
-        stim_cstr += ('M '+' '.join(qs))
-
-
-    stim_c = stim.Circuit(stim_cstr)
-    
-    return stim_c
+from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 
 
 def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
@@ -120,151 +97,175 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0
     model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype='stabilizer')
     return model
 
-def parse_pauli_product(prod, current_qubit_mapping):
-    #determine paulis and qubits
-    if prod[0]=="!":
-        prod = prod[1:] #TODO record that this measurement result should be flipped
-    terms = prod.split('*')
-    pauli_string = ''.join([t[0] for t in terms])
-    qubits = tuple(current_qubit_mapping[int(t[1:])] for t in terms)
-    return (pauli_string, qubits)
 
-    
-def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_meas_idles=False, include_idles=False, ignore_measurement=False):
-    
-    if qubit_relabelling_dict is None:
-        qubit_relabelling_dict = {q:q for q in qubit_labels}
+def _pygsti_gate(stim_name, table):
+    """
+    Returns `(pyGSTi gate name, qubit count)` for the unitary one- or two-qubit stim gate
+    `stim_name`, matching its tableau against `table` (the result of
+    `standard_gatenames_stim_conversions()`); the first match in table order wins.
+    Returns None for any other gate.
+    """
+    data = stim.gate_data(stim_name)
+    # `.tableau` raises for gates such as SPP, so check the gate's shape first.
+    if not (data.is_unitary and (data.is_single_qubit_gate or data.is_two_qubit_gate)):
+        return None
+    tableau = data.tableau
+    for pyg_name, pyg_tableau in table.items():
+        if pyg_tableau == tableau:
+            return pyg_name, (1 if data.is_single_qubit_gate else 2)
+    return None
 
-    measurements = []
-    detectors = []
-    observable_detectors = []
 
-    def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
-        gate_dict= {'H':'Gh', 
-                    'SQRT_Y': 'Gypi2',
-                    'SQRT_Y_DAG': 'Gympi2',
-                    'SQRT_X_DAG': 'Gxmpi2',
-                    'T': 'Gt',
-                    'T_DAG': 'Gtdag',
-                    'Z': 'Gzpi',
-                    'Y': 'Gypi', 
-                    'X':'Gxpi',
-                   'I':'Gi'}
-        pygsti_name = gate_dict[gatename]
-        return '[' + ''.join([f'{pygsti_name}:'+str(current_qubit_mapping[int(s)]) for s in stim_layer_string.split(' ')[1:]]) + ']'
+def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=False):
+    """
+    Converts a non-adaptive `stim.Circuit` into a pyGSTi circuit in which every reset starts a
+    fresh virtual qubit and all measurements are deferred to the end.
 
-    def convert_2q_layer(gatename, stim_layer_string, current_qubit_mapping):
-        gate_dict = {'CZ': 'Gcphase', 'CX': 'Gcnot'}
-        cnot_qubits = stim_layer_string.split(' ')[1:] #what????
-        num_cnots = len(cnot_qubits) // 2
-        pygsti_l_cnot = '['
-        for i in range(num_cnots):
-            q1 = str(current_qubit_mapping[int(cnot_qubits[2 * i])])
-            q2 = str(current_qubit_mapping[int(cnot_qubits[2 * i + 1])])
-            pygsti_l_cnot +=  f'{gate_dict[gatename]}:'+ q1 + ':' + q2
-        pygsti_l_cnot += ']'
-        return pygsti_l_cnot
+    Parameters
+    ----------
+    circuit : stim.Circuit
+        The circuit. Noise, non-Z-basis resets and measurements, `MPP`, feedback and gates
+        without a pyGSTi equivalent raise a `ValueError`, as does reusing a measured qubit
+        without resetting it.
 
-    def update_qubit_mapping(line, current_qubit_mapping, qubit_labels):
-        new_mapping = current_qubit_mapping.copy()
-        if line.split(' ')[0]=='MPP':
-            qs = []
-            for prod in line.split(' ')[1:]:
-                _, qs_prod = parse_pauli_product(prod, {q:q for q in qubit_labels})
-                qs.extend(qs_prod)
-            qs = list(set(qs))
-            print(line, qs)
-        
-        else:
-            qs = line.split(' ')[1:]
-        nqs = np.max(list(current_qubit_mapping.values()))+1
-        for i, measured_physical_q in enumerate(qs):
-            new_mapping[int(measured_physical_q)] = nqs+i
-        return new_mapping
-    
-    gate_layers = []
-    if type(circuit)==stim.Circuit:
-        cstr = str(circuit)
-    else: cstr = circuit
-    #need to keep track of current virtual qubits and map
-    current_qubit_mapping = {q:q for q in qubit_labels}
-    gates_happened = False
-    for line in cstr.split('\n'):
-        #check if gate layer
-        if 'T' in line.split(' ') or 'T_DAG' in line.split(' ') or 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' '):
-            gatename = line.split(' ')[0]
-            gate_layers.append(convert_1q_layer(gatename, line, current_qubit_mapping))
-            gates_happened = True
-            unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
+    include_idles : bool
+        Add an idle gate on every live qubit not touched by each gate layer.
+
+    include_meas_idles : bool
+        Add a layer of idle gates on every live qubit not touched by each `M`, `R` or `MR`
+        instruction.
+
+    Returns
+    -------
+    pyg_circuit : pygsti.circuits.Circuit
+        Circuit on virtual qubits `0 .. n_virtual-1`, without measurements.
+    detectors : list of stim.PauliString
+        Stim detector `D<i>` as a signed Pauli on the virtual qubits.
+    observables : list of stim.PauliString
+        Stim observable `L<j>` as a signed Pauli on the virtual qubits.
+    virtual_to_physical : list of int
+        The stim qubit each virtual qubit stands for.
+    """
+    table = standard_gatenames_stim_conversions()
+    idle_name = _pygsti_gate('I', table)[0]
+    n_phys = circuit.num_qubits
+    virt = list(range(n_phys))
+    virtual_to_physical = list(range(n_phys))
+    FRESH, ACTIVE, MEASURED = 'fresh', 'active', 'measured'
+    state = [FRESH] * n_phys
+
+    layers = []
+    measurements = []  # (virtual qubit, inverted)
+    detector_idx = []
+    observable_idx = {}
+
+    def idles(skip):
+        return [(idle_name, virt[q]) for q in range(n_phys) if state[q] != MEASURED and q not in skip]
+
+    def reuse_error(inst, q):
+        return ValueError(f"Qubit {q} is used after being measured without a reset in "
+                          f"instruction '{inst}'; add an `R` (or `MR`) on it first.")
+
+    for inst in circuit.flattened():
+        name = inst.name
+        targets = inst.targets_copy()
+        if name in ('TICK', 'QUBIT_COORDS', 'SHIFT_COORDS'):
+            continue
+
+        if name in ('DETECTOR', 'OBSERVABLE_INCLUDE'):
+            if not all(t.is_measurement_record_target for t in targets):
+                raise ValueError(f"Unsupported instruction '{inst}': only measurement record "
+                                 "targets are supported.")
+            idx = [len(measurements) + t.value for t in targets]
+            if any(i < 0 for i in idx):
+                raise ValueError(f"Unsupported instruction '{inst}': refers to a measurement "
+                                 "before the start of the circuit.")
+            if name == 'DETECTOR':
+                detector_idx.append(idx)
+            else:
+                observable_idx.setdefault(int(inst.gate_args_copy()[0]), []).extend(idx)
+            continue
+
+        if name in ('M', 'R', 'MR'):
+            if any(a != 0 for a in inst.gate_args_copy()):
+                raise ValueError(f"Noise in instruction '{inst}': measurement flip probabilities "
+                                 "are not supported; remove noise with `stim.Circuit.without_noise()`.")
+            if not all(t.is_qubit_target for t in targets):
+                raise ValueError(f"Unsupported instruction '{inst}': non-qubit target.")
+            for t in targets:
+                q = t.value
+                if name != 'R':
+                    if state[q] == MEASURED:
+                        raise reuse_error(inst, q)
+                    measurements.append((virt[q], t.is_inverted_result_target))
+                    state[q] = MEASURED
+                if name != 'M' and state[q] != FRESH:
+                    virt[q] = len(virtual_to_physical)
+                    virtual_to_physical.append(q)
+                    state[q] = FRESH
+            if include_meas_idles and targets:
+                touched = {t.value for t in targets}
+                layer = idles(touched)
+                if layer:
+                    layers.append(layer)
+            continue
+
+        # X- and Y-basis resets and measurements are refused rather than rewritten as Z-basis
+        # ones plus H gates: those H gates would pick up the model's H-gate noise, which the
+        # stim circuit never asked for. Whether to add them is the user's visible choice, made
+        # by rewriting the stim circuit.
+        match = _pygsti_gate(name, table)
+        if match is None:
+            data = stim.gate_data(name)
+            if data.is_noisy_gate and not data.produces_measurements:
+                raise ValueError(f"Noise in instruction '{inst}': stim noise channels are not "
+                                 "supported; remove noise with `stim.Circuit.without_noise()`.")
+            raise ValueError(f"Unsupported instruction '{inst}': no matching pyGSTi gate or "
+                             "not a Z-basis reset or measurement.")
+        if not all(t.is_qubit_target and not t.is_inverted_result_target for t in targets):
+            raise ValueError(f"Unsupported instruction '{inst}': classically controlled gates "
+                             "(`rec[...]` or `sweep[...]` targets) are not supported.")
+        pyg_name, arity = match
+
+        layer, used = [], set()
+
+        def flush():
             if include_idles:
-                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif 'CX' in line.split(' '):
-            gate_layers.append(convert_2q_layer('CX', line, current_qubit_mapping))
-            gates_happened = True
-            unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
-            if include_idles:
-                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif 'CZ' in line.split(' '):
-            gate_layers.append(convert_2q_layer('CZ', line, current_qubit_mapping))
-            gates_happened = True
-            unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
-            if include_idles:
-                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif line.split(' ')[0] in ['M','R','MR','MPP'] and not ignore_measurement:
-            if line.split(' ')[0] in ['M','MR']:
-                #gate_layers.append(convert_1q_layer('I', line, current_qubit_mapping))
-                measurements.extend([('Z',(current_qubit_mapping[int(q)],)) for q in line.split(' ')[1:]])
-            elif line.split(' ')[0]=='MPP':
-                measurements.extend([parse_pauli_product(prod, current_qubit_mapping) for prod in line.split(' ')[1:]]) #TODO 
-                
-            if gates_happened and line.split(' ')[0] !='MPP': ###MIGHT NEED TO CHANGE MPP case
-                #assuming there aren't initial measurements in the circuit
-                current_qubit_mapping = update_qubit_mapping(line, current_qubit_mapping, qubit_labels) #in a measurement layer, we just need to update our mapping to expanded circuit qubits
-                if show_qubit_mappings:
-                    print(current_qubit_mapping)
-            if include_meas_idles:
-                unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
-                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-                if show_qubit_mappings:
-                    print(current_qubit_mapping)
-        elif 'DETECTOR' in line.split(' ')[0]: #or 'OBSERVABLE_INCLUDE' in line.split('(')[0]:
-            #print(line)
-            det = []
-            for arg in line.split(' ')[1:]:
-                #get the ref number, it's negative, index into measurements
-                if 'rec' in arg:
-                    rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
-                    targ = len(measurements)-1*rel_meas
-                    det.append(targ)
-            detectors.append(det)   
-        elif 'OBSERVABLE_INCLUDE' in line.split('(')[0]:
-            if include_observables:
-                # Extract the integer j from OBSERVABLE_INCLUDE(j)
-                match = re.search(r'OBSERVABLE_INCLUDE\((\d+)\)', line)
-                if match:
-                    j = int(match.group(1))
-                    if len(observable_detectors) <= j:
-                        observable_detectors.append([])
-                    # Extract measurement references from the line
-                    for arg in line.split(' ')[1:]:
-                        if 'rec' in arg:
-                            rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
-                            targ = len(measurements) - 1 * rel_meas
-                            observable_detectors[j].append(targ)          
-        
-        elif 'TICK' in line.split(' ') or 'QUBIT_COORDS' or 'SHIFT_COORDS' in line.split(' '):
-            pass
-        else:
-            print(f'instruction not found for {line}') #IF THIS COMES UP, MAYBE BE CONCERNED
+                layer.extend(idles(used))
+            layers.append(list(layer))
 
-    pyg_c = pygsti.circuits.Circuit(''.join(gate_layers)+'@(' + ','.join([str(q) for q in range(1+max(current_qubit_mapping.values()))]) + ')', editable=True)
-    pyg_c.delete_idle_layers_inplace()
-    pyg_c.done_editing()
+        for i in range(0, len(targets), arity):
+            qs = [t.value for t in targets[i:i + arity]]
+            if any(state[q] == MEASURED for q in qs):
+                raise reuse_error(inst, next(q for q in qs if state[q] == MEASURED))
+            if used & set(qs):
+                flush()
+                layer, used = [], set()
+            used |= set(qs)
+            layer.append((pyg_name,) + tuple(virt[q] for q in qs))
+            for q in qs:
+                state[q] = ACTIVE
+        if layer:
+            flush()
 
-    if not separate_observables:
-        detectors.extend(observable_detectors)
-    
-        return pyg_c, current_qubit_mapping, measurements, detectors
-    
-    else:
-        return pyg_c, current_qubit_mapping, measurements, detectors, observable_detectors
+    n_virtual = len(virtual_to_physical)
+    pyg_circuit = pygsti.circuits.Circuit(layers, line_labels=tuple(range(n_virtual)))
+
+    def to_pauli(indices):
+        pauli = stim.PauliString(n_virtual)
+        for i in indices:
+            virtual, inverted = measurements[i]
+            pauli *= _z_on(virtual, n_virtual)
+            if inverted:
+                pauli *= -1
+        return pauli
+
+    detectors = [to_pauli(idx) for idx in detector_idx]
+    observables = [to_pauli(observable_idx.get(j, [])) for j in range(circuit.num_observables)]
+    return pyg_circuit, detectors, observables, virtual_to_physical
+
+
+def _z_on(qubit, n_qubits):
+    pauli = stim.PauliString(n_qubits)
+    pauli[qubit] = 'Z'
+    return pauli

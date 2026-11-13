@@ -28,24 +28,6 @@ def format_dem_stim(dem_dict, n_logical):
             dem_string+=line
     return dem_string
 
-def to_full_pauli(partial_pauli, qs, n_qubits):
-    full_p = stim.PauliString('I'*n_qubits)
-    for i,q in enumerate(qs):
-        full_p[q]=partial_pauli[i]
-    return full_p
-    
-
-def get_detector_as_parity(detector_indices, measurements, n_qubits):
-    #for each measurement in the detector, 
-    p_net = stim.PauliString('I'*n_qubits)
-    for idx in detector_indices:
-        #turn each Pauli into an n-qubit Pauli
-        partial_pauli, qs = measurements[idx]
-        p = to_full_pauli(partial_pauli, qs, n_qubits)
-        p_net *= p
-    #take the product of these Paulis
-    return p_net
-
 def compute_contribution(eeg, rate, det_pauli, tableau):
     contribution = rate*eprop.bulk_alpha_pauli([eeg], tableau, [det_pauli])/2 #TODO improve since this'll be slow
     return contribution
