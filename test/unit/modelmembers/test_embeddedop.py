@@ -20,46 +20,99 @@ from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace
 from pygsti.modelmembers.operations import EmbeddedErrorgen, EmbeddedOp, ExpErrorgenOp, LindbladErrorgen
 
 
-@pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
-@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.parametrize('direct_sum', [False, True])
-def test_mixed_qudit_embedding(on_space, targets, direct_sum):
-    from pygsti.modelmembers.operations import StaticArbitraryOp, StaticUnitaryOp
+def _mixed_qudit_hilbert_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """Embed a two-target unitary in Q0 * T1 * Q2 using Hilbert dimensions 2 * 3 * 2."""
+    local = matrix
+    if targets == ('Q2', 'T1'):
+        # Swap both output and input factors from (Q2, T1) to (T1, Q2).
+        local = matrix.reshape(2, 3, 2, 3).transpose(1, 0, 3, 2).reshape(6, 6)
+    return np.kron(np.eye(2), local)  # Q0 is untouched.
 
-    labels, dims = [('Q0', 'T1', 'Q2')], [(2, 3, 2)]
-    if direct_sum:
-        labels = [('Qleft',)] + labels + [('Qright',)]
-        dims = [(2,)] + dims + [(2,)]
-    ss = ExplicitStateSpace(labels, dims)
+
+def _mixed_qudit_superop_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """The same tensor embedding in operator space, with dimensions 4 * 9 * 4."""
+    local = matrix
+    if targets == ('Q2', 'T1'):
+        local = matrix.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
+    return np.kron(np.eye(4), local)
+
+
+def _mixed_qudit_hilbert_direct_sum_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """Leave the qubit sectors before and after Q0 * T1 * Q2 unchanged."""
+    active_block = _mixed_qudit_hilbert_reference(matrix, targets)
+    return block_diag(np.eye(2), active_block, np.eye(2))
+
+
+def _mixed_qudit_superop_direct_sum_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """Preserve the two surrounding qubit sectors in operator space."""
+    active_block = _mixed_qudit_superop_reference(matrix, targets)
+    return block_diag(np.eye(4), active_block, np.eye(4))
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_hilbert_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
     sub = ss.create_subspace(targets)
-    hilbert = on_space == 'Hilbert'
-    d = sub.udim if hilbert else sub.dim
     rng = np.random.default_rng(123)
-    mx = rng.normal(size=(d, d))
-    if hilbert:
-        mx = np.linalg.qr(mx + 1j * rng.normal(size=(d, d)))[0]
-        op = StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub)
-    else:
-        op = StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub)
-    embedded = EmbeddedOp(ss, targets, op)
-    qdim, tdim = (2, 3) if hilbert else (4, 9)
-    local = mx if targets[0] == 'T1' else mx.reshape(qdim, tdim, qdim, tdim).transpose(
-        1, 0, 3, 2).reshape(d, d)
-    ref = np.kron(np.eye(qdim), local)
-    if direct_sum:
-        ref = block_diag(np.eye(qdim), ref, np.eye(qdim))
-    np.testing.assert_allclose(embedded.to_dense(on_space), ref)
-    if not hilbert:  # StaticUnitaryOp does not implement to_sparse.
-        np.testing.assert_allclose(embedded.to_sparse(on_space).toarray(), ref)
-
-    if not hilbert:
-        from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
-        state = StateRepDense(rng.normal(size=ss.dim), ss, None)
-        np.testing.assert_allclose(embedded._rep.acton(state).data, ref @ state.data, atol=1e-12)
+    mx = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))[0]
+    embedded = EmbeddedOp(ss, targets, StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub))
+    reference = _mixed_qudit_hilbert_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('Hilbert'), reference)
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-def test_mixed_qudit_embedding_derivatives(targets):
+def test_mixed_qudit_hilbert_direct_sum_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2'), ('Qright',)],
+                            [(2,), (2, 3, 2), (2,)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))[0]
+    embedded = EmbeddedOp(ss, targets, StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub))
+    reference = _mixed_qudit_hilbert_direct_sum_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('Hilbert'), reference)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_superop_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
+    from pygsti.modelmembers.operations import StaticArbitraryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = rng.normal(size=(36, 36))
+    embedded = EmbeddedOp(ss, targets, StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
+    reference = _mixed_qudit_superop_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+    np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+    state = StateRepDense(rng.normal(size=ss.dim), ss, None)
+    np.testing.assert_allclose(embedded._rep.acton(state).data, reference @ state.data, atol=1e-12)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_superop_direct_sum_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
+    from pygsti.modelmembers.operations import StaticArbitraryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2'), ('Qright',)],
+                            [(2,), (2, 3, 2), (2,)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = rng.normal(size=(36, 36))
+    embedded = EmbeddedOp(ss, targets, StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
+    reference = _mixed_qudit_superop_direct_sum_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+    np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+    state = StateRepDense(rng.normal(size=ss.dim), ss, None)
+    np.testing.assert_allclose(embedded._rep.acton(state).data, reference @ state.data, atol=1e-12)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+def test_mixed_qudit_embedding_derivatives(targets: tuple[str, str]) -> None:
     from pygsti.modelmembers.operations import FullArbitraryOp
 
     ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
@@ -71,9 +124,8 @@ def test_mixed_qudit_embedding_derivatives(targets):
     for column, param in enumerate(params):
         local = np.zeros((sub.dim, sub.dim))
         local.flat[param] = 1
-        if targets[0] == 'Q2':
-            local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(sub.dim, sub.dim)
-        np.testing.assert_array_equal(deriv[:, column], np.kron(np.eye(4), local).ravel())
+        reference = _mixed_qudit_superop_reference(local, targets).ravel()
+        np.testing.assert_array_equal(deriv[:, column], reference)
 
 
 @pytest.mark.parametrize('relative_first', [False, True])
