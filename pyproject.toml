@@ -56,6 +56,10 @@ classifiers=[
 diamond_norm = [
     'cvxpy>=1.4.0'
 ]
+# Pure-Python CHP, the default backend for the 'chp' evotype. The original C
+# implementation is still supported -- set pygsti.evotypes.chp.chpexe to its
+# path -- but nothing needs to build it any more.
+chp = ['chp_sim']
 docs = [
     'jupyter-book>=0.15,<2',
     'jupytext>=1.16',

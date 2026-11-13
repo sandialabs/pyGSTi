@@ -1989,9 +1989,13 @@ def errorgen_and_projections(errgen, mx_basis):
     Anorm2 = sum([abs(v)**2 for v in Aproj.values()])
 
     egnorm2 = Hnorm2 + Snorm2 + Cnorm2 + Anorm2
-    ret['H projection power'] = Hnorm2 / egnorm2
-    ret['S projection power'] = Snorm2 / egnorm2
-    ret['CA projection power'] = (Cnorm2 + Anorm2) / egnorm2
+    # The target model has no error generator by construction, which makes each of these
+    # ratios 0/0. A NaN denominator reports the fraction as undefined without numpy
+    # warning about a divide by zero.
+    egnorm2_denom = egnorm2 if egnorm2 > 0 else _np.nan
+    ret['H projection power'] = Hnorm2 / egnorm2_denom
+    ret['S projection power'] = Snorm2 / egnorm2_denom
+    ret['CA projection power'] = (Cnorm2 + Anorm2) / egnorm2_denom
 
     ret['H projections'] = _np.array([Hproj.get(_LEEL('H', (lbl,)), 0.0) for lbl in elem_errgen_basis.labels[1:]], 'd')
     ret['S projections'] = _np.array([Sproj.get(_LEEL('S', (lbl,)), 0.0) for lbl in elem_errgen_basis.labels[1:]], 'd')
@@ -2006,8 +2010,9 @@ def errorgen_and_projections(errgen, mx_basis):
     H_gen_infdl = _np.sum(ret['H projections']**2)
     S_gen_infdl = _np.sum(ret['S projections'])
     gen_infdl = H_gen_infdl + S_gen_infdl
-    ret['H generator infidelity contribution'] = H_gen_infdl/gen_infdl
-    ret['S generator infidelity contribution'] = S_gen_infdl/gen_infdl
+    gen_infdl_denom = gen_infdl if gen_infdl != 0 else _np.nan  # 0/0 on the target model
+    ret['H generator infidelity contribution'] = H_gen_infdl/gen_infdl_denom
+    ret['S generator infidelity contribution'] = S_gen_infdl/gen_infdl_denom
     
     return ret
 

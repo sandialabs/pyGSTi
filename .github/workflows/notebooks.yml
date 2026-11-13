@@ -40,14 +40,14 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-uv-
     - name: Install package
-      # The `ml` extra is needed for docs/markdown/ml/* (the QPANN tutorials), which
+      # The `ml` extra is needed for docs/markdown/advanced/ml (QPANN), which
       # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
       # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
       # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
       # download TensorFlow purely to render Markdown.
       run: |
         uv pip install --system setuptools wheel
-        uv pip install --system -e .[testing,pytorch,docs,ml]
+        uv pip install --system -e .[testing,pytorch,docs,ml,chp]
     - name: Materialize notebooks
       # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
       # .md with an .ipynb sitting NEXT TO IT in the same directory (see
@@ -55,12 +55,6 @@ jobs:
       # docs/markdown/ for nbval to consume.
       run: |
         cd docs && jupytext --sync 'markdown/**/*.md'
-    - name: Build CHP
-      # Download and compile CHP for the Clifford-simulation notebook;
-      # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
-      run: |
-        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
-        gcc -o /usr/local/bin/chp /tmp/chp.c
     - name: Run notebook regression
       env:
         # glibc serves the thread-local storage of libraries built for "initial-exec" TLS from a

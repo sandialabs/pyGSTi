@@ -10,6 +10,7 @@ Functions related deprecating other functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
 import sys as _sys
 import types as _types
 import warnings as _warnings
@@ -53,6 +54,9 @@ def deprecate(replacement=None):
     function
     """
     def decorator(fn):
+        @_functools.wraps(fn)
+        # ^ Without this the wrapper reaches the docs as ``_inner(*args, **kwargs)``
+        #   with no docstring, which makes the decorator unusable on public API.
         def _inner(*args, **kwargs):
             warn_deprecated(fn.__name__, replacement)
             return fn(*args, **kwargs)

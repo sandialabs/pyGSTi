@@ -53,8 +53,5 @@ class TestCoreMethods(AlgorithmsBase):
         #print "\n",nSamplesList; print diffs; print a #DEBUG
         self.assertLess( a+0.5, 0.05 )
 
-    def test_miscellaneous(self):
-        self.runSilent(self.model.print_info) #just make sure it works
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

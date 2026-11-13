@@ -158,7 +158,7 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
     def _objective_func(vector_gs):
         mdl.from_vector(vector_gs)
         mdl.basis = mxBasis  # set basis for jamiolkowski iso
-        cpPenalty = _tools.sum_of_negative_choi_eigenvalues(mdl) * 1000
+        cpPenalty = _tools.abs_sum_of_negative_choi_eigenvalues(mdl) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + mdl.frobeniusdist(model)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
