@@ -37,18 +37,6 @@ def _mixed_qudit_superop_reference(matrix: np.ndarray, targets: tuple[str, str])
     return np.kron(np.eye(4), local)
 
 
-def _mixed_qudit_hilbert_direct_sum_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
-    """Leave the qubit sectors before and after Q0 * T1 * Q2 unchanged."""
-    active_block = _mixed_qudit_hilbert_reference(matrix, targets)
-    return block_diag(np.eye(2), active_block, np.eye(2))
-
-
-def _mixed_qudit_superop_direct_sum_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
-    """Preserve the two surrounding qubit sectors in operator space."""
-    active_block = _mixed_qudit_superop_reference(matrix, targets)
-    return block_diag(np.eye(4), active_block, np.eye(4))
-
-
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
 def test_mixed_qudit_hilbert_embedding(targets: tuple[str, str]) -> None:
     from pygsti.modelmembers.operations import StaticUnitaryOp
@@ -72,7 +60,8 @@ def test_mixed_qudit_hilbert_direct_sum_embedding(targets: tuple[str, str]) -> N
     rng = np.random.default_rng(123)
     mx = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))[0]
     embedded = EmbeddedOp(ss, targets, StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub))
-    reference = _mixed_qudit_hilbert_direct_sum_reference(mx, targets)
+    active_block = _mixed_qudit_hilbert_reference(mx, targets)
+    reference = block_diag(np.eye(2), active_block, np.eye(2))
     np.testing.assert_allclose(embedded.to_dense('Hilbert'), reference)
 
 
@@ -104,7 +93,8 @@ def test_mixed_qudit_superop_direct_sum_embedding(targets: tuple[str, str]) -> N
     rng = np.random.default_rng(123)
     mx = rng.normal(size=(36, 36))
     embedded = EmbeddedOp(ss, targets, StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
-    reference = _mixed_qudit_superop_direct_sum_reference(mx, targets)
+    active_block = _mixed_qudit_superop_reference(mx, targets)
+    reference = block_diag(np.eye(4), active_block, np.eye(4))
     np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
     np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
     state = StateRepDense(rng.normal(size=ss.dim), ss, None)
