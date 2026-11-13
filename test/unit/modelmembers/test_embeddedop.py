@@ -1,5 +1,5 @@
 """
-Tests for `EmbeddedOp`, in two groups.
+Tests for `EmbeddedOp`, including tensor references and cache regressions.
 
 Label-embedding regression tests for `errorgen_coefficient_labels`/`errorgen_coefficients` with
 `label_type='local'` (#878). `_embed_labels` once indexed a plain list with the `EmbeddedOp`'s
@@ -13,10 +13,209 @@ matrix simulator.
 """
 import numpy as np
 import pytest
+from scipy.linalg import block_diag
 
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.baseobjs.statespace import ExplicitStateSpace, QubitSpace
 from pygsti.modelmembers.operations import EmbeddedErrorgen, EmbeddedOp, ExpErrorgenOp, LindbladErrorgen
+
+
+def _mixed_qudit_hilbert_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """Embed a two-target unitary in Q0 * T1 * Q2 using Hilbert dimensions 2 * 3 * 2."""
+    local = matrix
+    if targets == ('Q2', 'T1'):
+        # Swap both output and input factors from (Q2, T1) to (T1, Q2).
+        local = matrix.reshape(2, 3, 2, 3).transpose(1, 0, 3, 2).reshape(6, 6)
+    return np.kron(np.eye(2), local)  # Q0 is untouched.
+
+
+def _mixed_qudit_superop_reference(matrix: np.ndarray, targets: tuple[str, str]) -> np.ndarray:
+    """The same tensor embedding in operator space, with dimensions 4 * 9 * 4."""
+    local = matrix
+    if targets == ('Q2', 'T1'):
+        local = matrix.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
+    return np.kron(np.eye(4), local)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
+def test_mixed_qudit_hilbert_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))[0]
+    embedded = EmbeddedOp(ss, targets, StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub))
+    reference = _mixed_qudit_hilbert_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('Hilbert'), reference)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
+def test_mixed_qudit_hilbert_direct_sum_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2'), ('Qright',)],
+                            [(2,), (2, 3, 2), (2,)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))[0]
+    embedded = EmbeddedOp(ss, targets, StaticUnitaryOp(mx, evotype='statevec_slow', state_space=sub))
+    active_block = _mixed_qudit_hilbert_reference(mx, targets)
+    reference = block_diag(np.eye(2), active_block, np.eye(2))
+    np.testing.assert_allclose(embedded.to_dense('Hilbert'), reference)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
+def test_mixed_qudit_superop_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
+    from pygsti.modelmembers.operations import StaticArbitraryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = rng.normal(size=(36, 36))
+    embedded = EmbeddedOp(ss, targets, StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
+    reference = _mixed_qudit_superop_reference(mx, targets)
+    np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+    np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+    state = StateRepDense(rng.normal(size=ss.dim), ss, None)
+    np.testing.assert_allclose(embedded._rep.acton(state).data, reference @ state.data, atol=1e-12)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
+def test_mixed_qudit_superop_direct_sum_embedding(targets: tuple[str, str]) -> None:
+    from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
+    from pygsti.modelmembers.operations import StaticArbitraryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2'), ('Qright',)],
+                            [(2,), (2, 3, 2), (2,)])
+    sub = ss.create_subspace(targets)
+    rng = np.random.default_rng(123)
+    mx = rng.normal(size=(36, 36))
+    embedded = EmbeddedOp(ss, targets, StaticArbitraryOp(mx, evotype='densitymx_slow', state_space=sub))
+    active_block = _mixed_qudit_superop_reference(mx, targets)
+    reference = block_diag(np.eye(4), active_block, np.eye(4))
+    np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+    np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+    state = StateRepDense(rng.normal(size=ss.dim), ss, None)
+    np.testing.assert_allclose(embedded._rep.acton(state).data, reference @ state.data, atol=1e-12)
+
+
+@pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
+def test_mixed_qudit_embedding_derivatives(targets: tuple[str, str]) -> None:
+    from pygsti.modelmembers.operations import FullArbitraryOp
+
+    ss = ExplicitStateSpace([('Q0', 'T1', 'Q2')], [(2, 3, 2)])
+    sub = ss.create_subspace(targets)
+    op = FullArbitraryOp(np.eye(sub.dim), evotype='densitymx_slow', state_space=sub)
+    embedded = EmbeddedOp(ss, targets, op)
+    params = [0, 37, sub.dim**2 - 1]
+    deriv = embedded.deriv_wrt_params(params)
+    for column, param in enumerate(params):
+        local = np.zeros((sub.dim, sub.dim))
+        local.flat[param] = 1
+        reference = _mixed_qudit_superop_reference(local, targets).ravel()
+        np.testing.assert_array_equal(deriv[:, column], reference)
+
+
+def _permuted_qubit_reference(matrix: np.ndarray, qdim: int) -> np.ndarray:
+    """Embed targets (2, 0) in qubits (0, 1, 2); qdim is 2 for states and 4 for operators."""
+    # I on spectator 1 gives tensor order (1, 2, 0); permute rows and columns to (0, 1, 2).
+    product = np.kron(np.eye(qdim), matrix)
+    return product.reshape((qdim,) * 6).transpose(2, 0, 1, 5, 3, 4).reshape(product.shape)
+
+
+def test_permuted_qubit_embedding_conversions_and_updates() -> None:
+    from pygsti.modelmembers.operations import FullArbitraryOp
+
+    ss = QubitSpace(3)
+    targets = [2, 0]
+    mx = np.random.default_rng(41).normal(size=(16, 16))
+    embedded = EmbeddedOp(ss, targets, FullArbitraryOp(
+        mx, evotype='densitymx_slow', state_space=ss.create_subspace(targets)))
+    # Reuse the same cached mapping after changing the contained operation's parameters.
+    for matrix in (mx, 2 * mx):
+        embedded.from_vector(matrix.ravel())
+        reference = _permuted_qubit_reference(matrix, 4)
+        np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+        np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+    params = [0, 37, 255]
+    deriv = embedded.deriv_wrt_params(params)
+    for column, param in enumerate(params):
+        local = np.zeros((16, 16))
+        local.flat[param] = 1
+        np.testing.assert_array_equal(deriv[:, column], _permuted_qubit_reference(local, 4).ravel())
+
+
+def test_permuted_qubit_embedding_direct_sum_conversions() -> None:
+    from pygsti.modelmembers.operations import StaticArbitraryOp
+
+    ss = ExplicitStateSpace([('Qleft',), (0, 1, 2), ('Qright',)], [(2,), (2, 2, 2), (2,)])
+    mx = np.random.default_rng(42).normal(size=(16, 16))
+    embedded = EmbeddedOp(ss, [2, 0], StaticArbitraryOp(
+        mx, evotype='densitymx_slow', state_space=ss.create_subspace([2, 0])))
+    reference = block_diag(np.eye(4), _permuted_qubit_reference(mx, 4), np.eye(4))
+    np.testing.assert_allclose(embedded.to_dense('HilbertSchmidt'), reference)
+    np.testing.assert_allclose(embedded.to_sparse('HilbertSchmidt').toarray(), reference)
+
+
+@pytest.mark.parametrize('on_space, qdim', [('Hilbert', 2), ('HilbertSchmidt', 4)])
+def test_embedding_iterator_order_and_values(on_space: str, qdim: int) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = QubitSpace(3)
+    op = EmbeddedOp(ss, [2, 0], StaticUnitaryOp(
+        np.eye(4), evotype='statevec_slow', state_space=ss.create_subspace([2, 0])))
+    expected = []
+    # For target order (2, 0), the quotient is qubit 2 and the remainder is qubit 0.
+    # Qubit 1 is unchanged. The iterator runs in local-row, local-column, spectator order.
+    for row in range(qdim**2):
+        for col in range(qdim**2):
+            for spectator in range(qdim):
+                out_index = (row % qdim) * qdim**2 + spectator * qdim + row // qdim
+                in_index = (col % qdim) * qdim**2 + spectator * qdim + col // qdim
+                expected.append((out_index, in_index, row, col))
+    assert list(op._iter_matrix_elements(on_space)) == expected
+    assert list(op._iter_matrix_elements(on_space)) == expected  # fully consumed cache
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='relative and absolute indices share one cache entry')
+@pytest.mark.parametrize('relative_first', [False, True])
+@pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
+def test_embedding_indices_relative_and_absolute(relative_first: bool, on_space: str) -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = ExplicitStateSpace([('Qleft',), ('Q0', 'Q1', 'Q2')])
+    targets = ['Q2', 'Q0']
+    op = EmbeddedOp(ss, targets, StaticUnitaryOp(
+        np.eye(4), evotype='statevec_slow', state_space=ss.create_subspace(targets)))
+    # Fully consume each iterator to isolate cache-key collisions from partial consumption.
+    list(op._iter_matrix_elements(on_space, relative_first))
+    relative = np.array(list(op._iter_matrix_elements(on_space, True)))
+    absolute = np.array(list(op._iter_matrix_elements(on_space, False)))
+    offset = 2 if on_space == 'Hilbert' else 4
+    np.testing.assert_array_equal(absolute[:, :2], relative[:, :2] + offset)
+    np.testing.assert_array_equal(absolute[:, 2:], relative[:, 2:])
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='partial iteration leaves an incomplete index cache')
+def test_embedding_partial_iteration_does_not_truncate_dense_matrix() -> None:
+    from pygsti.modelmembers.operations import StaticUnitaryOp
+
+    ss = QubitSpace(3)
+    rng = np.random.default_rng(43)
+    mx = np.linalg.qr(rng.normal(size=(4, 4)) + 1j * rng.normal(size=(4, 4)))[0]
+    op = EmbeddedOp(ss, [2, 0], StaticUnitaryOp(
+        mx, evotype='statevec_slow', state_space=ss.create_subspace([2, 0])))
+    iterator = op._iter_matrix_elements('Hilbert')
+    next(iterator)
+    reference = _permuted_qubit_reference(mx, 2)
+    np.testing.assert_allclose(op.to_dense('Hilbert'), reference, atol=1e-12)
 
 
 def _h_errorgen_op(pauli, rate=0.15, num_qubits=1):
