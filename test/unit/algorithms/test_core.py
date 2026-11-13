@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 import pygsti.circuits as pc
 import pygsti.data as pdata
@@ -9,6 +10,52 @@ from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
     PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from . import fixtures
 from ..util import BaseCase
+
+
+@pytest.mark.parametrize('simulator', ['map', 'matrix'])
+@pytest.mark.parametrize('with_instrument', [False, True])
+def test_iterative_gst_sparse_objective_matches_rebuilt(simulator, with_instrument):
+    """The outcome cache used for fitting must include outcomes absent from the data."""
+    from pygsti.modelpacks import smq1Q_XYI
+    from pygsti.modelmembers.operations import DepolarizeOp, StaticArbitraryOp
+    from pygsti.modelmembers.instruments import Instrument
+
+    # Fit just one depolarization parameter. Fixed noisy SPAM keeps the probability
+    # of measurement outcome '1' positive, so its missing objective term cannot vanish.
+    model = smq1Q_XYI.target_model().depolarize(spam_noise=0.1)
+    model.set_all_parameterizations('static')
+    model.operations[('Gdep', 0)] = DepolarizeOp(model.state_space, initial_rate=0.1)
+    model.sim = simulator
+    prefix = []
+    if with_instrument:
+        # A fair classical coin leaves the quantum state unchanged. Each branch has
+        # two POVM outcomes: the cache must count four outcomes, not two branches.
+        model.instruments[('Iz', 0)] = Instrument([
+            (label, StaticArbitraryOp(0.5 * np.eye(4), state_space=model.state_space))
+            for label in ('a', 'b')])
+        prefix = [('Iz', 0)]
+    circuits = [Circuit(prefix + [('Gdep', 0)] * n, line_labels=(0,)) for n in (0, 1, 2)]
+    outcomes = model.circuit_outcomes(circuits[0])
+    dataset = pdata.DataSet(outcome_labels=outcomes)
+    # Record 100 shots per circuit, split across instrument branches when present.
+    # Omit measurement outcome '1' entirely rather than storing explicit zero counts.
+    observed = [outcome for outcome in outcomes if outcome[-1] == '0']
+    for circuit in circuits:
+        dataset.add_count_dict(circuit, {outcome: 100 // len(observed) for outcome in observed})
+    dataset.done_adding_data()
+    builder = ObjectiveFunctionBuilder.create_from('logl')
+    # Exercise the ordinary iterative-GST entry point with two growing circuit lists.
+    circuit_lists = [circuits[:2], circuits]
+    _, _, _, objectives = core.run_iterative_gst(
+        dataset, model, circuit_lists, optimizer={'maxiter': 20},
+        iteration_objfn_builders=[builder], final_objfn_builders=[builder], resource_alloc=None)
+    # The retained stores share the final model. Compare each cached objective at
+    # those parameters with a fresh objective, which computes its own outcome counts.
+    for objective, circuit_list in zip(objectives, circuit_lists):
+        rebuilt = builder.build(objective.model, dataset, circuit_list)
+        assert rebuilt.fn() > 1
+        np.testing.assert_allclose(objective.fn(), rebuilt.fn(), rtol=1e-10, atol=1e-10)
+        assert all(objective.outcome_count_by_circuit_cache[c] == len(outcomes) for c in circuit_list)
 
 
 class CoreStdData(object):
