@@ -958,9 +958,10 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
         else:
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)        
         # Each expansion maps instrument-resolved circuits to their POVM outcomes.
-        outcome_count_by_circuit_cache = {
-            ckt: sum(len(outcomes) for outcomes in expansion.values())
-            for ckt, expansion in zip(unique_circuits, expanded_circuit_outcome_list)}
+        outcome_count_by_circuit_cache = {}
+        for ckt, expansion in zip(unique_circuits, expanded_circuit_outcome_list):
+            outcome_count = sum(map(len, expansion.values()))
+            outcome_count_by_circuit_cache[ckt] = outcome_count
     else:
         outcome_count_by_circuit_cache = {ckt: mdl.compute_num_outcomes(ckt) for ckt in unique_circuits}
 
