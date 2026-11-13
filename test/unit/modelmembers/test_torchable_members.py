@@ -98,6 +98,17 @@ def test_embeddederrorgen_torch_base():
     assert np.allclose(torch_base_jacobian(emb), dref, atol=1e-7)
 
 
+def _mixed_qudit_torch_reference(local: np.ndarray, targets: tuple[str, str], derivative: bool = False) -> np.ndarray:
+    """Embed a mixed-dimension target after the untouched Qleft sector and Q0 factor."""
+    if targets == ('Q2', 'T1'):
+        local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
+    result = np.zeros((148, 148))  # Qleft has dimension 4; Q0 * T1 * Q2 has dimension 144.
+    if not derivative:
+        result[:4, :4] = np.eye(4)
+    result[4:, 4:] = np.kron(np.eye(4), local)
+    return result
+
+
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
 def test_mixed_qudit_embeddedop_torch(targets: tuple[str, str]) -> None:
     ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])
@@ -109,20 +120,39 @@ def test_mixed_qudit_embeddedop_torch(targets: tuple[str, str]) -> None:
     direction = torch.zeros_like(params)
     direction[37] = 1
     value, tangent = torch.func.jvp(lambda p: EmbeddedOp.torch_base(sd, p), (params,), (direction,))
-
-    def reference(local: np.ndarray, derivative: bool = False) -> np.ndarray:
-        if targets[0] == 'Q2':
-            local = local.reshape(4, 9, 4, 9).transpose(1, 0, 3, 2).reshape(36, 36)
-        result = np.zeros((ss.dim, ss.dim))
-        if not derivative:
-            result[:4, :4] = np.eye(4)
-        result[4:, 4:] = np.kron(np.eye(4), local)
-        return result
-
     perturbation = np.zeros((36, 36))
     perturbation.flat[37] = 1
-    np.testing.assert_allclose(value.numpy(), reference(mx))
-    np.testing.assert_allclose(tangent.numpy(), reference(perturbation, derivative=True))
+    np.testing.assert_allclose(value.numpy(), _mixed_qudit_torch_reference(mx, targets))
+    np.testing.assert_allclose(tangent.numpy(), _mixed_qudit_torch_reference(perturbation, targets, derivative=True))
+
+
+def _permuted_qubit_torch_reference(local: np.ndarray, derivative: bool = False) -> np.ndarray:
+    """Embed targets (2, 0) in Qleft + (0 * 1 * 2), independently of EmbeddedOp's indices."""
+    active = np.kron(np.eye(4), local)  # tensor order (1, 2, 0)
+    active = active.reshape((4,) * 6).transpose(2, 0, 1, 5, 3, 4).reshape(64, 64)
+    result = np.zeros((68, 68))
+    if not derivative:
+        result[:4, :4] = np.eye(4)
+    result[4:, 4:] = active
+    return result
+
+
+def test_permuted_qubit_embeddedop_torch() -> None:
+    ss = ExplicitStateSpace([('Qleft',), (0, 1, 2)], [(2,), (2, 2, 2)])
+    mx = np.random.default_rng(26).normal(size=(16, 16))
+    emb = EmbeddedOp(ss, [2, 0], FullArbitraryOp(
+        mx, evotype='densitymx_slow', state_space=ss.create_subspace([2, 0])))
+    sd = emb.stateless_data(torch.float64, 'cpu')
+    direction = torch.zeros(emb.num_params, dtype=torch.float64)
+    direction[37] = 1
+    perturbation = np.zeros((16, 16))
+    perturbation.flat[37] = 1
+    # Stateless data must remain valid as the parameters change.
+    for matrix in (mx, 2 * mx):
+        params = torch.tensor(matrix.ravel())
+        value, tangent = torch.func.jvp(lambda p: EmbeddedOp.torch_base(sd, p), (params,), (direction,))
+        np.testing.assert_allclose(value.numpy(), _permuted_qubit_torch_reference(matrix))
+        np.testing.assert_allclose(tangent.numpy(), _permuted_qubit_torch_reference(perturbation, derivative=True))
 
 
 # --------------------------------------------------------------------------------------------------
