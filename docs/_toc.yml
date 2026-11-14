@@ -131,6 +131,7 @@ parts:
     - file: markdown/examples/Leakage-automagic
     - file: markdown/examples/Leakage-manual
   - file: markdown/examples/1QGST-InterpolatedOps
+  - file: markdown/examples/CrosstalkFreeGST
   - file: markdown/examples/Robust-GST
   - file: markdown/examples/MPI
     sections:
