@@ -23,6 +23,8 @@ Main entry points:
 - :func:`add_single_qubit_instruments` -- mid-circuit measurements, as single-qubit instruments.
 - :mod:`~pygsti.extras.crosstalkfreegst.diagnostics` -- checks of a fit against the joint
   (all-qubit) data, which the lane-marginal fit does not see.
+- :class:`CrosstalkFreeForwardSimulator` -- for up to about a dozen qubits, a forward simulator
+  that lets the rest of pyGSTi work lane by lane on an ordinary many-qubit crosstalk-free model.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -42,4 +44,5 @@ from .gaugeopt import GaugeOptResult, apply_product_gauge, gauge_optimize
 from .models import add_single_qubit_instruments, create_general_crosstalk_free_model, ideal_z_measurement
 from .report import error_summary, format_error_summary
 from .designs import create_simple_mcm_oneq_design, create_simple_mcm_twoq_design
+from .forwardsim import CrosstalkFreeForwardSimulator
 from . import diagnostics
