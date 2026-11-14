@@ -61,6 +61,14 @@ def local_x_errorgen(num_qubits, rate):
     
 
 def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0, prep_err=0):
+    """
+    Builds a `stabilizer` evotype model with Lindblad gate noise (`error_rates`, per gate name),
+    an S(X) preparation error `prep_err` on every qubit, and an S(X) measurement error `meas_err`.
+
+    The measurement error is a one-qubit POVM on purpose: pyGSTi builds every effect of an
+    n-qubit POVM when a model is made, which is infeasible beyond about 14 qubits.
+    `build_dem_end2end` reads it as the same error on every qubit.
+    """
     gate_dictionary = dict()
 
     
