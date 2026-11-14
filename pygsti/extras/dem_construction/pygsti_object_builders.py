@@ -15,26 +15,107 @@ from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
 from pygsti.modelmembers.povms import ComposedPOVM, ComputationalBasisPOVM
 
 
+# ---------------------------------------------------------------------------
+# Unified pyGSTi <-> stim translation tables.
+# pyGSTi names follow pygsti.tools.internalgates.standard_gatename_unitaries;
+# stim names follow https://github.com/quantumlib/Stim/blob/main/doc/gates.md.
+# Equivalences are up to global phase (consistent with
+# internalgates.standard_gatenames_stim_conversions).
+# ---------------------------------------------------------------------------
+
+#: Single-qubit Clifford gates, pyGSTi name -> canonical stim name.
+PYGSTI_TO_STIM_1Q = {
+    'Gi': 'I',
+    'Gxpi': 'X',
+    'Gypi': 'Y',
+    'Gzpi': 'Z',
+    'Gh': 'H',
+    'Gxpi2': 'SQRT_X',
+    'Gxmpi2': 'SQRT_X_DAG',
+    'Gypi2': 'SQRT_Y',
+    'Gympi2': 'SQRT_Y_DAG',
+    'Gzpi2': 'S',
+    'Gzmpi2': 'S_DAG',
+    'Gp': 'S',
+    'Gpdag': 'S_DAG',
+    # legacy pyGSTi aliases
+    'Gx': 'SQRT_X',
+    'Gy': 'SQRT_Y',
+    'Gz': 'S',
+}
+
+#: Two-qubit Clifford gates, pyGSTi name -> canonical stim name.
+PYGSTI_TO_STIM_2Q = {
+    'Gcnot': 'CX',
+    'Gcphase': 'CZ',
+    'Gswap': 'SWAP',
+    'Giswap': 'ISWAP',
+    'Gxx': 'SQRT_XX',
+    'Gzz': 'SQRT_ZZ',
+}
+
+#: All supported unitary gates, pyGSTi name -> stim name.
+PYGSTI_TO_STIM = {**PYGSTI_TO_STIM_1Q, **PYGSTI_TO_STIM_2Q}
+
+#: Single-qubit stim gate name (including stim aliases) -> preferred pyGSTi name.
+STIM_TO_PYGSTI_1Q = {
+    'I': 'Gi',
+    'X': 'Gxpi',
+    'Y': 'Gypi',
+    'Z': 'Gzpi',
+    'H': 'Gh',
+    'H_XZ': 'Gh',
+    'SQRT_X': 'Gxpi2',
+    'SQRT_X_DAG': 'Gxmpi2',
+    'SQRT_Y': 'Gypi2',
+    'SQRT_Y_DAG': 'Gympi2',
+    'S': 'Gzpi2',
+    'SQRT_Z': 'Gzpi2',
+    'S_DAG': 'Gzmpi2',
+    'SQRT_Z_DAG': 'Gzmpi2',
+}
+
+#: Two-qubit stim gate name (including stim aliases) -> preferred pyGSTi name.
+STIM_TO_PYGSTI_2Q = {
+    'CX': 'Gcnot',
+    'CNOT': 'Gcnot',
+    'ZCX': 'Gcnot',
+    'CZ': 'Gcphase',
+    'ZCZ': 'Gcphase',
+    'SWAP': 'Gswap',
+    'ISWAP': 'Giswap',
+    'SQRT_XX': 'Gxx',
+    'SQRT_ZZ': 'Gzz',
+}
+
+#: All supported unitary gates, stim name -> pyGSTi name.
+STIM_TO_PYGSTI = {**STIM_TO_PYGSTI_1Q, **STIM_TO_PYGSTI_2Q}
+
+#: Supported stim measurement / reset instructions
+STIM_Z_MEASUREMENTS = {'M', 'MR'}
+STIM_PAULI_PRODUCT_MEASUREMENTS = {'MPP'}
+STIM_RESETS = {'R'}
+STIM_MEASURE_RESET = STIM_Z_MEASUREMENTS | STIM_PAULI_PRODUCT_MEASUREMENTS | STIM_RESETS
+
+#: stim annotations that carry no gate/measurement content for this conversion.
+#Note for future development: Using TICK information is relevant for time-dependent error
+STIM_IGNORED_ANNOTATIONS = {'TICK', 'QUBIT_COORDS', 'SHIFT_COORDS'}
+
+
+def _stim_instruction_name(line):
+    """Return the bare stim instruction name of a line, stripping any '(...)' arguments."""
+    return line.strip().split(' ')[0].split('(')[0]
+
+
 def pygsti_c_to_stim(pyg_c, include_measurement=True):
-    gatenames_to_stim = {}
-    gatenames_to_stim['Gh'] = 'H'
-    gatenames_to_stim['Gzpi'] = 'Z'
-    gatenames_to_stim['Gypi'] = 'Y'
-    gatenames_to_stim['Gxpi'] = 'X'
-    gatenames_to_stim['Gypi2'] = 'SQRT_Y'
-    gatenames_to_stim['Gympi2'] = 'SQRT_Y_DAG'
-    gatenames_to_stim['Gcnot'] = 'CX'
-    gatenames_to_stim['Gh'] = 'H'
-    gatenames_to_stim['Gcphase'] = 'CZ'
-    gatenames_to_stim['Gxpi2'] = 'SQRT_X'
-    gatenames_to_stim['Gxmpi2'] = 'SQRT_X_DAG'
-    gatenames_to_stim['Gi'] = 'I'
-    
     qs = [str(q) for q in pyg_c.line_labels]
-    stim_cstr= 'I '+' '.join(q for q in qs)+'\n'
+    stim_cstr= PYGSTI_TO_STIM['Gi']+' '+' '.join(q for q in qs)+'\n'
     for gate in pyg_c:
         #assume serialized
-        stim_name = gatenames_to_stim[gate.name]
+        try:
+            stim_name = PYGSTI_TO_STIM[gate.name]
+        except KeyError:
+            raise ValueError(f'No stim translation available for pyGSTi gate {gate.name}.')
         stim_qs = ' '.join([str(q) for q in list(gate.qubits)])
         stim_cstr += (stim_name+' '+stim_qs+'\n')
     #add measurement of all qubits
@@ -140,34 +221,24 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     observable_detectors = []
 
     def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
-        gate_dict= {'H':'Gh', 
-                    'SQRT_Y': 'Gypi2',
-                    'SQRT_Y_DAG': 'Gympi2',
-                    'SQRT_X_DAG': 'Gxmpi2',
-                    'T': 'Gt',
-                    'T_DAG': 'Gtdag',
-                    'Z': 'Gzpi',
-                    'Y': 'Gypi', 
-                    'X':'Gxpi',
-                   'I':'Gi'}
-        pygsti_name = gate_dict[gatename]
+        pygsti_name = STIM_TO_PYGSTI_1Q[gatename]
         return '[' + ''.join([f'{pygsti_name}:'+str(current_qubit_mapping[int(s)]) for s in stim_layer_string.split(' ')[1:]]) + ']'
 
     def convert_2q_layer(gatename, stim_layer_string, current_qubit_mapping):
-        gate_dict = {'CZ': 'Gcphase', 'CX': 'Gcnot'}
-        cnot_qubits = stim_layer_string.split(' ')[1:] #what????
-        num_cnots = len(cnot_qubits) // 2
-        pygsti_l_cnot = '['
-        for i in range(num_cnots):
-            q1 = str(current_qubit_mapping[int(cnot_qubits[2 * i])])
-            q2 = str(current_qubit_mapping[int(cnot_qubits[2 * i + 1])])
-            pygsti_l_cnot +=  f'{gate_dict[gatename]}:'+ q1 + ':' + q2
-        pygsti_l_cnot += ']'
-        return pygsti_l_cnot
+        pygsti_name = STIM_TO_PYGSTI_2Q[gatename]
+        targets = stim_layer_string.split(' ')[1:]
+        num_pairs = len(targets) // 2
+        pygsti_layer = '['
+        for i in range(num_pairs):
+            q1 = str(current_qubit_mapping[int(targets[2 * i])])
+            q2 = str(current_qubit_mapping[int(targets[2 * i + 1])])
+            pygsti_layer +=  f'{pygsti_name}:'+ q1 + ':' + q2
+        pygsti_layer += ']'
+        return pygsti_layer
 
     def update_qubit_mapping(line, current_qubit_mapping, qubit_labels):
         new_mapping = current_qubit_mapping.copy()
-        if line.split(' ')[0]=='MPP':
+        if _stim_instruction_name(line) in STIM_PAULI_PRODUCT_MEASUREMENTS:
             qs = []
             for prod in line.split(' ')[1:]:
                 _, qs_prod = parse_pauli_product(prod, {q:q for q in qubit_labels})
@@ -190,34 +261,28 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     current_qubit_mapping = {q:q for q in qubit_labels}
     gates_happened = False
     for line in cstr.split('\n'):
+        instr = _stim_instruction_name(line)
         #check if gate layer
-        if 'T' in line.split(' ') or 'T_DAG' in line.split(' ') or 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' '):
-            gatename = line.split(' ')[0]
-            gate_layers.append(convert_1q_layer(gatename, line, current_qubit_mapping))
+        if instr in STIM_TO_PYGSTI_1Q:
+            gate_layers.append(convert_1q_layer(instr, line, current_qubit_mapping))
             gates_happened = True
             unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
             if include_idles:
                 gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif 'CX' in line.split(' '):
-            gate_layers.append(convert_2q_layer('CX', line, current_qubit_mapping))
+        elif instr in STIM_TO_PYGSTI_2Q:
+            gate_layers.append(convert_2q_layer(instr, line, current_qubit_mapping))
             gates_happened = True
             unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
             if include_idles:
                 gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif 'CZ' in line.split(' '):
-            gate_layers.append(convert_2q_layer('CZ', line, current_qubit_mapping))
-            gates_happened = True
-            unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
-            if include_idles:
-                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif line.split(' ')[0] in ['M','R','MR','MPP'] and not ignore_measurement:
-            if line.split(' ')[0] in ['M','MR']:
+        elif instr in STIM_MEASURE_RESET and not ignore_measurement:
+            if instr in STIM_Z_MEASUREMENTS:
                 #gate_layers.append(convert_1q_layer('I', line, current_qubit_mapping))
                 measurements.extend([('Z',(current_qubit_mapping[int(q)],)) for q in line.split(' ')[1:]])
-            elif line.split(' ')[0]=='MPP':
+            elif instr in STIM_PAULI_PRODUCT_MEASUREMENTS:
                 measurements.extend([parse_pauli_product(prod, current_qubit_mapping) for prod in line.split(' ')[1:]]) #TODO 
                 
-            if gates_happened and line.split(' ')[0] !='MPP': ###MIGHT NEED TO CHANGE MPP case
+            if gates_happened and instr not in STIM_PAULI_PRODUCT_MEASUREMENTS: ###MIGHT NEED TO CHANGE MPP case
                 #assuming there aren't initial measurements in the circuit
                 current_qubit_mapping = update_qubit_mapping(line, current_qubit_mapping, qubit_labels) #in a measurement layer, we just need to update our mapping to expanded circuit qubits
                 if show_qubit_mappings:
@@ -252,7 +317,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
                             targ = len(measurements) - 1 * rel_meas
                             observable_detectors[j].append(targ)          
         
-        elif 'TICK' in line.split(' ') or 'QUBIT_COORDS' or 'SHIFT_COORDS' in line.split(' '):
+        elif instr in STIM_IGNORED_ANNOTATIONS or instr in STIM_MEASURE_RESET or instr == '':
             pass
         else:
             print(f'instruction not found for {line}') #IF THIS COMES UP, MAYBE BE CONCERNED
