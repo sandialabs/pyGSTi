@@ -21,6 +21,8 @@ Main entry points:
 - :class:`LaneDecomposition`, :func:`simulate_lanewise_marginals` -- lane-marginal data,
   which avoids holding joint many-qubit datasets.
 - :func:`add_single_qubit_instruments` -- mid-circuit measurements, as single-qubit instruments.
+- :mod:`~pygsti.extras.crosstalkfreegst.diagnostics` -- checks of a fit against the joint
+  (all-qubit) data, which the lane-marginal fit does not see.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -39,3 +41,5 @@ from .simulate import lane_outcome_distributions, simulate_lanewise_data, simula
 from .gaugeopt import GaugeOptResult, apply_product_gauge, gauge_optimize
 from .models import add_single_qubit_instruments, create_general_crosstalk_free_model, ideal_z_measurement
 from .report import error_summary, format_error_summary
+from .designs import create_simple_mcm_oneq_design, create_simple_mcm_twoq_design
+from . import diagnostics
