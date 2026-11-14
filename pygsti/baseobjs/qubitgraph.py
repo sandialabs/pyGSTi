@@ -438,19 +438,21 @@ class QubitGraph(_NicelySerializable):
         list
         """
         ret = set()
-        for ilbl, i in self._nodeinds.items():
-            for jlbl, j in self._nodeinds.items():
-                if self._connectivity[i, j]:
-                    if include_directions and self.directions is not None:
-                        dirname = self.directions[self._connectivity[i, j] - 1]
-                        ret.add((ilbl, jlbl, dirname))  # i < j when undirected
-                        if (not self.directed) and double_for_undirected:
-                            raise ValueError(("Cannot double direction-named edges (no way to tell "
-                                              "what direction name should be)!"))
-                    else:
-                        ret.add((ilbl, jlbl))  # i < j when undirected
-                        if (not self.directed) and double_for_undirected:
-                            ret.add((jlbl, ilbl))
+        labels = list(self._nodeinds.keys())  # label of each node index
+        # Visit only the connected pairs: looping over all pairs is quadratic in the number of
+        # qubits, which is prohibitive when this is called once per subgraph of a large device.
+        for i, j in zip(*_np.nonzero(self._connectivity)):
+            ilbl, jlbl = labels[i], labels[j]
+            if include_directions and self.directions is not None:
+                dirname = self.directions[self._connectivity[i, j] - 1]
+                ret.add((ilbl, jlbl, dirname))  # i < j when undirected
+                if (not self.directed) and double_for_undirected:
+                    raise ValueError(("Cannot double direction-named edges (no way to tell "
+                                      "what direction name should be)!"))
+            else:
+                ret.add((ilbl, jlbl))  # i < j when undirected
+                if (not self.directed) and double_for_undirected:
+                    ret.add((jlbl, ilbl))
         return sorted(list(ret))
 
     def radius(self, base_nodes, max_hops):
