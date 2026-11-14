@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 import stim
@@ -298,3 +300,51 @@ def test_add_to_dem_converts_rates_to_real_floats():
     assert dem['1'] == pytest.approx((1 - np.exp(-0.02)) / 2)
     with pytest.raises(ValueError):
         dem_tools.add_to_dem({'1': 0.0}, ['1'], [{label: complex(0.01, 1e-3)}], [stim.PauliString('Z')], sim)
+
+
+def _stim_events(dem):
+    """ Event (its detector and observable targets) to rate, with repeated events combined. """
+    events = {}
+    for inst in dem.flattened():
+        if inst.type == 'error':
+            key = frozenset(str(t) for t in inst.targets_copy())
+            p, q = inst.args_copy()[0], events.get(key, 0.0)
+            events[key] = q * (1 - p) + p * (1 - q)
+    return events
+
+
+def _with_pauli_noise(circuit, rates):
+    """
+    The circuit with the Pauli flips of an S-only model with these rates: X on every qubit at the
+    start and after each reset, X on each CX target, Z after each H, X before each measurement.
+    """
+    flip = {name: (1 - math.exp(-2 * rate)) / 2 for name, rate in rates.items()}
+    noisy = stim.Circuit()
+    noisy.append('X_ERROR', range(circuit.num_qubits), flip['prep'])
+    for inst in circuit.flattened():
+        targets = [t.value for t in inst.targets_copy()]
+        if inst.name in ('M', 'MR'):
+            noisy.append('X_ERROR', targets, flip['povm'])
+        noisy.append(inst)
+        if inst.name == 'CX':
+            noisy.append('X_ERROR', targets[1::2], flip['Gcnot'])
+        elif inst.name == 'H':
+            noisy.append('Z_ERROR', targets, flip['Gh'])
+        if inst.name in ('R', 'MR'):
+            noisy.append('X_ERROR', targets, flip['prep'])
+    return noisy
+
+
+def test_surface_code_matches_stims_dem_for_pauli_noise():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3)
+    rates = {'Gcnot': 0.004, 'Gh': 0.003, 'prep': 0.005, 'povm': 0.006}
+    # build_model's one-qubit POVM: create_crosstalk_free_model builds every effect of a 26-qubit one
+    model = build_model({'Gcnot': {('S', 'IX'): rates['Gcnot']}, 'Gh': {('S', 'Z'): rates['Gh']}},
+                        _spec_for(circuit, True), ['Gh'], ['Gcnot'], meas_err=rates['povm'], prep_err=rates['prep'])
+    dem = build_dem_end2end(circuit, model)
+    ours = _stim_events(dem)
+    reference = _stim_events(_with_pauli_noise(circuit, rates).detector_error_model())
+    assert ours
+    assert ours.keys() == reference.keys()
+    for event, rate in ours.items():
+        assert rate == pytest.approx(reference[event], rel=1e-9)
