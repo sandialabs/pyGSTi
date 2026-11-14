@@ -16,6 +16,8 @@ Main entry points:
   restricting a many-qubit model (:meth:`LaneModels.from_model`) or straight from
   sub-processor-specs by a factory (needed beyond ~12 qubits).
 - :func:`create_general_crosstalk_free_model` -- the general crosstalk-free model.
+- :func:`gauge_optimize` -- gauge optimization over the per-qubit product of TP gauge groups.
+- :func:`error_summary` -- per-gate and per-qubit error metrics.
 - :class:`LaneDecomposition`, :func:`simulate_lanewise_marginals` -- lane-marginal data,
   which avoids holding joint many-qubit datasets.
 - :func:`add_single_qubit_instruments` -- mid-circuit measurements, as single-qubit instruments.
@@ -34,4 +36,6 @@ from .lanemodels import LaneModels, check_factorizable, member_objects, member_p
 from .parallel import LanePool
 from .fit import CrosstalkFreeGSTResults, FactorizedObjective, levenberg_marquardt, run_crosstalk_free_gst
 from .simulate import lane_outcome_distributions, simulate_lanewise_data, simulate_lanewise_marginals
+from .gaugeopt import GaugeOptResult, apply_product_gauge, gauge_optimize
 from .models import add_single_qubit_instruments, create_general_crosstalk_free_model, ideal_z_measurement
+from .report import error_summary, format_error_summary
