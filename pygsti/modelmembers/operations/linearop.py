@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import numpy as _np
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.baseobjs import _compatibility as _compat
@@ -211,9 +213,14 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise NotImplementedError("to_sparse(...) not implemented for %s objects!" % self.__class__.__name__)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -252,9 +259,14 @@ class LinearOperator(_modelmember.ModelMember):
         raise NotImplementedError("taylor_order_terms(...) not implemented for %s objects!" %
                                   self.__class__.__name__)
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_polynomial_vars=100):
         """
         Get terms with magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Get the terms (from a Taylor expansion of this operator) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
@@ -366,9 +378,14 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t[1] for t in sorted_terms], first_order_indices
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
         Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.

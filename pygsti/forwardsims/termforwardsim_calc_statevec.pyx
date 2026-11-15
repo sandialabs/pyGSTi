@@ -1,6 +1,13 @@
 # encoding: utf-8
 # cython: profile=False
 # cython: linetrace=False
+"""
+Cython kernels for the term forward simulator (statevec evotype)
+
+.. deprecated:: 0.11
+    This module exists solely to support the deprecated `TermForwardSimulator` and will be
+    removed in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

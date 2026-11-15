@@ -649,7 +649,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #mu = min(mu, MU_TOL1)
                     else:
                         # initial multiplicative damping element
-                        #mu = tau # initial damping element - but this seem to low, at least for termgap...
+                        #mu = tau # initial damping element - but this seem to low in some cases...
                         mu = min(1.0e5, ari.max_x(undamped_JTJ_diag) / norm_JTf)  # Erik's heuristic
                         #tries to avoid making mu so large that dx is tiny and we declare victory prematurely
                 else:

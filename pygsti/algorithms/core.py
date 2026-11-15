@@ -687,6 +687,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     # Solve least squares minimization problem
     from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+    # (TermForwardSimulator is deprecated; remove this branch and _do_term_runopt when it is removed, see #916)
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
@@ -957,7 +958,11 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                                                                                           completed_circuits= precomp_layout_circuit_cache['completed_circuits'].values())
         else:
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)        
-        outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
+        # Each expansion maps instrument-resolved circuits to their POVM outcomes.
+        outcome_count_by_circuit_cache = {}
+        for ckt, expansion in zip(unique_circuits, expanded_circuit_outcome_list):
+            outcome_count = sum(map(len, expansion.values()))
+            outcome_count_by_circuit_cache[ckt] = outcome_count
     else:
         outcome_count_by_circuit_cache = {ckt: mdl.compute_num_outcomes(ckt) for ckt in unique_circuits}
 
@@ -1091,6 +1096,11 @@ def _do_term_runopt(objective, optimizer, printer):
     is more complex because an appropriate "path set" must be found,
     requiring a loop of model optimizations with fixed path sets until
     a sufficient "good" path set is obtained.
+
+    .. deprecated:: 0.11
+        Exists solely to support the deprecated `TermForwardSimulator` (path-set
+        management); will be removed in pyGSTi 0.12.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     Parameters
     ----------

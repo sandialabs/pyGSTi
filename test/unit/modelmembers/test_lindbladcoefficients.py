@@ -28,6 +28,11 @@ from pygsti.baseobjs.basis import Basis
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as LCB
 
+# The term-object (TermForwardSimulator) machinery is deprecated (see #916); its tests are kept until the
+# deprecation expires (pyGSTi 0.12).  See agent-docs/known-debt.md.  Only the term-sim deprecation is ignored.
+ignore_termsim_deprecation = pytest.mark.filterwarnings(
+    "ignore:.*TermForwardSimulator.*:pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+
 
 # ---- validity matrix (block_type -> valid param_modes) ----
 VALID = {
@@ -355,6 +360,7 @@ def _evaluated_term_coeffs(terms, num_params):
 
 
 @pytest.mark.parametrize("bt,pm", _TERM_SNAPSHOT_CONFIGS, ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
+@ignore_termsim_deprecation
 def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     """Pin the Term-simulator polynomial coefficients (count + values at a fixed evaluation point)
     produced by create_lindblad_term_objects."""
@@ -617,6 +623,7 @@ def _setup_1q_block_with_deterministic_data(bt, pm):
 _ONE_QUBIT_CONFIGS = [(bt, pm) for bt, pms in VALID.items() for pm in pms]
 
 @pytest.mark.parametrize("bt,pm", _ONE_QUBIT_CONFIGS, ids=["%s-%s" % c for c in _ONE_QUBIT_CONFIGS])
+@ignore_termsim_deprecation
 def test_term_objects_reconstruct_dense_errorgen_1q(bt, pm):
     """The reconstructed superoperator from create_lindblad_term_objects matches the dense
     (LindbladErrorgen) superoperator for every valid 1-qubit block/param_mode pair."""
@@ -629,6 +636,7 @@ def test_term_objects_reconstruct_dense_errorgen_1q(bt, pm):
 
 
 @pytest.mark.parametrize("evotype", ['statevec', 'statevec_slow'])
+@ignore_termsim_deprecation
 def test_term_objects_reconstruct_dense_errorgen_other_elements_evotypes(evotype):
     """Focused test verifying other/elements term reconstruction with both statevec and statevec_slow."""
     try:

@@ -7,4 +7,4 @@ These tutorials cover how `pyGSTi` simulates circuits — computing the outcome 
 - [Error generator propagation](simulation/ErrorGeneratorPropagation) — propagate error generators through the layers of a circuit to get numerical quantities of interest.
 - [Error generator propagation parallelization](simulation/ErrorGeneratorPropagation-Parallelization) — configure multi-worker multiprocessing, pipeline pool reuse, and hardware-specific threshold calibration for error generator propagation.
 - [Error generator polynomials](simulation/ErrorGeneratorPolynomials) — propagate error generators through the layers of a circuit to get symbolic representations of quantities of interest, like end-of-circuit error generators.
-- [Forward simulation types](simulation/ForwardSimulationTypes) — the available forward simulators (matrix, map, term, …) and when to use each.
+- [Forward simulation types](simulation/ForwardSimulationTypes) — the available forward simulators (matrix, map, …) and when to use each (the term-based simulator is deprecated).
