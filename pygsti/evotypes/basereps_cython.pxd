@@ -33,6 +33,7 @@ cdef class StateRep:
 cdef class EffectRep:
     pass
 
+# deprecated: used only by the TermForwardSimulator machinery (remove in 0.12, see #916)
 cdef class TermRep:
     pass
 

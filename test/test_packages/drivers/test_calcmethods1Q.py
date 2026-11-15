@@ -22,6 +22,11 @@ from ..testutils import build_XYCNOT_cloudnoise_model as _build_XYCNOT_cloudnois
 
 build_XYCNOT_cloudnoise_model = partial(_build_XYCNOT_cloudnoise_model, xy_gate_names=('Gxpi2', 'Gypi2'))
 
+# TermForwardSimulator is deprecated (see #916); its tests are kept until the deprecation expires
+# (pyGSTi 0.12).  See agent-docs/known-debt.md.  This filter only ignores the term-sim deprecation.
+ignore_termsim_deprecation = pytest.mark.filterwarnings(
+    "ignore:.*TermForwardSimulator.*:pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+
 
 class CalcMethods1QTestCase(BaseTestCase):
 
@@ -157,6 +162,7 @@ class CalcMethods1QTestCase(BaseTestCase):
          # with low tolerance (1e-6), "map" tends to go for more iterations than "matrix",
          # resulting in a model that isn't exactly the same as the "matrix" one
 
+    @ignore_termsim_deprecation
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
         # This performs a map-based unitary evolution along each path.
@@ -194,6 +200,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Note: used to be places=3 above when comparing with cython-built files, but to match cython with
         # non-cython builds we loosen to places=1
 
+    @ignore_termsim_deprecation
     def test_stdgst_prunedpath(self):
         # Using term-based (path integral) calculation with path pruning
         # This performs a map-based unitary evolution along each path.
@@ -343,6 +350,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+    @ignore_termsim_deprecation
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -369,6 +377,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                - mdl_compare.to_vector()), 0, places=3)
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @ignore_termsim_deprecation
     def test_reducedmod_svterm_errorgens(self):
         # Using term-based calcs using map-based state-vector propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -390,6 +399,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Note: we don't compare errorgens models to a reference model yet...
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @ignore_termsim_deprecation
     def test_reducedmod_prunedpath_svterm_errorgens(self):
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='pruned')
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -416,6 +426,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+    @ignore_termsim_deprecation
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -438,6 +449,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @ignore_termsim_deprecation
     def test_reducedmod_cterm_errorgens(self):
         # Using term-based calcs using map-based stabilizer-state propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -556,6 +568,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, expected)
         self.assert_outcomes(probs2, expected)
 
+    @ignore_termsim_deprecation
     def test_circuitsim_svterm(self):
         # ### Density-matrix simulation (of superoperator gates) using map/matrix-based terms calcs
         # In this mode, "term calcs" use many state-vector propagation paths to simulate density
@@ -650,6 +663,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                     self.assertTrue(False)
         print("Done checking %d sequences!" % len(listOfExperiments))
 
+    @ignore_termsim_deprecation
     def test_circuitsim_cterm(self):
         # Density-matrix simulation (of superoperator gates) using stabilizer-based term calcs
         c0 = pygsti.circuits.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit

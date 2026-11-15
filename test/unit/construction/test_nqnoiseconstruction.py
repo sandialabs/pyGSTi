@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import scipy
 
@@ -5,6 +7,7 @@ import pygsti.models.modelconstruction as mc
 import pygsti.circuits.cloudcircuitconstruction as cc
 from pygsti.circuits import Circuit
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase
 
 
@@ -133,3 +136,19 @@ class NQNoiseConstructionTester(BaseCase):
 
         self.assertAlmostEqual(p1['00'], 0.08733219254516078)
         self.assertAlmostEqual(p1['01'], 0.9126678074548386)
+
+    def test_cloudnoise_circuits_deprecation_warnings(self):
+        pspec = _QubitProcessorSpec(2, ('Gxpi2', 'Gypi2', 'Gcnot', '{idle}'), geometry='line')
+        fids = [(), ('Gxpi2',), ('Gypi2',)]
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cc.create_cloudnoise_circuits(pspec, [1, 2], fids, max_idle_weight=1, maxhops=0)
+        self.assertEqual([str(x.message) for x in w if issubclass(x.category, pyGSTiDeprecationWarning)], [])
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cc._create_xycnot_cloudnoise_circuits(2, [1, 2], 'line', [(0, 1)], max_idle_weight=1, maxhops=0)
+        msgs = [str(x.message) for x in w if issubclass(x.category, pyGSTiDeprecationWarning)]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('_create_xycnot_cloudnoise_circuits', msgs[0])

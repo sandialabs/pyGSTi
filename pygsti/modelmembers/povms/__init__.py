@@ -436,8 +436,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
     povm : POVM
         POVM to convert
 
-    to_type : {"full","full TP","static","static pure","H+S terms",
-        "H+S clifford terms","clifford"}
+    to_type : {"full","full TP","static","static pure","H+S","CPTPLND","clifford", ...}
         The type of parameterizaton to convert to.  See
         :meth:`Model.set_all_parameterizations` for more details.
         TODO docstring: update the options here.

@@ -15,4 +15,4 @@ from .statereps import *
 from .opreps import *
 from .effectreps import *
 
-from .termreps import *
+from .termreps import *  # term-sim machinery: deprecated, remove in 0.12 (see #916)
