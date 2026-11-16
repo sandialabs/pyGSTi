@@ -109,7 +109,6 @@ def _mixed_qudit_torch_reference(local: np.ndarray, targets: tuple[str, str], de
     return result
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides in torch setup')
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
 def test_mixed_qudit_embeddedop_torch(targets: tuple[str, str]) -> None:
     ss = ExplicitStateSpace([('Qleft',), ('Q0', 'T1', 'Q2')], [(2,), (2, 3, 2)])

@@ -149,7 +149,9 @@ class EmbeddedOp(_LinearOperator, _Torchable):
 
     def _iter_matrix_elements_precalc(self, on_space):
         divisor = 1; divisors = []
-        for l in self.target_labels:
+        # _decomp_op_index consumes these in reverse, with the first target most significant.
+        # Each target's stride is the product of the dimensions of the targets after it.
+        for l in reversed(self.target_labels):
             divisors.append(divisor)
             dim = self.state_space.label_udimension(l) if on_space == "Hilbert" \
                 else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)

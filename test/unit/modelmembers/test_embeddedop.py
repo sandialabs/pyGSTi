@@ -38,7 +38,6 @@ def _mixed_qudit_superop_reference(matrix: np.ndarray, targets: tuple[str, str])
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
 def test_mixed_qudit_hilbert_embedding(targets: tuple[str, str]) -> None:
     from pygsti.modelmembers.operations import StaticUnitaryOp
 
@@ -52,7 +51,6 @@ def test_mixed_qudit_hilbert_embedding(targets: tuple[str, str]) -> None:
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
 def test_mixed_qudit_hilbert_direct_sum_embedding(targets: tuple[str, str]) -> None:
     from pygsti.modelmembers.operations import StaticUnitaryOp
 
@@ -68,7 +66,6 @@ def test_mixed_qudit_hilbert_direct_sum_embedding(targets: tuple[str, str]) -> N
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
 def test_mixed_qudit_superop_embedding(targets: tuple[str, str]) -> None:
     from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
     from pygsti.modelmembers.operations import StaticArbitraryOp
@@ -86,7 +83,6 @@ def test_mixed_qudit_superop_embedding(targets: tuple[str, str]) -> None:
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
 def test_mixed_qudit_superop_direct_sum_embedding(targets: tuple[str, str]) -> None:
     from pygsti.evotypes.densitymx_slow.statereps import StateRepDense
     from pygsti.modelmembers.operations import StaticArbitraryOp
@@ -106,7 +102,6 @@ def test_mixed_qudit_superop_direct_sum_embedding(targets: tuple[str, str]) -> N
 
 
 @pytest.mark.parametrize('targets', [('T1', 'Q2'), ('Q2', 'T1')])
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#956: mixed-dimension target strides')
 def test_mixed_qudit_embedding_derivatives(targets: tuple[str, str]) -> None:
     from pygsti.modelmembers.operations import FullArbitraryOp
 
