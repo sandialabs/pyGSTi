@@ -348,16 +348,18 @@ def _dem_by_steps(circuit, gate_rates, meas_err, prep_err):
     return dem_tools.format_dem_stim(dem_dict, len(detectors), len(observables))
 
 
-@pytest.mark.parametrize('route', ['end2end_stim_qubits', 'steps_expanded_qubits'])
+@pytest.mark.parametrize('route', ['end2end_stim_qubits', 'end2end_stabilizer_slow', 'steps_expanded_qubits'])
 def test_surface_code_matches_stims_dem_for_pauli_noise(route):
     circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3)
     rates = {'Gcnot': 0.004, 'Gh': 0.003, 'prep': 0.005, 'povm': 0.006}
     gate_rates = {'Gcnot': {('S', 'IX'): rates['Gcnot']}, 'Gh': {('S', 'Z'): rates['Gh']}}
     # build_model's one-qubit POVM: create_crosstalk_free_model builds every effect of a 26-qubit one
-    if route == 'end2end_stim_qubits':
+    if route.startswith('end2end'):
+        evotype = 'stabilizer_slow' if route == 'end2end_stabilizer_slow' else 'stabilizer'
         pyg, _, _, v2p = stim_to_pygsti_circuit(circuit)
         pspec = create_processor_spec(pyg, list(range(circuit.num_qubits)), virtual_to_physical=v2p)
-        model = build_model(gate_rates, pspec, ['Gh'], ['Gcnot'], meas_err=rates['povm'], prep_err=rates['prep'])
+        model = build_model(gate_rates, pspec, ['Gh'], ['Gcnot'], meas_err=rates['povm'], prep_err=rates['prep'],
+                            evotype=evotype)
         dem = build_dem_end2end(circuit, model)
     else:
         dem = _dem_by_steps(circuit, gate_rates, rates['povm'], rates['prep'])

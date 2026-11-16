@@ -186,7 +186,8 @@ def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
         The expanded circuit from `stim_to_pygsti_circuit`, on virtual qubits.
 
     model : pygsti.models.OpModel
-        A model of the `stabilizer` evotype with Lindblad noise, in one of two placements.
+        A model of the `stabilizer` (or `stabilizer_slow`) evotype with Lindblad noise, in one of
+        two placements.
         With `virtual_to_physical`, it is on the stim qubits. Without it, it is on the
         circuit's own (virtual) qubits, which allows noise that differs between rounds.
 
@@ -213,8 +214,9 @@ def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
     n_virtual = len(virtual_to_physical)
     sslbls = list(range(n_virtual))
 
-    if str(model.evotype) != 'stabilizer':
-        raise ValueError(f"Only models of the 'stabilizer' evotype are supported, not '{model.evotype}'.")
+    if str(model.evotype) not in ('stabilizer', 'stabilizer_slow'):
+        raise ValueError("Only models of the 'stabilizer' or 'stabilizer_slow' evotype are supported, "
+                         f"not '{model.evotype}'.")
     missing = set(virtual_to_physical) - set(model.state_space.qubit_labels)
     if missing:
         raise ValueError(f'The model has no qubits {sorted(missing)}, which the circuit uses.')
@@ -293,8 +295,8 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
         noiseless circuit.
 
     model : pygsti.models.ExplicitOpModel or LocalNoiseModel
-        A model of the `stabilizer` evotype with Lindblad noise, on the circuit's own stim
-        qubit indices. Its gates are named as `stim_to_pygsti_circuit` names them (pyGSTi's
+        A model of the `stabilizer` (or `stabilizer_slow`) evotype with Lindblad noise, on the
+        circuit's own stim qubit indices. Its gates are named as `stim_to_pygsti_circuit` names them (pyGSTi's
         `internalgates` names, such as `Gcnot`, `Gh` or `Gxpi`). Noise of a gate must act
         on the gate's own qubits. A preparation or measurement error generator must act on
         one qubit; when the preparation or measurement operator is a one-qubit one, its

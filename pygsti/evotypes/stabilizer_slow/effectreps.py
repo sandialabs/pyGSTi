@@ -38,8 +38,8 @@ class EffectRepComputational(EffectRep):
     def __init__(self, zvals, basis, state_space):
         self.zvals = zvals
         self.basis = basis
-        assert(self.state_space.num_qubits == len(self.zvals))
         super(EffectRepComputational, self).__init__(state_space)
+        assert(self.state_space.num_qubits == len(self.zvals))
 
     def __str__(self):
         nQubits = len(self.zvals)

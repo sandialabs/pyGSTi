@@ -18,6 +18,12 @@ from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
 from pygsti.modelmembers.povms import ComposedPOVM, ComputationalBasisPOVM
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 
+try:  # the compiled stabilizer evotype needs pyGSTi's Cython extensions; fall back to the pure-Python one
+    from pygsti.evotypes import stabilizer as _stabilizer_ext  # noqa: F401
+    DEFAULT_EVOTYPE = 'stabilizer'
+except ImportError:
+    DEFAULT_EVOTYPE = 'stabilizer_slow'
+
 
 def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_to_physical=None):
     """
@@ -43,25 +49,27 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_
     return pspec
 
 
-def local_x_errorgen(num_qubits, rate):
+def local_x_errorgen(num_qubits, rate, evotype=DEFAULT_EVOTYPE):
     state_space = QubitSpace(1)
     basis = BuiltinBasis('PP', state_space)
     errdict = {('S', bl): rate for bl in basis.labels[1:] if 'Y' not in bl and 'Z' not in bl}
     errgen = LindbladErrorgen.from_elementary_errorgens(
         errdict, "D", basis, mx_basis='pp',
-        truncate=False, evotype='stabilizer', state_space=state_space)
+        truncate=False, evotype=evotype, state_space=state_space)
     embedded_errorgens = []
     for i in range(num_qubits):
         embedded_errorgens.append(EmbeddedErrorgen(QubitSpace(num_qubits), [i], errgen))
-    composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype='stabilizer', state_space=QubitSpace(num_qubits))    
+    composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype=evotype, state_space=QubitSpace(num_qubits))    
         
     return composed_errorgen
     
 
-def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0, prep_err=0):
+def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0, prep_err=0,
+                evotype=DEFAULT_EVOTYPE):
     """
-    Builds a `stabilizer` evotype model with Lindblad gate noise (`error_rates`, per gate name),
-    an S(X) preparation error `prep_err` on every qubit, and an S(X) measurement error `meas_err`.
+    Builds a model with Lindblad gate noise (`error_rates`, per gate name), an S(X) preparation
+    error `prep_err` on every qubit, and an S(X) measurement error `meas_err`. Its `evotype` is
+    `stabilizer`, or `stabilizer_slow` when pyGSTi's extensions aren't built.
 
     The measurement error is a one-qubit POVM on purpose: pyGSTi builds every effect of an
     n-qubit POVM when a model is made, which is infeasible beyond about 14 qubits.
@@ -74,8 +82,8 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0
         state_space = QubitSpace(num_qubits)
         lindblad_errorgen = LindbladErrorgen.from_elementary_errorgens(erates,
                                                                        state_space=state_space,
-                                                                       evotype='stabilizer')
-        perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
+                                                                       evotype=evotype)
+        perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype=evotype)
         exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
         gate_mm = ComposedOp([perfect_gate, exp_errorgen])
         return gate_mm
@@ -92,15 +100,15 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0
 
     nqs = pspec.num_qubits
 
-    povm_errorgen = LindbladErrorgen.from_elementary_errorgens({('S', 'X'): meas_err}, state_space=QubitSpace(1), evotype='stabilizer')
+    povm_errorgen = LindbladErrorgen.from_elementary_errorgens({('S', 'X'): meas_err}, state_space=QubitSpace(1), evotype=evotype)
 
-    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(povm_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(povm_errorgen), ComputationalBasisPOVM(1, evotype=evotype, state_space=QubitSpace(1)))}
     
-    prep_errorgen = local_x_errorgen(nqs, prep_err) 
+    prep_errorgen = local_x_errorgen(nqs, prep_err, evotype) 
 
-    prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*nqs, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
+    prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*nqs, evotype=evotype), ExpErrorgenOp(prep_errorgen))}
 
-    model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype='stabilizer')
+    model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype=evotype)
     return model
 
 

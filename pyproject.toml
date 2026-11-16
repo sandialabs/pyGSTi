@@ -113,6 +113,7 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
+    'pymatching',
     'sympy',
     'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,reports]'
 ]

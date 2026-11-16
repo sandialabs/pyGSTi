@@ -14,7 +14,7 @@ import numbers as _numbers
 import numpy as _np
 import scipy.sparse as _sps
 from functools import partial as _partial
-from math import log2, sqrt
+from math import sqrt
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
