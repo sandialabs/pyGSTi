@@ -8,15 +8,10 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as np
 import stim
 import pygsti
 
 from pygsti.baseobjs import Label, QubitSpace, BuiltinBasis
-
-import pygsti.tools.errgenproptools as eprop
-from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
-from pygsti.baseobjs import Label, QubitSpace
 from pygsti.models import LocalNoiseModel
 from pygsti.modelmembers.operations import ComposedOp, LindbladErrorgen, ExpErrorgenOp, StaticCliffordOp, EmbeddedErrorgen, ComposedErrorgen
 from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
@@ -50,14 +45,11 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_
 
 def local_x_errorgen(num_qubits, rate):
     state_space = QubitSpace(1)
-    basis_size = state_space.dim  # e.g. 4 for a single qubit
     basis = BuiltinBasis('PP', state_space)
     errdict = {('S', bl): rate for bl in basis.labels[1:] if 'Y' not in bl and 'Z' not in bl}
     errgen = LindbladErrorgen.from_elementary_errorgens(
         errdict, "D", basis, mx_basis='pp',
         truncate=False, evotype='stabilizer', state_space=state_space)
-    #calling this twice is intentional. Second setting adds adjustment to get correct rate adjustment for depol probability.
-    #errgen.set_error_rates(errdict)
     embedded_errorgens = []
     for i in range(num_qubits):
         embedded_errorgens.append(EmbeddedErrorgen(QubitSpace(num_qubits), [i], errgen))
