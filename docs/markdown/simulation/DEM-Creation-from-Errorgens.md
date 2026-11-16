@@ -22,19 +22,16 @@ import stim
 import pygsti
 import pymatching
 
-#Error generator propagation
-from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
-
 #DEM construction
 from pygsti.extras.dem_construction import pygsti_object_builders as obj
 from pygsti.extras.dem_construction import dem_tools as dems
 ```
 
 ## Setting up an error model
-The function below constructs a family of H+S error models. Note that SPAM error is currently limited to uniform single-qubit error, and the error on mid-circuit measurements is modelled by (1) the `Mdefault` error, then (2) the perfect measurement with reset, then (3) the `rho0` error.
+The function below constructs a family of H+S error models for the gates. Preparation and measurement error are not part of it: they are the `prep_err` and `meas_err` arguments of `build_model` below, a uniform single-qubit S(X) error that applies to every qubit and to each mid-circuit reset and measurement.
 
 ```{code-cell} ipython3
-def make_sh_sweep_error_param_dict(p=1, h_scale=0, spam_error=0):
+def make_sh_sweep_error_param_dict(p=1, h_scale=0):
     error_rates_dict = {}
     error_rates_dict['Gh'] = {('H','Z'):np.sqrt(0.0001*p*h_scale),('H','X'):np.sqrt(0.0001*p*h_scale),
                               ('S','Z'):0.0001*p+0.0001*p*(1-h_scale),('S','Y'):0.0001*p,('S','X'):0.0001*p*(1-h_scale)}
@@ -44,95 +41,56 @@ def make_sh_sweep_error_param_dict(p=1, h_scale=0, spam_error=0):
                                  ('S', 'YX'):0.01*p/15, ('S', 'YY'):0.01*p/15, ('S', 'YZ'):0.01*p/15,
                                  ('S', 'ZX'):0.01*p/15+0.01*p*(1-h_scale), ('S', 'ZY'):0.01*p/15, ('S', 'ZZ'):0.01*p/15,
                                  ('S','XI'): 0.01*p/15,('S', 'YI'):0.01*p/15,('S', 'ZI'):0.01*p/15+0.01*p*(1-h_scale)}
-    error_rates_dict['Mdefault'] = {('S', 'X'): spam_error}
-    error_rates_dict['rho0'] = {('S', 'X'): 0}
     return error_rates_dict
 ```
 
-We also need a helper function for unrolling `REPEAT` blocks in stim circuits.
-
-```{code-cell} ipython3
-def unroll_repeat_blocks(circuit, add_2q_idles=False, add_measurement_idles=False):
-    new_circuit = stim.Circuit()
-    for operation in circuit:
-        if operation.name == "REPEAT":
-            for _ in range(operation.repeat_count):
-                for op in operation.body_copy():
-                    if op.name == "REPEAT":
-                        break  # Stop if we hit another repeat block
-                    new_circuit.append_operation(op.name, op.targets_copy(), op.gate_args_copy())
-                    if (op.name=='MR' or op.name=='R') and add_measurement_idles:
-                        unmeasured_qubits = set(range(circuit.num_qubits))-set(t.qubit_value for t in op.targets_copy())
-                        new_circuit.append_operation('I', unmeasured_qubits, op.gate_args_copy())
-                    elif (op.name=='CX' or op.name=='CZ') and add_2q_idles:
-                        unused_qubits = set(range(circuit.num_qubits))-set(t.qubit_value for t in op.targets_copy())
-                        new_circuit.append_operation('I', unused_qubits, op.gate_args_copy())
-        else:
-            new_circuit.append_operation(operation.name, operation.targets_copy())
-            if (operation.name=='MR' or operation.name=='R') and add_measurement_idles:
-                unmeasured_qubits = set(range(circuit.num_qubits))-set(t.qubit_value for t in operation.targets_copy())
-                new_circuit.append_operation('I', unmeasured_qubits, operation.gate_args_copy())
-            elif (operation.name=='CX' or operation.name=='CZ') and add_2q_idles:
-                unused_qubits = set(range(circuit.num_qubits))-set(t.qubit_value for t in operation.targets_copy())
-                new_circuit.append_operation('I', unused_qubits, operation.gate_args_copy())
-    return new_circuit
-```
-
 ## Building the circuit and model
-For demo purposes we construct a DEM for a single model and code distance, using a stim surface code memory circuit with detectors specified in it. You can replace this with another stim circuit. Note that there are known bugs for circuits where `OBSERVABLE_INCLUDE(n)` for a fixed `n` occurs at multiple points in the circuit.
+For demo purposes we construct a DEM for a single model and code distance, using a stim surface code memory circuit with detectors specified in it. You can replace this with another stim circuit, as long as it has no noise instructions, only Z-basis resets and measurements, and no feedback; anything else raises a `ValueError`. `REPEAT` blocks are handled by the converter.
 
 ```{code-cell} ipython3
 distance = 5
 p = 0.5
 hscale = 0.5
 rounds = distance
+meas_error = 0.005
 
-error_rates_dict = make_sh_sweep_error_param_dict(p=p, h_scale=hscale, spam_error=0)
+error_rates_dict = make_sh_sweep_error_param_dict(p=p, h_scale=hscale)
 
 stimc = stim.Circuit.generated("surface_code:rotated_memory_z", distance=distance, rounds=rounds)
-stimc = unroll_repeat_blocks(stimc)
 ```
 
-Next we convert the stim circuit to pyGSTi objects and build the noise model. Make sure `include_observables=True` when doing logical error rate estimation.
+Next we convert the stim circuit to pyGSTi objects and build the noise model. The converter returns the circuit with every reset starting a fresh virtual qubit and all measurements deferred to the end, the detectors and observables as signed Paulis on those virtual qubits, and `virtual_to_physical`, which gives the stim qubit of each virtual qubit. Passing `virtual_to_physical` to `create_processor_spec` puts the processor spec, and so the model, on the stim qubits. Here preparation is perfect and each measurement has an S(X) error of rate `meas_error`, a flip probability of about `meas_error`.
 
 ```{code-cell} ipython3
-pcircuit, qubit_mapping, measurements, detectors = obj.stim_to_pygsti_circuit(
-    stimc, range(stimc.num_qubits), include_idles=False, include_observables=True)
-pspec = obj.create_processor_spec(pcircuit, pcircuit.line_labels, gates=['Gh','Gcnot'])
-n_qubits = len(pcircuit.line_labels)
-model = obj.build_model(error_rates_dict, pspec, oneQ_gate_names=['Gh'], twoQ_gate_names=['Gcnot'])
+pcircuit, detectors, observables, virtual_to_physical = obj.stim_to_pygsti_circuit(stimc)
+pspec = obj.create_processor_spec(pcircuit, list(range(stimc.num_qubits)), gates=['Gh','Gcnot'],
+                                  virtual_to_physical=virtual_to_physical)
+model = obj.build_model(error_rates_dict, pspec, oneQ_gate_names=['Gh'], twoQ_gate_names=['Gcnot'],
+                        meas_err=meas_error, prep_err=0)
 ```
+
+Alternatively the model can be built on the converted circuit's own qubits, by calling `create_processor_spec` on `pcircuit` without `virtual_to_physical` and `end_of_circuit_errorgen` below without it. That is the place to start when the noise differs between rounds, since each round's qubits are then separate qubits of the model.
 
 ## Constructing the DEM step by step
-First we represent each detector as a Pauli operator, given by the product of the Paulis of the measurements it references.
+First we propagate the error generators to the end of the circuit and combine them into a single end-of-circuit error generator using the first-order BCH approximation. This includes the preparation and measurement error. The function also returns the tableau of the whole ideal circuit.
 
 ```{code-cell} ipython3
-dets_as_pauli_strings = [dems.get_detector_as_parity(det, measurements, n_qubits) for det in detectors]
+eoc_eeg, tableau = dems.end_of_circuit_errorgen(pcircuit, model, virtual_to_physical)
 ```
 
 Next we set up a `stim.TableauSimulator` for the ideal circuit, which is needed to compute the contributions of error generators to DEM events.
 
 ```{code-cell} ipython3
-pcircuit_serial = pcircuit.serialize()
-stim_c_no_extras = obj.pygsti_c_to_stim(pcircuit_serial, include_measurement=False)
-tableau = stim.Tableau.from_circuit(stim_c_no_extras)
 sim = stim.TableauSimulator()
-sim.set_inverse_tableau(tableau**-1)
+sim.do_tableau(tableau, list(range(len(virtual_to_physical))))
 ```
 
-We then propagate the error generators to the end of the circuit and combine them into a single end-of-circuit error generator using the first-order BCH approximation.
+Finally we construct the DEM. The detectors and observables are signed Paulis, and `generate_dem_higher_order` accepts either ideal sign. It returns the DEM as a dictionary mapping flip bitstrings to probabilities, which `format_dem_stim` converts into a stim DEM, given the number of detectors and of observables.
 
 ```{code-cell} ipython3
-egp = ErrorGeneratorPropagator(model)
-eoc_eeg = egp.propagate_errorgens_bch(pcircuit_serial, bch_order=1, include_spam=True)
-```
-
-Finally we construct the DEM. `generate_dem_higher_order` returns the DEM as a dictionary mapping detector-flip bitstrings to probabilities, which `format_dem_stim` converts into a stim DEM string.
-
-```{code-cell} ipython3
-total_dem = dems.generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim, zassenhaus_order=1)
-stim_dem_str = dems.format_dem_stim(total_dem, n_logical=stimc.num_observables)
-stim_dem = stim.DetectorErrorModel(stim_dem_str)
+paulis = list(detectors) + list(observables)
+total_dem = dems.generate_dem_higher_order(paulis, eoc_eeg, sim, zassenhaus_order=1)
+stim_dem = dems.format_dem_stim(total_dem, len(detectors), len(observables))
 ```
 
 ## Decoding with pymatching
@@ -153,11 +111,16 @@ print(f'LER of {ler} for distance={distance}, p={p}')
 ```
 
 ## Building the DEM in one call
-`build_dem_end2end` combines the steps above into a single call: detector-to-Pauli conversion, simulator setup, error generator propagation, and DEM construction. It takes the un-serialized circuit returned by `stim_to_pygsti_circuit`, together with its detectors and measurements.
+`build_dem_end2end` combines the steps above into a single call: conversion, error generator propagation, simulator setup, and DEM construction. It takes the stim circuit and the model, and returns a `stim.DetectorErrorModel`.
 
 ```{code-cell} ipython3
-stim_dem_e2e = dems.build_dem_end2end(pcircuit, model, detectors, measurements,
-                                      n_logical=stimc.num_observables, zassenhaus_order=1)
+stim_dem_e2e = dems.build_dem_end2end(stimc, model, zassenhaus_order=1)
+```
+
+Both routes give the same DEM, which we check here.
+
+```{code-cell} ipython3
+assert stim_dem.approx_equals(stim_dem_e2e, atol=1e-9)
 ```
 
 The result can be decoded exactly as before.

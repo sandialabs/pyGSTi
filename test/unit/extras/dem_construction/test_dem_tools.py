@@ -8,7 +8,8 @@ import pygsti
 from pygsti.baseobjs import Label, QubitSpace
 from pygsti.extras.dem_construction import dem_tools
 from pygsti.extras.dem_construction.dem_tools import build_dem_end2end
-from pygsti.extras.dem_construction.pygsti_object_builders import build_model, stim_to_pygsti_circuit
+from pygsti.extras.dem_construction.pygsti_object_builders import (
+    build_model, create_processor_spec, stim_to_pygsti_circuit)
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.modelmembers.operations import ExpErrorgenOp, LindbladErrorgen
 from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
@@ -335,16 +336,41 @@ def _with_pauli_noise(circuit, rates):
     return noisy
 
 
-def test_surface_code_matches_stims_dem_for_pauli_noise():
+def _dem_by_steps(circuit, gate_rates, meas_err, prep_err):
+    """ The step-by-step route, with the model on the expanded circuit's qubits. """
+    pyg, detectors, observables, v2p = stim_to_pygsti_circuit(circuit)
+    pspec = create_processor_spec(pyg, list(range(len(v2p))))
+    model = build_model(gate_rates, pspec, ['Gh'], ['Gcnot'], meas_err=meas_err, prep_err=prep_err)
+    eoc_eeg, tableau = dem_tools.end_of_circuit_errorgen(pyg, model)
+    sim = stim.TableauSimulator()
+    sim.do_tableau(tableau, list(range(len(v2p))))
+    dem_dict = dem_tools.generate_dem_higher_order(list(detectors) + list(observables), eoc_eeg, sim)
+    return dem_tools.format_dem_stim(dem_dict, len(detectors), len(observables))
+
+
+@pytest.mark.parametrize('route', ['end2end_stim_qubits', 'steps_expanded_qubits'])
+def test_surface_code_matches_stims_dem_for_pauli_noise(route):
     circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3)
     rates = {'Gcnot': 0.004, 'Gh': 0.003, 'prep': 0.005, 'povm': 0.006}
+    gate_rates = {'Gcnot': {('S', 'IX'): rates['Gcnot']}, 'Gh': {('S', 'Z'): rates['Gh']}}
     # build_model's one-qubit POVM: create_crosstalk_free_model builds every effect of a 26-qubit one
-    model = build_model({'Gcnot': {('S', 'IX'): rates['Gcnot']}, 'Gh': {('S', 'Z'): rates['Gh']}},
-                        _spec_for(circuit, True), ['Gh'], ['Gcnot'], meas_err=rates['povm'], prep_err=rates['prep'])
-    dem = build_dem_end2end(circuit, model)
+    if route == 'end2end_stim_qubits':
+        pyg, _, _, v2p = stim_to_pygsti_circuit(circuit)
+        pspec = create_processor_spec(pyg, list(range(circuit.num_qubits)), virtual_to_physical=v2p)
+        model = build_model(gate_rates, pspec, ['Gh'], ['Gcnot'], meas_err=rates['povm'], prep_err=rates['prep'])
+        dem = build_dem_end2end(circuit, model)
+    else:
+        dem = _dem_by_steps(circuit, gate_rates, rates['povm'], rates['prep'])
     ours = _stim_events(dem)
     reference = _stim_events(_with_pauli_noise(circuit, rates).detector_error_model())
     assert ours
     assert ours.keys() == reference.keys()
     for event, rate in ours.items():
         assert rate == pytest.approx(reference[event], rel=1e-9)
+
+
+def test_end_of_circuit_errorgen_without_map_needs_zero_based_line_labels():
+    # Without a map the model is taken to be on the circuit's qubits; other labels would be misplaced silently
+    model = build_model({'Gh': {('S', 'Z'): 0.01}}, _pspec(2, ['Gh'], {}), ['Gh'], [])
+    with pytest.raises(ValueError):
+        dem_tools.end_of_circuit_errorgen(pygsti.circuits.Circuit([('Gh', 5)], line_labels=[5, 7]), model)

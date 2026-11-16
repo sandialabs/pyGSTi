@@ -24,17 +24,23 @@ from pygsti.modelmembers.povms import ComposedPOVM, ComputationalBasisPOVM
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 
 
-def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
+def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_to_physical=None):
     """
     Creates a processor spec that from a pyGSTi syndrome extraction circuit, containing the 
     required gates (CNOTs between qubits that are coupled in those circuits). Will then be
     used to define the noise model we simulate.
+
+    If `virtual_to_physical` (as returned by `stim_to_pygsti_circuit`) is given, each
+    connection is mapped through it and duplicates are dropped, so that the spec is on the
+    stim qubits, and `qubit_labels` should be those.
     """
     ###Note to future self: watch out for the possibility of wanting other gates###
     pyg_cstr = pcircuit.str
     # Find all the CNOT gates used in the circuit, using brute force string comprehension
     cleaned_pcstr = pyg_cstr.replace(']', '').replace('[', '').split('@')[0]
     connections = [(int(s.split(':')[1]), int(s.split(':')[2])) for s in cleaned_pcstr.split('G') if len(s.split(':')) > 2]
+    if virtual_to_physical is not None:
+        connections = list(dict.fromkeys((virtual_to_physical[a], virtual_to_physical[b]) for a, b in connections))
     availability={'Gcnot':connections, 'Gcphase':connections}
     pspec = pygsti.processors.QubitProcessorSpec(len(qubit_labels), gates, qubit_labels=qubit_labels,
                                              availability=availability)
@@ -178,6 +184,7 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
         name = inst.name
         targets = inst.targets_copy()
         if name in ('TICK', 'QUBIT_COORDS', 'SHIFT_COORDS'):
+            # Note for future development: TICK information is relevant for time-dependent error
             continue
 
         if name in ('DETECTOR', 'OBSERVABLE_INCLUDE'):

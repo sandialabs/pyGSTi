@@ -127,9 +127,19 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim, zassenhaus_or
     """
     Groups the error generators by the DEM event they flip, rates each event, and composes
     the events of the Zassenhaus commutator channels. Returns a dictionary of event bit
-    strings (one bit per detector) to probabilities. Every Pauli must have ideal value +1 on
-    the state held by `sim`.
+    strings (one bit per Pauli) to probabilities. Each Pauli may have ideal value +1 or -1 on
+    the state held by `sim` (its sign is folded in); a Pauli with any other ideal value
+    raises a `ValueError`.
     """
+    folded = []
+    for i, pauli in enumerate(dets_as_pauli_strings):
+        expectation = sim.peek_observable_expectation(pauli)
+        if expectation == 0:
+            raise ValueError(f'The Pauli {i} is not deterministic in the noiseless circuit, '
+                             'so it has no error model.')
+        folded.append(-pauli if expectation == -1 else pauli)
+    dets_as_pauli_strings = folded
+
     dem = defaultdict(float)
     term_sorting = sort_terms_by_effect(eoc_eeg, dets_as_pauli_strings)
     generator_split, base_events = split_generator(term_sorting, eoc_eeg)
@@ -165,12 +175,41 @@ def estimate_error_rate_exact(edict):
     return contribution
 
 
-def _end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical):
+def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
     """
-    The end-of-circuit error generator of an expanded circuit under a model on the physical
-    qubits (first-order BCH): a dictionary of `LocalStimErrorgenLabel` to rate on the virtual
-    qubits, and the `stim.Tableau` of the whole circuit.
+    The end-of-circuit error generator of an expanded circuit under a noise model, combined
+    to first order in BCH.
+
+    Parameters
+    ----------
+    pyg_circuit : pygsti.circuits.Circuit
+        The expanded circuit from `stim_to_pygsti_circuit`, on virtual qubits.
+
+    model : pygsti.models.OpModel
+        A model of the `stabilizer` evotype with Lindblad noise, in one of two placements.
+        With `virtual_to_physical`, it is on the stim qubits. Without it, it is on the
+        circuit's own (virtual) qubits, which allows noise that differs between rounds.
+
+    virtual_to_physical : list of int, optional
+        As returned by `stim_to_pygsti_circuit`. If None, the identity map, which requires the
+        circuit's line labels to be `0..n-1`; otherwise a `ValueError` is raised.
+
+    Returns
+    -------
+    dict
+        `LocalStimErrorgenLabel` to rate, on the virtual qubits, for the gates' noise and for
+        preparation and measurement noise. Preparation error is applied to the start state of
+        every qubit and measurement error to the final measurement of every qubit; a model
+        with a one-qubit preparation or measurement operator applies its error to every
+        qubit, otherwise a term on a qubit applies to that qubit only.
+    stim.Tableau
+        The tableau of the whole circuit.
     """
+    if virtual_to_physical is None:
+        virtual_to_physical = list(range(len(pyg_circuit.line_labels)))
+        if list(pyg_circuit.line_labels) != virtual_to_physical:
+            raise ValueError('Without virtual_to_physical, the circuit\'s line labels must be 0..n-1, not '
+                             f'{list(pyg_circuit.line_labels)}.')
     n_virtual = len(virtual_to_physical)
     sslbls = list(range(n_virtual))
 
@@ -281,19 +320,11 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
     pyg_circuit, detectors, observables, virtual_to_physical = stim_to_pygsti_circuit(
         circuit, include_idles, include_meas_idles)
     n_virtual = len(virtual_to_physical)
-    eoc_eeg, tableau = _end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical)
+    eoc_eeg, tableau = end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical)
 
     sim = stim.TableauSimulator()
     sim.do_tableau(tableau, list(range(n_virtual)))
 
-    paulis = []
-    for kind, kind_paulis in (('detector', detectors), ('observable', observables)):
-        for i, pauli in enumerate(kind_paulis):
-            expectation = sim.peek_observable_expectation(pauli)
-            if expectation == 0:
-                raise ValueError(f'The {kind} {i} is not deterministic in the noiseless circuit, '
-                                 'so it has no error model.')
-            paulis.append(-pauli if expectation == -1 else pauli)  # every ideal value is +1
-
-    dem_dict = generate_dem_higher_order(paulis, eoc_eeg, sim, zassenhaus_order=zassenhaus_order)
+    dem_dict = generate_dem_higher_order(list(detectors) + list(observables), eoc_eeg, sim,
+                                         zassenhaus_order=zassenhaus_order)
     return format_dem_stim(dem_dict, len(detectors), len(observables))
