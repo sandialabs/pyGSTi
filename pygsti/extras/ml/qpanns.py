@@ -46,6 +46,13 @@ class QPANN(_keras.Model):
     gauge freedom of the learned error rates (as in GST), so compare learned rates only after
     gauge fixing, or compare predictions.
 
+    Instead of bit string probabilities, a QPANN can predict expectation values of Pauli
+    observables: build the tensors with `encoding.error_generator_tensors(...,
+    pauli_observables=...)` and pass its 'expectations' (ideal expectation values) where the
+    ideal probabilities would otherwise go. Everything else is unchanged, and this composes with
+    SPAM error modelling (pass `include_spam=True` as well; the measurement error layer then acts
+    right before an ideal measurement of each observable).
+
     Attributes
     ----------
     encoding_length : int
