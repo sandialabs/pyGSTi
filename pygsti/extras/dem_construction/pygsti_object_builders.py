@@ -32,16 +32,16 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_
     used to define the noise model we simulate.
 
     If `virtual_to_physical` (as returned by `stim_to_pygsti_circuit`) is given, each
-    connection is mapped through it and duplicates are dropped, so that the spec is on the
-    stim qubits, and `qubit_labels` should be those.
+    connection is mapped through it, so that the spec is on the stim qubits, and
+    `qubit_labels` should be those. Duplicate connections are dropped.
     """
     ###Note to future self: watch out for the possibility of wanting other gates###
-    pyg_cstr = pcircuit.str
-    # Find all the CNOT gates used in the circuit, using brute force string comprehension
-    cleaned_pcstr = pyg_cstr.replace(']', '').replace('[', '').split('@')[0]
-    connections = [(int(s.split(':')[1]), int(s.split(':')[2])) for s in cleaned_pcstr.split('G') if len(s.split(':')) > 2]
+    # The qubit pairs of the circuit's two-qubit gates, read from its layer labels
+    connections = [tuple(c.qubits) for i in range(pcircuit.depth)
+                   for c in pcircuit.layer_label(i).components if len(c.qubits) == 2]
     if virtual_to_physical is not None:
-        connections = list(dict.fromkeys((virtual_to_physical[a], virtual_to_physical[b]) for a, b in connections))
+        connections = [tuple(virtual_to_physical[q] for q in pair) for pair in connections]
+    connections = list(dict.fromkeys(connections))
     availability={'Gcnot':connections, 'Gcphase':connections}
     pspec = pygsti.processors.QubitProcessorSpec(len(qubit_labels), gates, qubit_labels=qubit_labels,
                                              availability=availability)
@@ -135,6 +135,12 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
     Converts a non-adaptive `stim.Circuit` into a pyGSTi circuit in which every reset starts a
     fresh virtual qubit and all measurements are deferred to the end.
 
+    A layer is a time step of the stim circuit, the instructions between two `TICK`s. A step
+    with a gate, `M`, `R` or `MR` gives one layer, which is empty when the step has only
+    measurements and resets (and no idles are added). A step with none of these gives no
+    layer. A gate on a qubit that a gate of the step's open layer already uses starts a new
+    layer, so such a step gives more than one.
+
     Parameters
     ----------
     circuit : stim.Circuit
@@ -143,11 +149,13 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
         without resetting it.
 
     include_idles : bool
-        Add an idle gate on every live qubit not touched by each gate layer.
+        For each step with gates, add an idle gate on every live qubit that no gate, `M`,
+        `R` or `MR` of the step touches, in the step's last layer. Needs `TICK`s in the
+        circuit, else a `ValueError` is raised.
 
     include_meas_idles : bool
-        Add a layer of idle gates on every live qubit not touched by each `M`, `R` or `MR`
-        instruction.
+        The same for each step that has no gates but has an `M`, `R` or `MR`. Needs `TICK`s
+        in the circuit, else a `ValueError` is raised.
 
     Returns
     -------
@@ -160,6 +168,10 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
     virtual_to_physical : list of int
         The stim qubit each virtual qubit stands for.
     """
+    if (include_idles or include_meas_idles) and circuit.num_ticks == 0:
+        raise ValueError("Idle gates are placed per time step, the run of instructions between "
+                         "`TICK`s, and this circuit has no `TICK`; add `TICK`s or turn off "
+                         "`include_idles` and `include_meas_idles`.")
     table = standard_gatenames_stim_conversions()
     idle_name = _pygsti_gate('I', table)[0]
     n_phys = circuit.num_qubits
@@ -173,18 +185,38 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
     detector_idx = []
     observable_idx = {}
 
-    def idles(skip):
-        return [(idle_name, virt[q]) for q in range(n_phys) if state[q] != MEASURED and q not in skip]
+    # The open time step: its open layer, the qubits that layer uses, every qubit any gate, `M`,
+    # `R` or `MR` of the step touched, and whether the step has gates or measurements/resets.
+    step = {'layer': [], 'used': set(), 'touched': set(), 'gates': False, 'has_meas': False}
 
     def reuse_error(inst, q):
         return ValueError(f"Qubit {q} is used after being measured without a reset in "
                           f"instruction '{inst}'; add an `R` (or `MR`) on it first.")
 
+    def close_layer(add_idles):
+        layer = list(step['layer'])
+        if add_idles:
+            layer += [(idle_name, virt[q]) for q in range(n_phys)
+                      if state[q] != MEASURED and q not in step['touched']]
+        step['layer'], step['used'] = [], set()
+        return layer
+
+    def end_step():
+        # A step with gates closes its last layer; a gate-free step with `M`/`R`/`MR` gives
+        # one (possibly empty) layer; any other step gives none.
+        if step['gates']:
+            layers.append(close_layer(include_idles))
+        elif step['has_meas']:
+            layers.append(close_layer(include_meas_idles))
+        step['touched'], step['gates'], step['has_meas'] = set(), False, False
+
     for inst in circuit.flattened():
         name = inst.name
         targets = inst.targets_copy()
-        if name in ('TICK', 'QUBIT_COORDS', 'SHIFT_COORDS'):
-            # Note for future development: TICK information is relevant for time-dependent error
+        if name == 'TICK':
+            end_step()
+            continue
+        if name in ('QUBIT_COORDS', 'SHIFT_COORDS'):
             continue
 
         if name in ('DETECTOR', 'OBSERVABLE_INCLUDE'):
@@ -218,11 +250,8 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
                     virt[q] = len(virtual_to_physical)
                     virtual_to_physical.append(q)
                     state[q] = FRESH
-            if include_meas_idles and targets:
-                touched = {t.value for t in targets}
-                layer = idles(touched)
-                if layer:
-                    layers.append(layer)
+                step['touched'].add(q)
+                step['has_meas'] = True
             continue
 
         # X- and Y-basis resets and measurements are refused rather than rewritten as Z-basis
@@ -242,26 +271,19 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
                              "(`rec[...]` or `sweep[...]` targets) are not supported.")
         pyg_name, arity = match
 
-        layer, used = [], set()
-
-        def flush():
-            if include_idles:
-                layer.extend(idles(used))
-            layers.append(list(layer))
-
         for i in range(0, len(targets), arity):
             qs = [t.value for t in targets[i:i + arity]]
             if any(state[q] == MEASURED for q in qs):
                 raise reuse_error(inst, next(q for q in qs if state[q] == MEASURED))
-            if used & set(qs):
-                flush()
-                layer, used = [], set()
-            used |= set(qs)
-            layer.append((pyg_name,) + tuple(virt[q] for q in qs))
+            if step['used'] & set(qs):
+                layers.append(close_layer(False))
+            step['used'] |= set(qs)
+            step['touched'] |= set(qs)
+            step['gates'] = True
+            step['layer'].append((pyg_name,) + tuple(virt[q] for q in qs))
             for q in qs:
                 state[q] = ACTIVE
-        if layer:
-            flush()
+    end_step()
 
     n_virtual = len(virtual_to_physical)
     pyg_circuit = pygsti.circuits.Circuit(layers, line_labels=tuple(range(n_virtual)))

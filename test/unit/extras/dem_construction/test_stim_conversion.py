@@ -60,7 +60,7 @@ def test_signs_and_observable_indices():
     assert obs == [stim.PauliString('+ZZ')]
 
     pyg, _, _, _ = stim_to_pygsti_circuit(stim.Circuit("M(0) 0"))
-    assert pyg.depth == 0
+    assert all(not layer for layer in _layers(pyg))
 
 
 def test_gate_translation_matches_stim_tableau():
@@ -98,7 +98,7 @@ def test_gate_translation_matches_stim_tableau():
     ("CX 0 1\nM 1\nCX 1 2", False, 'reset'),
     ("M 0\nM 0", False, 'reset'),
     ("M 0\nH 0", False, 'reset'),
-    ("M 0\nH 0", True, 'reset'),
+    ("M 0\nTICK\nH 0", True, 'reset'),
     ("M 0\nOBSERVABLE_INCLUDE(0) X1", False, 'OBSERVABLE_INCLUDE'),
     ("M 0\nDETECTOR rec[-2]", False, 'DETECTOR'),
 ])
@@ -115,12 +115,60 @@ def test_reset_of_used_or_measured_qubit_allocates_virtual_qubit(text):
     assert v2p == [0, 0]
 
 
-def test_idle_gates():
-    pyg, _, _, _ = stim_to_pygsti_circuit(stim.Circuit("M 2\nH 0"), include_idles=True)
-    assert _layers(pyg) == [[('Gh', 0), ('Gi', 1)]]
+_TICKED = """
+    R 0 1 2
+    TICK
+    CX 0 1
+    X 2
+    TICK
+    CX 2 1
+    TICK
+    M 1
+    DETECTOR rec[-1]
+    TICK
+    M 0 2
+    OBSERVABLE_INCLUDE(0) rec[-1]
+    DETECTOR rec[-1] rec[-2]
+"""
 
-    pyg, _, _, _ = stim_to_pygsti_circuit(stim.Circuit("H 0 1\nMR 1\nH 0"), include_meas_idles=True)
-    assert _layers(pyg) == [[('Gh', 0), ('Gh', 1)], [('Gi', 0)], [('Gh', 0)]]
 
-    pyg, _, _, _ = stim_to_pygsti_circuit(stim.Circuit("H 0 1\nMR 1\nH 0"))
-    assert all(lbl[0] != 'Gi' for layer in _layers(pyg) for lbl in layer)
+def _convert(text, **kwargs):
+    return _layers(stim_to_pygsti_circuit(stim.Circuit(text), **kwargs)[0])
+
+
+def test_layers_follow_ticks():
+    assert _convert(_TICKED) == [[], [('Gcnot', 0, 1), ('Gxpi', 2)], [('Gcnot', 2, 1)], [], []]
+    assert _convert(_TICKED.replace('TICK\n    CX 2 1', 'TICK\n    TICK\n    CX 2 1')) == \
+        _convert(_TICKED)
+
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=2)
+    pyg, _, _, _ = stim_to_pygsti_circuit(circuit)
+    assert pyg.depth == circuit.num_ticks + 1
+
+
+def test_idle_gates_once_per_tick():
+    both = dict(include_idles=True, include_meas_idles=True)
+    gate_step = [('Gcnot', 0, 1), ('Gxpi', 2)]
+    assert _convert(_TICKED, include_idles=True) == [[], gate_step, [('Gcnot', 2, 1), ('Gi', 0)], [], []]
+    assert _convert(_TICKED, include_meas_idles=True) == [[], gate_step, [('Gcnot', 2, 1)],
+                                                          [('Gi', 0), ('Gi', 2)], []]
+    assert _convert(_TICKED, **both) == [[], gate_step, [('Gcnot', 2, 1), ('Gi', 0)],
+                                         [('Gi', 0), ('Gi', 2)], []]
+    assert all(lbl[0] != 'Gi' for layer in _convert(_TICKED) for lbl in layer)
+
+    mixed = "R 0 1\nTICK\nH 0\nMR 1\nTICK\nH 0\nTICK\nM 0"
+    assert _convert(mixed, include_idles=True) == [[], [('Gh', 0)], [('Gh', 0), ('Gi', 2)], []]
+    assert _convert(mixed, include_meas_idles=True) == [[], [('Gh', 0)], [('Gh', 0)], [('Gi', 2)]]
+
+    split = "R 0 1 2\nTICK\nCX 0 1\nCX 1 2\nTICK\nM 0 1 2"
+    assert _convert(split, include_idles=True) == [[], [('Gcnot', 0, 1)], [('Gcnot', 1, 2)], []]
+    split4 = "R 0 1 2 3\nTICK\nCX 0 1\nCX 1 2\nTICK\nM 0 1 2 3"
+    assert _convert(split4, include_idles=True) == [[], [('Gcnot', 0, 1)], [('Gcnot', 1, 2), ('Gi', 3)], []]
+
+
+@pytest.mark.parametrize('flag', ['include_idles', 'include_meas_idles'])
+def test_idles_without_ticks_raise(flag):
+    circuit = stim.Circuit("R 0\nH 0\nM 0")
+    with pytest.raises(ValueError, match='TICK'):
+        stim_to_pygsti_circuit(circuit, **{flag: True})
+    stim_to_pygsti_circuit(circuit)

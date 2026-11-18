@@ -303,6 +303,18 @@ def test_add_to_dem_converts_rates_to_real_floats():
         dem_tools.add_to_dem({'1': 0.0}, ['1'], [{label: complex(0.01, 1e-3)}], [stim.PauliString('Z')], sim)
 
 
+def test_negative_rates_warn(recwarn):
+    with pytest.warns(UserWarning) as record:
+        dem = dem_tools.format_dem_stim({'10': -0.01, '01': 0.02}, 2, 0)
+    assert len(record) == 1
+    assert len(dem) == 1 and dem.num_detectors == 2
+    assert dem[0].targets_copy() == [stim.target_relative_detector_id(1)]
+
+    recwarn.clear()
+    dem_tools.format_dem_stim({'10': 0.01, '01': 0.02, '11': 0.0}, 2, 0)
+    assert len(recwarn) == 0
+
+
 def _stim_events(dem):
     """ Event (its detector and observable targets) to rate, with repeated events combined. """
     events = {}
@@ -369,6 +381,37 @@ def test_surface_code_matches_stims_dem_for_pauli_noise(route):
     assert ours.keys() == reference.keys()
     for event, rate in ours.items():
         assert rate == pytest.approx(reference[event], rel=1e-9)
+
+
+def test_idle_noise_matches_stims_dem():
+    rate = 0.01
+    flip = (1 - math.exp(-2 * rate)) / 2
+    body = """
+        R 0 1 2
+        TICK
+        CX 0 1
+        X 2
+        TICK
+        CX 2 1
+        {noise}
+        TICK
+        M 1
+        DETECTOR rec[-1]
+        TICK
+        M 0 2
+        OBSERVABLE_INCLUDE(0) rec[-1]
+        DETECTOR rec[-1] rec[-2]
+    """
+    clean = stim.Circuit(body.format(noise=''))
+    noisy = stim.Circuit(body.format(noise=f'X_ERROR({flip}) 0'))
+    pspec = _pspec(3, ['Gcnot', 'Gxpi', 'Gi'], {'Gcnot': {(0, 1), (2, 1)}})
+    model = build_model({'Gcnot': {('S', 'XI'): 0.0}, 'Gxpi': {('S', 'X'): 0.0}, 'Gi': {('S', 'X'): rate}},
+                        pspec, ['Gxpi', 'Gi'], ['Gcnot'])
+    ours = _stim_events(build_dem_end2end(clean, model, include_idles=True))
+    reference = _stim_events(noisy.detector_error_model())
+    assert ours.keys() == reference.keys() and len(ours) == 1
+    for event, p in ours.items():
+        assert p == pytest.approx(reference[event], rel=1e-9)
 
 
 def test_end_of_circuit_errorgen_without_map_needs_zero_based_line_labels():

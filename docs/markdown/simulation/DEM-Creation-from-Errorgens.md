@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Detector Error Models from Error Generators
-This tutorial demonstrates constructing a stim detector error model (DEM) from pyGSTi error generators using `pygsti.extras.dem_construction`, and using it for decoding with `pymatching`. This module is under active development, so the API shown here may change.
+This tutorial demonstrates constructing a Stim detector error model (DEM) from pyGSTi error generators using `pygsti.extras.dem_construction`, and using it for decoding with `pymatching`. This module is under active development, so the API shown here may change.
 
 This tutorial requires the `stim` and `pymatching` python packages.
 
@@ -45,7 +45,7 @@ def make_sh_sweep_error_param_dict(p=1, h_scale=0):
 ```
 
 ## Building the circuit and model
-For demo purposes we construct a DEM for a single model and code distance, using a stim surface code memory circuit with detectors specified in it. You can replace this with another stim circuit, as long as it has no noise instructions, only Z-basis resets and measurements, and no feedback; anything else raises a `ValueError`. `REPEAT` blocks are handled by the converter.
+For demo purposes we construct a DEM for a single model and code distance, using a Stim surface code memory circuit with detectors specified in it. You can replace this with another Stim circuit, as long as it has no noise instructions, only Z-basis resets and measurements, and no feedback; anything else raises a `ValueError`. `REPEAT` blocks are handled by the converter.
 
 ```{code-cell} ipython3
 distance = 5
@@ -59,7 +59,7 @@ error_rates_dict = make_sh_sweep_error_param_dict(p=p, h_scale=hscale)
 stimc = stim.Circuit.generated("surface_code:rotated_memory_z", distance=distance, rounds=rounds)
 ```
 
-Next we convert the stim circuit to pyGSTi objects and build the noise model. The converter returns the circuit with every reset starting a fresh virtual qubit and all measurements deferred to the end, the detectors and observables as signed Paulis on those virtual qubits, and `virtual_to_physical`, which gives the stim qubit of each virtual qubit. Passing `virtual_to_physical` to `create_processor_spec` puts the processor spec, and so the model, on the stim qubits. Here preparation is perfect and each measurement has an S(X) error of rate `meas_error`, a flip probability of about `meas_error`.
+Next we convert the Stim circuit to pyGSTi objects and build the noise model. The converter returns the circuit with every reset starting a fresh virtual qubit, all measurements deferred to the end and one layer per time step of the circuit (the instructions between two `TICK`s), the detectors and observables as signed Paulis on those virtual qubits, and `virtual_to_physical`, which gives the Stim qubit of each virtual qubit. Passing `virtual_to_physical` to `create_processor_spec` puts the processor spec, and so the model, on the Stim qubits. Here preparation is perfect and each measurement has an S(X) error of rate `meas_error`, a flip probability of about `meas_error`.
 
 ```{code-cell} ipython3
 pcircuit, detectors, observables, virtual_to_physical = obj.stim_to_pygsti_circuit(stimc)
@@ -85,7 +85,7 @@ sim = stim.TableauSimulator()
 sim.do_tableau(tableau, list(range(len(virtual_to_physical))))
 ```
 
-Finally we construct the DEM. The detectors and observables are signed Paulis, and `generate_dem_higher_order` accepts either ideal sign. It returns the DEM as a dictionary mapping flip bitstrings to probabilities, which `format_dem_stim` converts into a stim DEM, given the number of detectors and of observables.
+Finally we construct the DEM. The detectors and observables are signed Paulis, and `generate_dem_higher_order` accepts either ideal sign. It returns the DEM as a dictionary mapping flip bitstrings to probabilities, which `format_dem_stim` converts into a Stim DEM, given the number of detectors and of observables.
 
 ```{code-cell} ipython3
 paulis = list(detectors) + list(observables)
@@ -111,7 +111,7 @@ print(f'LER of {ler} for distance={distance}, p={p}')
 ```
 
 ## Building the DEM in one call
-`build_dem_end2end` combines the steps above into a single call: conversion, error generator propagation, simulator setup, and DEM construction. It takes the stim circuit and the model, and returns a `stim.DetectorErrorModel`.
+`build_dem_end2end` combines the steps above into a single call: conversion, error generator propagation, simulator setup, and DEM construction. It takes the Stim circuit and the model, and returns a `stim.DetectorErrorModel`.
 
 ```{code-cell} ipython3
 stim_dem_e2e = dems.build_dem_end2end(stimc, model, zassenhaus_order=1)

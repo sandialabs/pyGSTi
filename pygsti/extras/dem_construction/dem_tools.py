@@ -9,6 +9,7 @@
 #***************************************************************************************************
 import numpy as np
 import itertools
+import warnings as _warnings
 import stim
 
 from collections import defaultdict
@@ -24,9 +25,17 @@ def format_dem_stim(dem_dict, n_detectors, n_observables):
     """
     Builds a `stim.DetectorErrorModel` from a dictionary of event bit strings (detectors, then
     observables) to probabilities. Non-positive probabilities are dropped, and the result
-    always declares `n_detectors` detectors and `n_observables` observables.
+    always declares `n_detectors` detectors and `n_observables` observables. Dropping
+    negative probabilities, which come from the method's approximations, gives one
+    `UserWarning` per call.
     """
     dem = stim.DetectorErrorModel()
+    negative = [prob for prob in dem_dict.values() if prob < 0]
+    if negative:
+        _warnings.warn(f"{len(negative)} detector error model event(s) with a negative rate were "
+                       f"dropped (the most negative is {min(negative):.3g}). Negative rates come "
+                       "from the method's approximations, such as the second-order commutator "
+                       "channel and C and A terms.", stacklevel=2)
     for event, prob in dem_dict.items():
         if prob > 0:
             targets = [stim.target_relative_detector_id(i) for i in range(n_detectors) if event[i] == '1']
@@ -47,24 +56,17 @@ def compute_contribution_bulk(eegs, rates, det_pauli, sim):
 
 
 def sort_terms_by_effect(terms, detectors):
-    """ Groups error generators by the bit string of the detectors that their first Pauli flips. """
-    sorted_terms = defaultdict(list)
-    for eeg in terms:
+    """
+    Groups a dictionary of error generators to rates by the bit string of the detectors that
+    their first Pauli flips. Returns one dictionary of rates per event, and the events.
+    """
+    sorted_terms = defaultdict(dict)
+    for eeg, rate in terms.items():
         P = eeg.basis_element_labels[0]
         det_string = ''.join('0' if P.commutes(det_pauli) else '1' for det_pauli in detectors)
-        sorted_terms[det_string].append(eeg)
+        sorted_terms[det_string][eeg] = rate
 
-    return dict(sorted_terms)
-
-
-def split_generator(term_sorting, eoc_eeg):
-    """ Turns grouped error generators into one dictionary of rates per event, and the events. """
-    generator_split = []
-    base_events = []
-    for k, v in term_sorting.items():
-        base_events.append(k)
-        generator_split.append({egen: eoc_eeg[egen] for egen in v})
-    return generator_split, base_events
+    return list(sorted_terms.values()), list(sorted_terms.keys())
 
 
 def _real(rate):
@@ -82,9 +84,9 @@ def add_to_dem(dem, base_events, channels, dets, sim):
             det_pauli = dets[first_flipped_detector]
             egens = {k: _real(v) for k, v in egens.items()}
 
-            if all(k.errorgen_type == 'S' for k in egens.keys()) or (
-                    len(egens.keys()) == 1 and all(k.errorgen_type == 'H' for k in egens.keys())):
-                dem[event] += estimate_error_rate_exact(egens)
+            exact = estimate_error_rate_exact(egens)
+            if exact is not None:
+                dem[event] += exact
             else:
                 #properly deal with H terms by separating SCA terms from H terms
                 h_terms = [t for t in egens if t.errorgen_type == 'H']
@@ -141,8 +143,7 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim, zassenhaus_or
     dets_as_pauli_strings = folded
 
     dem = defaultdict(float)
-    term_sorting = sort_terms_by_effect(eoc_eeg, dets_as_pauli_strings)
-    generator_split, base_events = split_generator(term_sorting, eoc_eeg)
+    generator_split, base_events = sort_terms_by_effect(eoc_eeg, dets_as_pauli_strings)
     if not generator_split:
         return dem
 
@@ -154,8 +155,7 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim, zassenhaus_or
     dem = add_to_dem(dem, base_events, leading_order_channels, dets_as_pauli_strings, sim)
     for channel in higher_order_channels:
         #sort by dem event
-        term_sorting = sort_terms_by_effect(channel, dets_as_pauli_strings)
-        generator_split, new_events = split_generator(term_sorting, channel)
+        generator_split, new_events = sort_terms_by_effect(channel, dets_as_pauli_strings)
         terms_zassenhaus = eprop.zassenhaus_formula(generator_split, zassenhaus_order=1)
 
         additional_dem = add_to_dem(defaultdict(float), new_events, terms_zassenhaus,
@@ -166,13 +166,16 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim, zassenhaus_or
 
 
 def estimate_error_rate_exact(edict):
-    """ Exact event rate for a channel of only S terms, or of a single H term. """
+    """
+    Exact event rate for a channel of only S terms, or of a single H term; None for any
+    other channel, which has no exact rate.
+    """
     if all(k.errorgen_type == 'S' for k in edict.keys()):
-        contribution = (1 - np.exp(-2 * sum(edict.values()))) / 2
-    else:
-        (rate,) = edict.values()  # a single H term
-        contribution = np.sin(rate)**2
-    return contribution
+        return (1 - np.exp(-2 * sum(edict.values()))) / 2
+    if len(edict) == 1 and all(k.errorgen_type == 'H' for k in edict.keys()):
+        (rate,) = edict.values()
+        return np.sin(rate)**2
+    return None
 
 
 def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
@@ -307,8 +310,11 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
         errors of other events.
 
     include_idles, include_meas_idles : bool, optional
-        Passed to `stim_to_pygsti_circuit`: whether idle qubits get an idle gate in each
-        layer, and whether they do in the measurement layers.
+        Passed to `stim_to_pygsti_circuit`. Layers are the circuit's time steps (the
+        instructions between `TICK`s); a layer is empty when its step has only measurements
+        and resets. `include_idles` gives each qubit untouched in a step with gates one idle
+        gate in that step; `include_meas_idles` does the same for steps with no gates. Either
+        needs `TICK`s in the circuit, else a `ValueError` is raised.
 
     Returns
     -------
@@ -317,7 +323,8 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
         only S terms and for events with a single H term. Otherwise they are first order in
         the S, C and A rates and second order in the H rates, on top of a first-order BCH
         combination of the circuit's error generators. Rates that are not positive are
-        dropped. A circuit or model outside what is described here raises a `ValueError`.
+        dropped, and dropping a negative rate gives a `UserWarning`. A circuit or model
+        outside what is described here raises a `ValueError`.
     """
     pyg_circuit, detectors, observables, virtual_to_physical = stim_to_pygsti_circuit(
         circuit, include_idles, include_meas_idles)
