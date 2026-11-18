@@ -49,18 +49,17 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh'], virtual_
     return pspec
 
 
-def local_x_errorgen(num_qubits, rate, evotype=DEFAULT_EVOTYPE):
+def local_x_errorgen(num_qubits_or_labels, rate, evotype=DEFAULT_EVOTYPE):
     state_space = QubitSpace(1)
     basis = BuiltinBasis('PP', state_space)
     errdict = {('S', bl): rate for bl in basis.labels[1:] if 'Y' not in bl and 'Z' not in bl}
     errgen = LindbladErrorgen.from_elementary_errorgens(
         errdict, "D", basis, mx_basis='pp',
         truncate=False, evotype=evotype, state_space=state_space)
-    embedded_errorgens = []
-    for i in range(num_qubits):
-        embedded_errorgens.append(EmbeddedErrorgen(QubitSpace(num_qubits), [i], errgen))
-    composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype=evotype, state_space=QubitSpace(num_qubits))    
-        
+    full_space = QubitSpace(num_qubits_or_labels)
+    embedded_errorgens = [EmbeddedErrorgen(full_space, [q], errgen) for q in full_space.qubit_labels]
+    composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype=evotype, state_space=full_space)
+
     return composed_errorgen
     
 
@@ -104,9 +103,11 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0
 
     povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(povm_errorgen), ComputationalBasisPOVM(1, evotype=evotype, state_space=QubitSpace(1)))}
     
-    prep_errorgen = local_x_errorgen(nqs, prep_err, evotype) 
+    prep_errorgen = local_x_errorgen(pspec.qubit_labels, prep_err, evotype)
 
-    prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*nqs, evotype=evotype), ExpErrorgenOp(prep_errorgen))}
+    prep_layers = {Label('rho0'): ComposedState(
+        ComputationalBasisState(zvals=['0'] * nqs, evotype=evotype, state_space=QubitSpace(pspec.qubit_labels)),
+        ExpErrorgenOp(prep_errorgen))}
 
     model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype=evotype)
     return model
@@ -130,6 +131,12 @@ def _pygsti_gate(stim_name, table):
     return None
 
 
+def _used_qubits(circuit):
+    """The set of qubits that some instruction of the stim circuit acts on (not `QUBIT_COORDS`)."""
+    return {t.value for inst in circuit.flattened() if inst.name != 'QUBIT_COORDS'
+            for t in inst.targets_copy() if t.is_qubit_target}
+
+
 def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=False):
     """
     Converts a non-adaptive `stim.Circuit` into a pyGSTi circuit in which every reset starts a
@@ -150,8 +157,10 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
 
     include_idles : bool
         For each step with gates, add an idle gate on every live qubit that no gate, `M`,
-        `R` or `MR` of the step touches, in the step's last layer. Needs `TICK`s in the
-        circuit, else a `ValueError` is raised.
+        `R` or `MR` of the step touches, in the step's last layer. Only qubits that some
+        instruction of the circuit acts on get idle gates. An idle gate counts as activity:
+        a qubit idled and then reset gets a new virtual qubit, so its idle noise doesn't
+        carry through the reset. Needs `TICK`s in the circuit, else a `ValueError` is raised.
 
     include_meas_idles : bool
         The same for each step that has no gates but has an `M`, `R` or `MR`. Needs `TICK`s
@@ -175,6 +184,7 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
     table = standard_gatenames_stim_conversions()
     idle_name = _pygsti_gate('I', table)[0]
     n_phys = circuit.num_qubits
+    used = _used_qubits(circuit)
     virt = list(range(n_phys))
     virtual_to_physical = list(range(n_phys))
     FRESH, ACTIVE, MEASURED = 'fresh', 'active', 'measured'
@@ -196,8 +206,10 @@ def stim_to_pygsti_circuit(circuit, include_idles=False, include_meas_idles=Fals
     def close_layer(add_idles):
         layer = list(step['layer'])
         if add_idles:
-            layer += [(idle_name, virt[q]) for q in range(n_phys)
-                      if state[q] != MEASURED and q not in step['touched']]
+            for q in sorted(used - step['touched']):
+                if state[q] != MEASURED:
+                    layer.append((idle_name, virt[q]))
+                    state[q] = ACTIVE  # so that a later reset starts a new virtual qubit
         step['layer'], step['used'] = [], set()
         return layer
 

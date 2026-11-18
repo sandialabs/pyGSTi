@@ -419,3 +419,51 @@ def test_end_of_circuit_errorgen_without_map_needs_zero_based_line_labels():
     model = build_model({'Gh': {('S', 'Z'): 0.01}}, _pspec(2, ['Gh'], {}), ['Gh'], [])
     with pytest.raises(ValueError):
         dem_tools.end_of_circuit_errorgen(pygsti.circuits.Circuit([('Gh', 5)], line_labels=[5, 7]), model)
+
+
+@pytest.mark.parametrize('name, body, noise, include, n_events', [
+    ('first reset after other gates',
+     "R 0 1\nTICK\nCX 0 1\n{n2}TICK\nR 2\nTICK\nCX 0 2\n{n1}TICK\nM 0 1 2\n"
+     "DETECTOR rec[-1]\nDETECTOR rec[-2]",
+     {'n2': 'X_ERROR({f}) 2\n', 'n1': 'X_ERROR({f}) 1\n'}, 'include_idles', 1),
+    ('reset, idle, reset',
+     "R 0 1 2\nTICK\nCX 0 1\n{n2}TICK\nR 2\nTICK\nCX 0 2\nTICK\nM 0 1 2\nDETECTOR rec[-1]",
+     {'n2': 'X_ERROR({f}) 2\n', 'n1': ''}, 'include_idles', 0),
+    ('MR, idle in a measurement step, reset',
+     "R 0 1\nTICK\nCX 0 1\nTICK\nMR 1\nTICK\nM 0\n{n1}TICK\nR 0 1\nTICK\nCX 0 1\nTICK\nM 0 1\n"
+     "DETECTOR rec[-1]\nDETECTOR rec[-2]",
+     {'n2': '', 'n1': 'X_ERROR({f}) 1\n'}, 'include_meas_idles', 0),
+])
+def test_idle_noise_before_a_reset_is_wiped(name, body, noise, include, n_events):
+    rate = 0.01
+    flip = (1 - math.exp(-2 * rate)) / 2
+    clean = stim.Circuit(body.format(n1='', n2=''))
+    noisy = stim.Circuit(body.format(**{k: v.format(f=flip) for k, v in noise.items()}))
+    pspec = _pspec(3, ['Gcnot', 'Gi'], {'Gcnot': {(0, 1), (0, 2)}})
+    model = build_model({'Gcnot': {('S', 'XI'): 0.0}, 'Gi': {('S', 'X'): rate}}, pspec, ['Gi'], ['Gcnot'])
+    ours = _stim_events(build_dem_end2end(clean, model, **{include: True}))
+    reference = _stim_events(noisy.detector_error_model())
+    assert ours.keys() == reference.keys() and len(ours) == n_events
+    for event, p in ours.items():
+        assert p == pytest.approx(reference[event], rel=1e-9)
+
+
+def test_model_on_used_qubits_matches_model_on_all_qubits():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=2)
+    pyg, _, _, v2p = stim_to_pygsti_circuit(circuit)
+    used = sorted({t.value for inst in circuit.flattened() if inst.name != 'QUBIT_COORDS'
+                   for t in inst.targets_copy() if t.is_qubit_target})
+    assert len(used) < circuit.num_qubits
+    rates = {'Gh': {('S', 'Z'): 0.003}, 'Gcnot': {('S', 'IX'): 0.004}, 'Gi': {('S', 'X'): 0.002}}
+
+    def dem(labels, **kwargs):
+        pspec = create_processor_spec(pyg, labels, gates=['Gh', 'Gcnot', 'Gi'], virtual_to_physical=v2p)
+        model = build_model(rates, pspec, ['Gh', 'Gi'], ['Gcnot'], meas_err=0.006, prep_err=0.005)
+        return _stim_events(build_dem_end2end(circuit, model, **kwargs))
+
+    for kwargs in ({}, {'include_idles': True}):
+        full = dem(list(range(circuit.num_qubits)), **kwargs)
+        small = dem(used, **kwargs)
+        assert full and full.keys() == small.keys()
+        for event, p in full.items():
+            assert small[event] == pytest.approx(p, rel=1e-9)

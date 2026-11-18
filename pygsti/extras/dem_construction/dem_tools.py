@@ -18,7 +18,7 @@ from pygsti.baseobjs import Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel
 from pygsti.circuits import Circuit
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel, canonicalize_errorgen_layer
-from pygsti.extras.dem_construction.pygsti_object_builders import stim_to_pygsti_circuit
+from pygsti.extras.dem_construction.pygsti_object_builders import stim_to_pygsti_circuit, _used_qubits
 
 
 def format_dem_stim(dem_dict, n_detectors, n_observables):
@@ -191,8 +191,10 @@ def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
     model : pygsti.models.OpModel
         A model of the `stabilizer` (or `stabilizer_slow`) evotype with Lindblad noise, in one of
         two placements.
-        With `virtual_to_physical`, it is on the stim qubits. Without it, it is on the
-        circuit's own (virtual) qubits, which allows noise that differs between rounds.
+        With `virtual_to_physical`, it is on the stim qubits and needs those the circuit's
+        layers act on. Without it, it is on the circuit's own (virtual) qubits and needs all
+        of them, which allows noise that differs between rounds. A `ValueError` names any
+        missing qubits.
 
     virtual_to_physical : list of int, optional
         As returned by `stim_to_pygsti_circuit`. If None, the identity map, which requires the
@@ -209,6 +211,7 @@ def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
     stim.Tableau
         The tableau of the whole circuit.
     """
+    given_map = virtual_to_physical is not None
     if virtual_to_physical is None:
         virtual_to_physical = list(range(len(pyg_circuit.line_labels)))
         if list(pyg_circuit.line_labels) != virtual_to_physical:
@@ -220,9 +223,16 @@ def end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical=None):
     if str(model.evotype) not in ('stabilizer', 'stabilizer_slow'):
         raise ValueError("Only models of the 'stabilizer' or 'stabilizer_slow' evotype are supported, "
                          f"not '{model.evotype}'.")
-    missing = set(virtual_to_physical) - set(model.state_space.qubit_labels)
+    if given_map:
+        needed = {virtual_to_physical[v] for i in range(pyg_circuit.depth)
+                  for c in pyg_circuit.layer_label(i).components for v in c.qubits}
+        uses = "the circuit's gates act on"
+    else:
+        needed = set(virtual_to_physical)
+        uses = 'the circuit uses'
+    missing = needed - set(model.state_space.qubit_labels)
     if missing:
-        raise ValueError(f'The model has no qubits {sorted(missing)}, which the circuit uses.')
+        raise ValueError(f'The model has no qubits {sorted(missing)}, which {uses}.')
 
     cache = {}
 
@@ -299,7 +309,9 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
 
     model : pygsti.models.ExplicitOpModel or LocalNoiseModel
         A model of the `stabilizer` (or `stabilizer_slow`) evotype with Lindblad noise, on the
-        circuit's own stim qubit indices. Its gates are named as `stim_to_pygsti_circuit` names them (pyGSTi's
+        circuit's own stim qubit indices. It needs every qubit some instruction of the
+        circuit acts on, and a `ValueError` names any that are missing; qubits the circuit never
+        acts on (index gaps) may be left out. Its gates are named as `stim_to_pygsti_circuit` names them (pyGSTi's
         `internalgates` names, such as `Gcnot`, `Gh` or `Gxpi`). Noise of a gate must act
         on the gate's own qubits. A preparation or measurement error generator must act on
         one qubit; when the preparation or measurement operator is a one-qubit one, its
@@ -329,6 +341,9 @@ def build_dem_end2end(circuit, model, zassenhaus_order=1, include_idles=False, i
     pyg_circuit, detectors, observables, virtual_to_physical = stim_to_pygsti_circuit(
         circuit, include_idles, include_meas_idles)
     n_virtual = len(virtual_to_physical)
+    missing = _used_qubits(circuit) - set(model.state_space.qubit_labels)
+    if missing:
+        raise ValueError(f'The model has no qubits {sorted(missing)}, which the circuit acts on.')
     eoc_eeg, tableau = end_of_circuit_errorgen(pyg_circuit, model, virtual_to_physical)
 
     sim = stim.TableauSimulator()
