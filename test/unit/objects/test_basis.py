@@ -667,3 +667,13 @@ class BasisTester(BaseCase):
         tp = basis.TensorProdBasis([basis.BuiltinBasis('pp', 4), basis.BuiltinBasis('pp', 4)])
         self.assertEqual(len(tp.elements), 16)
         self.assertEqual(len(tp.labels), 16)
+
+
+class LargeDimensionTester(BaseCase):
+    # 4**32 and up overflow int64, which numpy's sqrt and log2 reject on a Python int
+    def test_matrix_dim_beyond_int64(self):
+        self.assertEqual(bc.MatrixBasisConstructor('pp', None, None, True, True).matrix_dim(4**40), 2**40)
+
+    def test_default_space_for_dim_beyond_int64(self):
+        from pygsti.baseobjs.statespace import default_space_for_dim
+        self.assertEqual(default_space_for_dim(4**40).num_qubits, 40)
