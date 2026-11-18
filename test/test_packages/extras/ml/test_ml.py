@@ -1,5 +1,6 @@
 import unittest
 from typing import Any, cast
+import itertools
 import numpy as np
 import networkx as nx
 import pytest
@@ -936,6 +937,188 @@ class MLSubpackageTester(unittest.TestCase):
         # Position 0 in Pauli string 'XI' corresponds to pspec_rev.qubit_labels[0] == 1
         self.assertEqual(snip_rev[0], enc_rev.indices_for_qubits([1]))
         self.assertEqual(snip_rev[1], enc_rev.indices_for_qubits([0]))
+
+    @staticmethod
+    def _dense_pauli_expectations(circuit, num_qubits, layer_rates, paulis):
+        """Exact <P> for each Pauli in `paulis` after `circuit`, with error generator layers exp(L_l)
+        after each layer l; `layer_rates` maps l -> list of (rate, (type, paulis))."""
+        from scipy.linalg import expm
+        from pygsti.baseobjs.basis import BuiltinBasis
+        from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
+        basis_1q = BuiltinBasis('PP', 4)
+        d = 2 ** num_qubits
+        rho = state_to_dmvec(np.eye(d)[:, 0].astype(complex))
+        for l, tab in enumerate(circuit.convert_to_stim_tableau_layers()):
+            U = tab.to_unitary_matrix(endian='big')
+            L = np.zeros((d * d, d * d), complex)
+            for rate, (typ, labels) in layer_rates.get(l, []):
+                L += rate * create_elementary_errorgen_nqudit(typ, labels, basis_1q, normalize=False, sparse=False,
+                                                               tensorprod_basis=False)
+            rho = expm(L) @ (np.kron(U, U.conj()) @ rho)
+        # kron(U, U.conj()) acts on the row-stacked vectorization of rho, so un-stack row-major
+        # (column-major would give rho^T, flipping the sign of <P> for P with an odd number of Y's).
+        rho_mat = rho.reshape(d, d)
+        return np.array([np.real(np.trace(stim.PauliString(p).to_unitary_matrix(endian='big') @ rho_mat)) for p in paulis])
+
+    def test_pauli_expectation_tensors_match_dense_simulation(self):
+        # Ideal Pauli expectation values and their first-order sensitivities to every layer's error
+        # generator rates must match a dense density-matrix simulation (central finite differences),
+        # for all four generator types (incl. same-qubit and cross-qubit 'C'/'A' pairs) and all
+        # 15 non-identity two-qubit Pauli observables, including the signs of 'H' sensitivities.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+                    Circuit('[Gypi2:0][Gcphase:0:1][Gxpi2:0]@(0,1)')]
+        gens = [('H', ('XI',)), ('H', ('ZY',)), ('S', ('XI',)), ('S', ('ZZ',)),
+                ('C', ('XI', 'YI')), ('A', ('XI', 'YI')), ('C', ('IY', 'XI')), ('A', ('IY', 'XI'))]
+        paulis = [''.join(p) for p in itertools.product('IXYZ', repeat=2)][1:]
+        T = encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=paulis, process_num=1)
+        self.assertNotIn('probabilities', T)
+        self.assertEqual(T['alphas'].shape, (2, 15, 3, len(gens)))
+        eps = 1e-6
+        for ci, circuit in enumerate(circuits):
+            # atol: stim's to_unitary_matrix is single precision (1/sqrt(2) rounded at ~1e-7)
+            np.testing.assert_allclose(T['expectations'][ci],
+                                       self._dense_pauli_expectations(circuit, 2, {}, paulis), atol=1e-6)
+            for layer in range(circuit.depth):
+                for j, g in enumerate(gens):
+                    plus = self._dense_pauli_expectations(circuit, 2, {layer: [(eps, g)]}, paulis)
+                    minus = self._dense_pauli_expectations(circuit, 2, {layer: [(-eps, g)]}, paulis)
+                    np.testing.assert_allclose(T['alphas'][ci, :, layer, j], (plus - minus) / (2 * eps), atol=1e-6,
+                                               err_msg=f"circuit {ci}, layer {layer}, generator {g}")
+
+    def test_pauli_observables_per_circuit_and_validation(self):
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]@(0,1)'), Circuit('[Gypi2:0][Gxpi2:1]@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('IZ',))]
+        shared = encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=['ZI', 'XY'], process_num=1)
+        per = encoding.error_generator_tensors(circuits, gens, pspec, process_num=1,
+                                               pauli_observables=[['ZI', 'XY'], [stim.PauliString('XY'), 'ZI']])
+        # per-circuit lists: circuit 1's observables are circuit 0's in reverse order
+        np.testing.assert_allclose(per['expectations'][0], shared['expectations'][0])
+        np.testing.assert_allclose(per['expectations'][1], shared['expectations'][1][::-1])
+        np.testing.assert_allclose(per['alphas'][1], shared['alphas'][1][::-1])
+        with self.assertRaises(ValueError):    # wrong number of per-circuit lists
+            encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=[['ZI']], process_num=1)
+        with self.assertRaises(ValueError):    # ragged per-circuit lists
+            encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=[['ZI'], ['ZI', 'XX']], process_num=1)
+        with self.assertRaises(ValueError):    # wrong number of qubits
+            encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=['ZII'], process_num=1)
+        with self.assertRaises(ValueError):    # signed observable
+            encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=[stim.PauliString('-ZI')], process_num=1)
+        with self.assertRaises(NotImplementedError):
+            encoding.error_generator_tensors(circuits, gens, pspec, alpha_representation='matrix', pauli_observables=['ZI'])
+
+    def test_qpann_forward_and_fit_with_pauli_observables(self):
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1@(0,1)'), Circuit('[Gypi2:0][Gxpi2:1]@(0,1)'),
+                    Circuit('Gcphase:0:1[Gxpi2:0]@(0,1)')]
+        gens = [('H', ('XI',)), ('S', ('IX',)), ('A', ('XI', 'YI'))]
+        observables = ['ZI', 'IZ', 'ZZ', 'XY', 'YX']
+        tensors = encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=observables, process_num=1)
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(gens, encoder, adjacency_matrix, hops=1)
+        model = qpanns.QPANN(encoder.length, gens, snipper)
+        x = [circuits_tensor, tensors['alphas'], tensors['expectations']]
+        output = model(x)
+        self.assertEqual(tuple(output.shape), (len(circuits), len(observables)))
+        initial_weights = [w.numpy().copy() for w in model.trainable_variables]
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-1), loss='mse')
+        model.fit(x, tensors['expectations'] * 0.98, epochs=2, verbose=0)
+        self.assertTrue(any(not np.allclose(w0, w1.numpy()) for w0, w1 in zip(initial_weights, model.trainable_variables)))
+
+    def test_pauli_observables_with_spam(self):
+        # Pauli observables combined with SPAM modelling: the state-preparation row (0), the layer
+        # rows and the measurement row (last) must give the exact first-order sensitivity of every
+        # Pauli expectation value, checked against central finite differences of a dense simulation
+        # with error generator layers after state preparation and before an ideal Pauli measurement.
+        from scipy.linalg import expm
+        from pygsti.baseobjs.basis import BuiltinBasis
+        from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
+        basis_1q = BuiltinBasis('PP', 4)
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+                    Circuit('[Gypi2:0][Gcphase:0:1]@(0,1)'),
+                    Circuit([], line_labels=[0, 1])]
+        gens = [('H', ('XI',)), ('H', ('ZY',)), ('S', ('XI',)), ('S', ('ZZ',)),
+                ('C', ('XI', 'YI')), ('A', ('XI', 'YI')), ('A', ('IX', 'IY')), ('A', ('IY', 'XI'))]
+        paulis = [''.join(p) for p in itertools.product('IXYZ', repeat=2)][1:]
+        pauli_matrices = [stim.PauliString(p).to_unitary_matrix(endian='big') for p in paulis]
+
+        def expectations(circuit, rows):
+            # rows: 0 = after state preparation, 1..depth = after each layer, depth + 1 = before measurement
+            def gen(r):
+                L = np.zeros((16, 16), complex)
+                for rate, (typ, labels) in rows.get(r, []):
+                    L += rate * create_elementary_errorgen_nqudit(typ, labels, basis_1q, normalize=False, sparse=False,
+                                                                   tensorprod_basis=False)
+                return expm(L)
+            rho = gen(0) @ state_to_dmvec(np.eye(4)[:, 0].astype(complex))
+            layers = circuit.convert_to_stim_tableau_layers() if circuit.depth > 0 else []
+            for l, tab in enumerate(layers):
+                U = tab.to_unitary_matrix(endian='big')
+                rho = gen(l + 1) @ (np.kron(U, U.conj()) @ rho)
+            rho_mat = (gen(circuit.depth + 1) @ rho).reshape(4, 4)
+            return np.array([np.real(np.trace(P @ rho_mat)) for P in pauli_matrices])
+
+        T = encoding.error_generator_tensors(circuits, gens, pspec, include_spam=True, pauli_observables=paulis,
+                                             process_num=1)
+        max_depth = max(c.depth for c in circuits)
+        self.assertEqual(T['alphas'].shape, (len(circuits), 15, max_depth + 2, len(gens)))
+        # the circuit-layer rows are those obtained without SPAM
+        T0 = encoding.error_generator_tensors(circuits, gens, pspec, pauli_observables=paulis, process_num=1)
+        np.testing.assert_array_equal(T['alphas'][:, :, 1:-1], T0['alphas'])
+        np.testing.assert_array_equal(T['expectations'], T0['expectations'])
+        eps = 1e-6
+        for ci, circuit in enumerate(circuits):
+            np.testing.assert_allclose(T['expectations'][ci], expectations(circuit, {}), atol=1e-6)
+            for dense_row, tensor_row in [(0, 0), (circuit.depth + 1, max_depth + 1)]:
+                for j, g in enumerate(gens):
+                    derivative = (expectations(circuit, {dense_row: [(eps, g)]})
+                                  - expectations(circuit, {dense_row: [(-eps, g)]})) / (2 * eps)
+                    np.testing.assert_allclose(T['alphas'][ci, :, tensor_row, j], derivative, atol=1e-6,
+                                               err_msg=f"circuit {ci}, row {tensor_row}, generator {g}")
+            # padding rows (between the last layer and the measurement row) contribute nothing
+            self.assertTrue(np.all(T['alphas'][ci, :, circuit.depth + 1:max_depth + 1] == 0))
+
+        # End to end: SPAM-aware encoder + Pauli tensors -> QPANN forward pass
+        encoder = encoding.StandardCircuitEncoder(pspec, include_spam=True)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        self.assertEqual(circuits_tensor.shape[1], T['alphas'].shape[2])
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(gens, encoder, adjacency_matrix, hops=0)
+        model = qpanns.QPANN(encoder.length, gens, snipper)
+        output = model([circuits_tensor, T['alphas'], T['expectations']])
+        self.assertEqual(tuple(output.shape), (len(circuits), 15))
+
+    def test_errgentools_pauli_alphabet(self):
+        # Default alphabet is unchanged.
+        self.assertEqual(errgentools.up_to_weight_k_error_gens(2, 3, ['H', 'S', 'C', 'A']),
+                         errgentools.up_to_weight_k_error_gens(2, 3, ['H', 'S', 'C', 'A'], pauli_alphabet='XYZ'))
+        # Z-only: every Pauli is Z-type; counts are the weight-<=2 supports times 1 letter each.
+        paulis = errgentools.up_to_weight_k_paulis(2, 3, pauli_alphabet='Z')
+        self.assertEqual(sorted(paulis), sorted(['ZII', 'IZI', 'IIZ', 'ZZI', 'ZIZ', 'IZZ']))
+        pairs = errgentools.up_to_weight_k_pauli_pairs(1, 2, pauli_alphabet='Z')
+        self.assertEqual(pairs, [])                    # weight-1 supports admit no distinct Z-only pair
+        pairs = errgentools.up_to_weight_k_pauli_pairs(2, 2, pauli_alphabet='Z')
+        self.assertEqual(sorted(pairs), sorted([('IZ', 'ZI'), ('IZ', 'ZZ'), ('ZI', 'ZZ')]))
+        # Alphabet order does not matter; results are a subset of the full alphabet's.
+        xz = errgentools.up_to_weight_k_error_gens(2, 3, ['H', 'C'], pauli_alphabet='ZX')
+        self.assertEqual(xz, errgentools.up_to_weight_k_error_gens(2, 3, ['H', 'C'], pauli_alphabet='XZ'))
+        full = set(errgentools.up_to_weight_k_error_gens(2, 3, ['H', 'C']))
+        self.assertTrue(set(xz) < full)
+        self.assertTrue(all('Y' not in p for _, labels in xz for p in labels))
+        # Qubit-graph variants honour the alphabet too.
+        graph_gens = errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+            2, 3, np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]), 1, egtypes=['S', 'A'], pauli_alphabet='Z')
+        self.assertTrue(len(graph_gens) > 0 and all(set(p) <= {'I', 'Z'} for _, labels in graph_gens for p in labels))
+        for bad in ('', 'XX', 'XW', 'I'):
+            with self.assertRaises(ValueError):
+                errgentools.up_to_weight_k_paulis(2, 3, pauli_alphabet=bad)
 
     def test_definite_outcome_hamiltonian_alpha_is_zero(self):
         # Regression test for a dead-code bug in `encoding._circuit_loop_probs`: it used to

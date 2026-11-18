@@ -462,12 +462,22 @@ def index_to_pauli_pair(idx: int, n: int) -> tuple[str, str]:
 # when enumerating pairs of Paulis for 'C'/'A' error generators (see `_pauli_pairs_for_support`
 # below): 3 where only P is non-trivial at this qubit, 3 where only Q is, and 9 where both are
 # (letters need not differ locally -- only the *overall* n-qubit strings P and Q must differ).
-_PAULI_PAIR_LOCAL_CHOICES: list[tuple[str, str]] = (
-    [(p, 'I') for p in 'XYZ'] + [('I', q) for q in 'XYZ'] + [(p, q) for p in 'XYZ' for q in 'XYZ']
-)
+def _validate_pauli_alphabet(pauli_alphabet: str) -> str:
+    """Check that `pauli_alphabet` is a non-empty, duplicate-free subset of 'XYZ'; return it sorted."""
+    if (not isinstance(pauli_alphabet, str) or len(pauli_alphabet) == 0 or not set(pauli_alphabet) <= set('XYZ')
+            or len(set(pauli_alphabet)) != len(pauli_alphabet)):
+        raise ValueError(f"pauli_alphabet must be a non-empty, duplicate-free subset of 'XYZ', got {pauli_alphabet!r}.")
+    return ''.join(sorted(pauli_alphabet))
 
 
-def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bool) -> list[tuple[str, str]]:
+def _pauli_pair_local_choices(pauli_alphabet: str = 'XYZ') -> list[tuple[str, str]]:
+    """Per-qubit (P_q, Q_q) choices for a pair of Paulis jointly supported on that qubit."""
+    a = _validate_pauli_alphabet(pauli_alphabet)
+    return [(p, 'I') for p in a] + [('I', q) for q in a] + [(p, q) for p in a for q in a]
+
+
+def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bool,
+                             pauli_alphabet: str = 'XYZ') -> list[tuple[str, str]]:
     """
     Enumerate all canonically-ordered pairs `(P, Q)`, `P < Q` lexicographically, of DISTINCT,
     non-identity n-qubit Pauli strings such that `support(P) union support(Q)` equals `support`
@@ -491,6 +501,10 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
         position `q` (matching the convention used by `up_to_weight_k_paulis`). Each of this
         module's two pair-enumeration functions below passes whichever value keeps it
         consistent with its own single-Pauli counterpart.
+
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
 
     Returns
     -------
@@ -516,7 +530,7 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
     w = len(support)
     pairs = []
     base = ['I'] * n
-    for combo in _itertools.product(_PAULI_PAIR_LOCAL_CHOICES, repeat=w):
+    for combo in _itertools.product(_pauli_pair_local_choices(pauli_alphabet), repeat=w):
         p_letters = [c[0] for c in combo]
         q_letters = [c[1] for c in combo]
         if all(letter == 'I' for letter in p_letters):
@@ -541,7 +555,7 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
     return pairs
 
 
-def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
+def up_to_weight_k_paulis(k: int, n: int, pauli_alphabet: str = 'XYZ') -> list[str]:
     """
     Return all n-qubit Pauli strings with weight 1..k (non-identity count). If k=0, returns the all-identity string. If k>n, automatically sets k=n.
 
@@ -559,6 +573,10 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
         Positive integer. Maximum Pauli weight. Values > n are treated as n.
     n : int
         Number of qubits (string length).
+
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
 
     Returns
     -------
@@ -606,7 +624,7 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
 
             # For those w positions, choose an assignment of X/Y/Z at each position.
             # There are 3^w such assignments.
-            for letters in _itertools.product("XYZ", repeat=w):
+            for letters in _itertools.product(_validate_pauli_alphabet(pauli_alphabet), repeat=w):
 
                 # Copy the all-identity template, then place X/Y/Z on the support.
                 s = base[:]  # shallow copy of list of characters
@@ -619,7 +637,7 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
     return paulis
 
 
-def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
+def up_to_weight_k_pauli_pairs(k: int, n: int, pauli_alphabet: str = 'XYZ') -> list[tuple[str, str]]:
     """
     Return all unordered pairs `(P, Q)` (canonically ordered, `P < Q`) of DISTINCT, non-identity
     n-qubit Pauli strings such that the *union* of P's and Q's individual qubit supports has
@@ -637,6 +655,10 @@ def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
         are treated as n.
     n : int
         Number of qubits (string length).
+
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
 
     Returns
     -------
@@ -663,13 +685,13 @@ def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
         # `_pauli_pairs_for_support`'s docstring for why "exactly" avoids double-counting across
         # different values of w).
         for support in _itertools.combinations(positions, w):
-            pairs.extend(_pauli_pairs_for_support(support, n, reverse_index=False))
+            pairs.extend(_pauli_pairs_for_support(support, n, reverse_index=False, pauli_alphabet=pauli_alphabet))
 
     return pairs
 
 
 def up_to_weight_k_paulis_from_qubit_graph(
-    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None,
+    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None, pauli_alphabet: str = 'XYZ',
 ) -> list[str]:
     """
     Enumerate Pauli strings of weight 1..k whose *support set* of non-identity qubits
@@ -696,6 +718,10 @@ def up_to_weight_k_paulis_from_qubit_graph(
         types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
+
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
 
     Returns
     -------
@@ -744,7 +770,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
 
         # For each support, assign an X/Y/Z to each qubit in the support.
         # There are 3^w assignments.
-        for letters in _itertools.product("XYZ", repeat=w):
+        for letters in _itertools.product(_validate_pauli_alphabet(pauli_alphabet), repeat=w):
 
             # Start from all-identity string, then overwrite the support positions.
             s = base[:]
@@ -761,7 +787,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
 
 
 def up_to_weight_k_pauli_pairs_from_qubit_graph(
-    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None,
+    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None, pauli_alphabet: str = 'XYZ',
 ) -> list[tuple[str, str]]:
     """
     Enumerate unordered pairs `(P, Q)` (canonically ordered, `P < Q`) of DISTINCT, non-identity
@@ -799,6 +825,10 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
 
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
+
     Returns
     -------
     list[tuple[str, str]]
@@ -827,7 +857,7 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
     # ---- Enumerate all valid Pauli pairs ----
     pairs: list[tuple[str, str]] = []
     for support_qubits in supports:
-        pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=False))
+        pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=False, pauli_alphabet=pauli_alphabet))
 
     return pairs
 
@@ -860,7 +890,7 @@ def _split_and_validate_egtypes(egtypes: list[str]) -> tuple[list[str], list[str
 
 def up_to_weight_k_error_gens_from_qubit_graph(
     k: int, n: int | None, qubit_graph: Any = None, num_hops: int | None = None,
-    egtypes: list[str] = ['H', 'S'],
+    egtypes: list[str] = ['H', 'S'], pauli_alphabet: str = 'XYZ',
 ) -> list[tuple[str, tuple[str, ...]]]:
     """Returns a list of all n-qubit error generators up to weight k of the specified
     types (e.g., 'H', 'S', 'C', and/or 'A') whose supports are connected subgraphs of the
@@ -908,6 +938,10 @@ def up_to_weight_k_error_gens_from_qubit_graph(
           * 'C' : Stochastic Pauli-Correlation error generators
           * 'A' : Active error generators
 
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
+
     Returns
     -------
     list[tuple]
@@ -935,7 +969,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(
     if single_pauli_types:
         # 2a. Retrieve all Pauli strings up to weight k whose supports are connected
         #     subgraphs of the qubit graph (with adjacency defined by <= num_hops).
-        relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph, num_hops)
+        relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph, num_hops, pauli_alphabet=pauli_alphabet)
         for egtype in single_pauli_types:
             # Each error generator is represented as a tuple: (type, (pauli_string,))
             error_generators += [(egtype, (p,)) for p in relevant_paulis]
@@ -943,7 +977,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(
     if pair_types:
         # 2b. Retrieve all Pauli pairs up to union-weight k whose union support is a connected
         #     subgraph of the qubit graph (with adjacency defined by <= num_hops).
-        relevant_pairs = up_to_weight_k_pauli_pairs_from_qubit_graph(k, n, qubit_graph, num_hops)
+        relevant_pairs = up_to_weight_k_pauli_pairs_from_qubit_graph(k, n, qubit_graph, num_hops, pauli_alphabet=pauli_alphabet)
         for egtype in pair_types:
             # Each error generator is represented as a tuple: (type, (pauli_string_1, pauli_string_2))
             error_generators += [(egtype, (p1, p2)) for (p1, p2) in relevant_pairs]
@@ -951,7 +985,8 @@ def up_to_weight_k_error_gens_from_qubit_graph(
     return error_generators
 
 
-def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -> list[tuple[str, tuple[str, ...]]]:
+def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S'],
+                              pauli_alphabet: str = 'XYZ') -> list[tuple[str, tuple[str, ...]]]:
     """Returns a list of all n-qubit error generators up to weight k, of types given in
     egtypes, in a tuple-of-strings format.
 
@@ -963,6 +998,10 @@ def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -
         Number of qubits.
     egtypes : list[str], default ['H','S']
         Error generator types to include. Supported values are 'H', 'S', 'C', and 'A'.
+
+    pauli_alphabet : str, default 'XYZ'
+        The single-qubit Paulis allowed on each qubit of the support, e.g. 'Z' for Z-type Paulis
+        only, or 'XZ'. Must be a non-empty subset of 'XYZ' (in any order).
 
     Returns
     -------
@@ -977,12 +1016,12 @@ def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -
     error_generators: list[tuple[str, tuple[str, ...]]] = []
 
     if single_pauli_types:
-        relevant_paulis = up_to_weight_k_paulis(k, n)
+        relevant_paulis = up_to_weight_k_paulis(k, n, pauli_alphabet=pauli_alphabet)
         for egtype in single_pauli_types:
             error_generators += [(egtype, (p,)) for p in relevant_paulis]
 
     if pair_types:
-        relevant_pairs = up_to_weight_k_pauli_pairs(k, n)
+        relevant_pairs = up_to_weight_k_pauli_pairs(k, n, pauli_alphabet=pauli_alphabet)
         for egtype in pair_types:
             error_generators += [(egtype, (p1, p2)) for (p1, p2) in relevant_pairs]
 
