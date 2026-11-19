@@ -48,7 +48,8 @@ class StateRep(_basereps.StateRep):
         return self  # for most classes, the rep itself is actionable
 
     def copy(self):
-        cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None, self.state_space)  # makes a dummy cpy.sframe
+        cpy = StateRep.__new__(StateRep)  # skip __init__, which would build and check a throwaway frame
+        cpy.state_space = self.state_space
         cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
         return cpy
 
