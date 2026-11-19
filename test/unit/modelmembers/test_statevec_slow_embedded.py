@@ -81,9 +81,10 @@ def test_statevec_embedded_direct_sum_actions(action: str) -> None:
     np.testing.assert_array_equal(state.data, vector)
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason='#990: embedded random actions draw once per block')
 @pytest.mark.parametrize('adjoint', [False, True])
 @pytest.mark.parametrize('internal_rng', [False, True])
-def test_statevec_embedded_random_draws_per_block(adjoint: bool, internal_rng: bool) -> None:
+def test_statevec_embedded_random_draws_once(adjoint: bool, internal_rng: bool) -> None:
     ss = QubitSpace(4)
     targets = [3, 1]
     sub = ss.create_subspace(targets)
@@ -97,11 +98,12 @@ def test_statevec_embedded_random_draws_per_block(adjoint: bool, internal_rng: b
     state = StateRepDensePure(vector.copy(), ss, None)
     expected = vector.copy().reshape((2,) * 4)
     expected_rng = np.random.RandomState(123)
+    # One draw per action, applied to every spectator block.
+    matrix = matrices[expected_rng.choice(2, p=[0.5, 0.5])]
+    if adjoint:
+        matrix = matrix.conj().T
     # Untouched factors are 0 and 2; transpose each slice into target order (3, 1).
     for q0, q2 in np.ndindex(2, 2):
-        matrix = matrices[expected_rng.choice(2, p=[0.5, 0.5])]
-        if adjoint:
-            matrix = matrix.conj().T
         block = expected[q0, :, q2, :].T.reshape(4)
         expected[q0, :, q2, :] = (matrix @ block).reshape(2, 2).T
     random_state = None if internal_rng else np.random.RandomState(123)
