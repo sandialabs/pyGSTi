@@ -179,7 +179,6 @@ def test_embedding_iterator_order_and_values(on_space: str, qdim: int) -> None:
     assert list(op._iter_matrix_elements(on_space)) == expected  # fully consumed cache
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='relative and absolute indices share one cache entry')
 @pytest.mark.parametrize('relative_first', [False, True])
 @pytest.mark.parametrize('on_space', ['Hilbert', 'HilbertSchmidt'])
 def test_embedding_indices_relative_and_absolute(relative_first: bool, on_space: str) -> None:
@@ -198,7 +197,6 @@ def test_embedding_indices_relative_and_absolute(relative_first: bool, on_space:
     np.testing.assert_array_equal(absolute[:, 2:], relative[:, 2:])
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='partial iteration leaves an incomplete index cache')
 def test_embedding_partial_iteration_does_not_truncate_dense_matrix() -> None:
     from pygsti.modelmembers.operations import StaticUnitaryOp
 
