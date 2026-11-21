@@ -974,7 +974,8 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     if gate_args_lists is None:
         gate_args_lists = {}
     if qubit_labels is not None:
-        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), \
+            "qubit_labels must be a list or a tuple!"
         qubits = list(qubit_labels[:])  # copy this list
         if len(qubits) != width:
             raise ValueError(f"qubit_labels has {len(qubits)} qubits, but width is {width}.")
@@ -2374,7 +2375,11 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     #     - absolute_compilation: compilation rules 
     #     - qubit_labels:
     #     - circuit: Boolean that determines if a list of single-qubit Paulis or a compiled circuit is returned.
-
+    
+    if circuit is True:
+        if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
+        else: qubits = pspec.qubit_labels[:]
+    
     rng = _np.random.default_rng(seed)
 
     pauli_list = ['I','X','Y','Z']
@@ -2394,64 +2399,18 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     if circuit is False:
         return pauli, sign
     else:
-        pauli_circuit = _circuit_from_pauli(pauli, pspec=pspec, absolute_compilation=absolute_compilation,
-                                            qubit_labels=qubit_labels)
-        return pauli, sign, pauli_circuit
+        pauli_layer_std_lbls = [_lbl.Label(pauli_list[rand_ints[q]], (qubits[q],)) for q in range(n)]
+        # Converts the layer to a circuit, and changes to the native model.
+        pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize()
+        pauli_circuit = pauli_circuit.copy(editable=True)
+        pauli_circuit.change_gate_library(absolute_compilation)
+        if pauli_circuit.depth == 0:
+            pauli_circuit.insert_layer_inplace([_lbl.Label(())], 0)
+        pauli_circuit.done_editing()
 
+    return pauli, sign, pauli_circuit
 
-def _sample_random_pauli_with_identities_fixed(n, is_identity, pspec=None, absolute_compilation=None,
-                                               qubit_labels=None, circuit=False, seed=None):
-    # As _sample_random_pauli, but with the location of the identities fixed: the qubits for which
-    # is_identity is True are assigned 'I', and the rest a uniformly random non-identity Pauli.
-    #     - n: Number of qubits
-    #     - is_identity: Length-n list of bools, True where the Pauli is fixed to the identity
-    #     - pspec: Processor spec
-    #     - absolute_compilation: compilation rules
-    #     - qubit_labels:
-    #     - circuit: Boolean that determines if a list of single-qubit Paulis or a compiled circuit is returned.
-
-    rng = _np.random.default_rng(seed)
-
-    non_identity_pauli_list = ['X', 'Y', 'Z']
-    rand_ints = rng.integers(0, 3, n)
-    pauli = []
-    for i in range(n):
-        if is_identity[i]:
-            pauli.append('I')
-        else:
-            pauli.append(non_identity_pauli_list[rand_ints[i]])
-
-    if set(pauli) != set('I'): sign = rng.choice([-1, 1])
-    else: sign = 1
-
-    if circuit is False:
-        return pauli, sign
-    else:
-        pauli_circuit = _circuit_from_pauli(pauli, pspec=pspec,
-                                            absolute_compilation=absolute_compilation,
-                                            qubit_labels=qubit_labels)
-        return pauli, sign, pauli_circuit
-
-
-def _circuit_from_pauli(pauli, pspec=None, absolute_compilation=None, qubit_labels=None):
-    # Compiles a Pauli, given as a list of 'I'/'X'/'Y'/'Z', into a circuit of native gates.
-
-    if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
-    else: qubits = pspec.qubit_labels[:]
-    n = len(pauli)
-
-    pauli_layer_std_lbls = [_lbl.Label(pauli[q], (qubits[q],)) for q in range(n)]
-    # Converts the layer to a circuit, and changes to the native model.
-    pauli_circuit = _cir.Circuit(layer_labels=pauli_layer_std_lbls, line_labels=qubits).parallelize()
-    pauli_circuit = pauli_circuit.copy(editable=True)
-    pauli_circuit.change_gate_library(absolute_compilation)
-    if pauli_circuit.depth == 0:
-        pauli_circuit.insert_layer_inplace([_lbl.Label(())], 0)
-    pauli_circuit.done_editing()
-
-    return pauli_circuit
-
-
+      
 def _select_neg_evecs(pauli, sign, seed=None):
     # Selects the entries in an n-qubit that will be turned be given a -1 1Q eigenstates
     #     - pauli: The n-qubit Pauli
@@ -2509,7 +2468,8 @@ def _compose_initial_cliffords(prep_circuit):
     return composed_layer
 
 
-def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None, randomize_for_identity=True):
+def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None, randomize_for_identity=True,
+                       bits=None):
     # Samples a random stabilizer of a Pauli, s = s_1 \otimes ... \otimes s_n. For each s_i,
     # we perform the following gates:
     #     - s_i = X: H
@@ -2521,6 +2481,10 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
     #     - pauli: a list of 1Q paulis whose tensor product gives the n-qubit Pauli
     #     - sign: The overall phase of the pauli. This will determine how many -1 1Q eigenvectors 
     #             our stabilizer state must have.
+    #     - bits: None (default, used by BiRB) draws the -1 eigenstates with _select_neg_evecs. Otherwise a
+    #             length-n sequence of 0s and 1s used in its place on every qubit: a 1 prepares the -1
+    #             eigenstate of that qubit's Pauli, or |1> where the Pauli is the identity. The parity of
+    #             the bits on the Pauli's support must equal the sign. Needs randomize_for_identity=False.
     # Returns: The symplectic representation of the stabilizer state, symplectic representation of the 
     #          preparation circuit, and a pygsti circuit representation of the prep circuit
 
@@ -2528,8 +2492,13 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
     rng = _np.random.default_rng(seed)
 
     n = len(pauli)
-    neg_evecs = _select_neg_evecs(pauli, sign, seed=seed)
-    assert((-1)**sum(neg_evecs) == sign)
+    if bits is None:
+        neg_evecs = _select_neg_evecs(pauli, sign, seed=seed)
+    else:
+        assert(not randomize_for_identity), "bits needs randomize_for_identity=False"
+        assert(len(bits) == n), "bits needs one entry per qubit"
+        neg_evecs = _np.array(bits)
+    assert((-1)**sum(neg_evecs[i] for i in range(n) if pauli[i] != 'I') == sign)
     zvals = [0 if neg_evecs[i] == 0 else -1 for i in range(n)]
     
     
@@ -2552,7 +2521,7 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
     # single-qubit Clifford is used. Passing randomize_for_identity=False leaves those qubits
     # idle instead, which is what direct fidelity estimation on a fixed circuit shape needs:
     # the width and two-qubit gate density of the circuit must not depend on which Paulis were
-    # drawn.
+    # drawn. Those qubits stay idle unless bits puts a 1 there, which prepares |1> with an X.
     if randomize_for_identity:
         circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C' + str(rng.integers(24)) for i in pauli]
     else:
