@@ -19,7 +19,6 @@ from pygsti.protocols import protocol as _proto
 from pygsti.protocols import vb as _vb
 from pygsti.algorithms import dfe as _dfe
 from pygsti.tools import mcfetools as _mcfe
-from pygsti.baseobjs.label import Label as _Label
 
 
 class DFEDesign(_vb.BenchmarkingDesign):
@@ -35,9 +34,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
     dataframe from results on such a design warns, because its `Qubits` entry shows
     `qubit_labels` for every target.
 
-    Whether any circuit was sampled with a mask is recorded in the boolean attribute
-    `has_fixed_identity_locations`. The reference circuits, if any, are stored in the
-    attribute `reference_circuits` (None otherwise).
+    The reference circuits, if any, are stored in the attribute `reference_circuits` (None
+    otherwise), and their kind in `reference`.
 
     Parameters
     ----------
@@ -59,7 +57,6 @@ class DFEDesign(_vb.BenchmarkingDesign):
 
     add_default_protocol : bool, optional
         If True, a :class:`DFE` protocol named `'DFE'` is attached as the default protocol.
-        Combining this with `fixed_identity_locations` raises ValueError.
 
     seed : int, optional
         A seed for the random number generator, for reproducible sampling. If None, a seed
@@ -67,38 +64,24 @@ class DFEDesign(_vb.BenchmarkingDesign):
         stored in the `seed` attribute, so the design can be regenerated from its saved
         metadata.
 
-    fixed_identity_locations : None, 'idle' or sequence, optional
-        Qubits on which the sampled Pauli is pinned to the identity. If None, a uniformly
-        random non-identity Pauli is sampled over all qubits for every circuit. If `'idle'`,
-        each circuit pins the qubits that no gate acts on: empty layers are ignored, and an
-        explicit idle gate such as `Gi` counts as a gate. Otherwise, a sequence with one
-        entry per circuit, each None or a list of bools over that circuit's `line_labels`
-        (see :func:`~pygsti.algorithms.dfe.sample_dfe_circuit`). Pinned sampling has fixed
-        support and generally gives a biased process fidelity, for every circuit with a
-        mask, including an `'idle'` circuit with no idle qubit. The :class:`DFE` protocol
-        refuses designs with any mask.
-
-    create_same_measurement_reference : bool, optional
-        If True, adds for each dressed circuit a reference circuit, stored in `reference_circuits`
-        (one list per target, paired with `circuit_lists`). This doubles the number of circuits.
-        With references, :class:`DFE` also reports a reference-corrected fidelity.
+    reference : None, 'paired' or 'readout', optional
+        `'paired'` adds, for each dressed circuit, a random eigenstate of the image of its Pauli,
+        then the dressed circuit's own final layer; `'readout'` adds a uniformly random bitstring
+        with the measured Z string's parity, then the measurement. Either is stored in
+        `reference_circuits` (one list per target, paired with `circuit_lists`), recorded in
+        `reference`, and doubles the number of circuits; :class:`DFE` then also reports a
+        reference-corrected fidelity. Any other value raises ValueError.
     """
     def __init__(self, pspec, circuits, clifford_compilations, num_samples,
                  descriptor='A DFE experiment', add_default_protocol=False, seed=None,
-                 fixed_identity_locations=None, create_same_measurement_reference=False):
+                 reference=None):
 
         circuits = list(circuits)
-        identity_masks = self._resolve_identity_masks(circuits, fixed_identity_locations)
-        pinned = any(mask is not None for mask in identity_masks)
-        if pinned and add_default_protocol:
-            raise ValueError("The DFE protocol refuses designs with fixed_identity_locations, because their "
-                             "fixed-support Paulis bias its process-fidelity estimate. Use "
-                             "add_default_protocol=False to build this design for other analyses.")
 
         circuit_lists = []
         measurements = []
         signs = []
-        reference_circuits = [] if create_same_measurement_reference else None
+        reference_circuits = [] if reference is not None else None
 
         if seed is None:
             self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
@@ -108,7 +91,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
             self.seed = seed
         rand_state = _np.random.RandomState(self.seed)
 
-        for c, mask in zip(circuits, identity_masks):
+        for c in circuits:
             dfe_circuits_for_c = []
             measurements_for_c = []
             signs_for_c = []
@@ -116,9 +99,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
             for sample_num in range(num_samples):
                 sampled = _dfe.sample_dfe_circuit(
                     pspec, c, clifford_compilations,
-                    create_same_measurement_reference=create_same_measurement_reference,
-                    seed=rand_state.randint(0, 2**31), fixed_identity_locations=mask)
-                if create_same_measurement_reference:
+                    reference=reference, seed=rand_state.randint(0, 2**31))
+                if reference is not None:
                     dfe_circ, meas, sign, ref_circ = sampled
                     references_for_c.append(ref_circ)
                 else:
@@ -130,41 +112,16 @@ class DFEDesign(_vb.BenchmarkingDesign):
             circuit_lists.append(dfe_circuits_for_c)
             measurements.append(measurements_for_c)
             signs.append(signs_for_c)
-            if create_same_measurement_reference:
+            if reference is not None:
                 reference_circuits.append(references_for_c)
 
         self._init_foundation(circuit_lists, measurements, signs, num_samples, descriptor,
-                              add_default_protocol, pinned, reference_circuits=reference_circuits)
-
-    @staticmethod
-    def _resolve_identity_masks(circuits, fixed_identity_locations):
-        # Returns one fixed_identity_locations entry (None or a list of bools over the
-        # circuit's line labels) per circuit. Consumes no randomness; the per-mask checks
-        # (length, all-True) are left to sample_dfe_circuit.
-        if fixed_identity_locations is None:
-            return [None] * len(circuits)
-        if isinstance(fixed_identity_locations, str):
-            if fixed_identity_locations != 'idle':
-                raise ValueError("fixed_identity_locations must be None, 'idle' or a sequence with one "
-                                 "entry per circuit, not %r." % fixed_identity_locations)
-            masks = []
-            for c in circuits:
-                idle = c.idling_lines(idle_layer_labels=[_Label(())])
-                masks.append([q in idle for q in c.line_labels])
-            return masks
-        if len(fixed_identity_locations) != len(circuits):
-            raise ValueError("fixed_identity_locations has %d entries, but there are %d circuits."
-                             % (len(fixed_identity_locations), len(circuits)))
-        for entry in fixed_identity_locations:
-            if not (entry is None or isinstance(entry, (list, tuple))
-                    or (isinstance(entry, _np.ndarray) and entry.ndim == 1)):
-                raise ValueError("fixed_identity_locations takes one mask (or None) per circuit, but got "
-                                 "the entry %r." % (entry,))
-        return list(fixed_identity_locations)
+                              add_default_protocol, reference=reference,
+                              reference_circuits=reference_circuits)
 
     def _init_foundation(self, circuit_lists, measurements, signs, num_samples, descriptor,
-                         add_default_protocol, has_fixed_identity_locations, depths=None, qubit_labels=None,
-                         reference_circuits=None):
+                         add_default_protocol, depths=None, qubit_labels=None,
+                         reference=None, reference_circuits=None):
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
         if reference_circuits is not None:
@@ -181,7 +138,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
         self.signs = signs
         self.circuits_per_depth = num_samples
         self.descriptor = descriptor
-        self.has_fixed_identity_locations = bool(has_fixed_identity_locations)
+        self.reference = reference
         self.reference_circuits = reference_circuits
         if reference_circuits is not None:
             # BenchmarkingDesign's 'json' type can't serialize circuits.
@@ -198,7 +155,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
         The new design keeps the depths (target indices), measurements, signs,
-        `has_fixed_identity_locations`, `seed` and reference circuits (mapped) of this one.
+        `seed`, `reference` and reference circuits (mapped) of this one.
         Like the RB designs, it has no default protocols: use `add_default_protocol(DFE(name='DFE'))` to get one.
 
         Parameters
@@ -225,9 +182,9 @@ class DFEDesign(_vb.BenchmarkingDesign):
                              [list(s) for s in self.signs],
                              self.circuits_per_depth, self.descriptor,
                              add_default_protocol=False,
-                             has_fixed_identity_locations=getattr(self, 'has_fixed_identity_locations', False),
                              depths=list(self.depths),
                              qubit_labels=self._mapped_qubit_labels(mapper),
+                             reference=getattr(self, 'reference', None),
                              reference_circuits=references)
         ret.seed = getattr(self, 'seed', None)
         return ret
@@ -265,54 +222,97 @@ class DFEDesign(_vb.BenchmarkingDesign):
         return super().setup_nameddict(final_dict)
 
 
+def _repeat_covariance(dataset, entries):
+    """
+    The shot covariance between different entries that read the same dataset row.
+
+    A DataSet pools the shots of a repeated circuit into one row, so the sample variance of
+    the entries' values misses the covariance that their shared shots induce. `entries` has
+    one list per entry of `(circuit, coefficient, measurement, sign)` terms, and an entry's
+    value is the sum of `coefficient * energy` over its terms. For each row that two or more
+    entries read, this adds the variance of all the terms on the row, less the variance of
+    each entry's own terms on it, each estimated from the row's counts as
+    `(E[y^2] - E[y]^2) / (M - 1)` for `M` shots. Rows read by a single entry are skipped.
+    The row must have at least 2 shots.
+    """
+    readers = {}
+    for k, terms in enumerate(entries):
+        for term in terms:
+            readers.setdefault(term[0], {}).setdefault(k, []).append(term[1:])
+
+    def variance(terms, row):
+        m1 = 0.0
+        m2 = 0.0
+        for outcome, count in row.counts.items():
+            y = sum(coef * _vb._outcome_energy(outcome[0], meas, sign) for coef, meas, sign in terms)
+            m1 += count * y
+            m2 += count * y * y
+        total = row.total
+        return (m2 / total - (m1 / total)**2) / (total - 1)
+
+    covariance = 0.0
+    for circuit, by_entry in readers.items():
+        if len(by_entry) < 2:
+            continue
+        row = dataset[circuit]
+        covariance += variance([t for terms in by_entry.values() for t in terms], row)
+        covariance -= sum(variance(terms, row) for terms in by_entry.values())
+    return covariance
+
+
 class DFE(_vb.SummaryStatistics):
     """
     Direct fidelity estimation of the process fidelity of each target circuit in a DFEDesign.
 
-    For a Clifford target on n qubits (its own `line_labels`) under stochastic Pauli errors, the energy of a dressed
-    circuit is an unbiased estimate of the Pauli fidelity of its sampled Pauli. The default
-    sampling is uniform over all 4^n - 1 non-identity Paulis, so the mean energy `p` over a
-    target's dressed circuits gives the process fidelity `1 - (4^n - 1)(1 - p)/4^n`, computed by
-    :func:`~pygsti.tools.mcfetools.polarization_to_fidelity`. For n >= 20 that function returns
-    `p` itself.
-
-    Non-Pauli noise can bias the estimate: qubits where the sampled Pauli is the identity start
-    in |0> rather than in a random state, so non-unital errors such as amplitude damping shift
-    the estimate by an amount that depends on the target circuit. Under T1 decay toward |0> the
-    fidelity is overstated.
+    For a Clifford target on n qubits (its own `line_labels`), every qubit of a dressed circuit
+    starts in a uniformly random eigenstate bit, so averaged over the bits the input is
+    `(I + sign P) / 2^n`. Averaged over the bits and the Pauli's uniformly random sign, the mean
+    energy of a dressed circuit is the diagonal entry for its Pauli of the target error's Pauli
+    transfer matrix (for one sign, a non-unital error adds a term that flips with the sign). The
+    default sampling is uniform over all 4^n - 1 non-identity Paulis, and the process fidelity
+    is the mean of those entries, so the estimate is unbiased for any trace-preserving error on
+    the target, not only stochastic Pauli errors (amplitude damping included). The mean energy
+    `p` over a target's dressed circuits gives the process fidelity `1 - (4^n - 1)(1 - p)/4^n`,
+    computed by :func:`~pygsti.tools.mcfetools.polarization_to_fidelity`. For n >= 20 that
+    function returns `p` itself.
 
     The standard error is `(1 - 4^-n)` times the sample standard deviation of the energies,
     divided by the square root of the number of dressed circuits K. It folds shot noise and
-    Pauli sampling into one empirical spread. It is zero when every energy is equal, as on
-    noiseless data, and NaN when K is 1. With few samples, or when the Pauli fidelities take few
-    distinct values, it can underestimate the true error.
+    Pauli sampling into one empirical spread. A DataSet pools a repeated circuit's shots into one
+    row, which hides their shot covariance from the sample variance, so the variance adds it
+    back, estimated from those rows; repeats don't shrink it. It is zero when every energy is
+    equal, as on noiseless data, and NaN when K is 1. With few samples, or when the Pauli
+    fidelities take few distinct values, it can underestimate the true error.
 
     The estimate covers the whole dressed circuit: errors in the preparation and
     measurement-basis layers that dressing adds, and in state preparation and readout, are
     included.
 
-    For a design with reference circuits (`create_same_measurement_reference=True`), the results
+    For a design with reference circuits (`reference='paired'` or `'readout'`), the results
     also hold `reference_corrected_fidelities` and `reference_corrected_standard_errors`. With
     `E` the dressed energies and `R` the energies of their paired references, the estimate is
     the process fidelity of `p = mean(E) / mean(R)`, with no square root. The vanilla fields
-    ignore the references. Errors in the shared final layer and in readout divide out of each
-    pair. This is exact for symmetric (bit-flip) readout error; asymmetric readout
-    (`P(1|0) != P(0|1)`) leaves a residual of the order of their difference, of either sign.
-    State-preparation errors, and errors in the preparation layer, divide out only partly,
-    because the reference prepares a stabilizer state of the image of the sampled Pauli rather
-    than that Pauli's own state. The ratio of means weights each pair by its reference energy,
-    which overstates the fidelity slightly under large readout error. Values above 1 or below 0
-    aren't clamped, and a non-positive mean reference energy gives NaN with a warning. The
-    standard error is the delta method's for the ratio of paired means,
-    `(1 - 4^-n) std(E - p R) / (sqrt(K) mean(R))`, and has the same caveats as the vanilla one,
-    including the undercount when dressed or reference circuits repeat.
+    ignore the references. Both kinds use this estimator, and readout error divides out on
+    average, asymmetric readout included, because a dressed circuit and its reference both end,
+    ideally and averaged over the draws, in the uniform distribution over bitstrings whose
+    parity gives the sign. A paired reference also divides out its shared final layer fully,
+    and the errors of state preparation and of the preparation layer in part, because it
+    prepares a stabilizer state of the image of the sampled Pauli rather than that Pauli's own
+    state. A readout reference shares only the measurement, so it leaves the errors of the
+    dressing's preparation and final layers in the corrected estimate, and its circuits are
+    shallow. The ratio of means weights each pair by its reference energy, which overstates the
+    fidelity slightly under large readout error. Values above 1 or below 0 aren't clamped, and a
+    non-positive mean reference energy gives NaN with a warning. The standard error is the
+    delta method's for the ratio of paired means,
+    `(1 - 4^-n) std(E - p R) / (sqrt(K) mean(R))`, with the shot covariance of repeated dressed
+    or reference circuits added back to the variance of the paired differences, and has the
+    same caveats as the vanilla one.
 
     Designs that aren't :class:`DFEDesign` objects are refused with TypeError, since other
     benchmarking designs (e.g. `BinaryRBDesign`) carry similar attributes but would give
-    meaningless numbers. Designs built with `fixed_identity_locations` are refused with
-    ValueError, because their sampled Paulis have fixed support and the process-fidelity
-    estimate would be biased. ValueError is also raised for data with no dataset, for a dataset
-    that lacks counts for some dressed or reference circuit (missing or zero-count rows), and for
+    meaningless numbers. ValueError is raised for data with no dataset, for a dataset
+    that lacks counts for some dressed or reference circuit (missing or zero-count rows), for
+    a target whose repeated dressed or reference circuit has fewer than 2 shots, and for
     a design whose `measurements`, `signs` or reference circuits don't line up with its circuit
     lists.
 
@@ -349,12 +349,9 @@ class DFE(_vb.SummaryStatistics):
         design = data.edesign
         if not isinstance(design, DFEDesign):
             raise TypeError("The DFE protocol needs a DFEDesign, not a %s." % type(design).__name__)
-        if getattr(design, 'has_fixed_identity_locations', False):
-            raise ValueError("This design pins identity locations (fixed_identity_locations), so its sampled "
-                             "Paulis have fixed support and the process-fidelity estimate would be biased. "
-                             "Rebuild it with fixed_identity_locations=None.")
         self._check_alignment(design)
         self._check_data_complete(design, data.dataset)
+        self._check_repeat_shots(design, data.dataset)
 
         summary = self._compute_summary_statistics(data, energy=True)
 
@@ -379,7 +376,11 @@ class DFE(_vb.SummaryStatistics):
             n = len(design.measurements[i][0])
             fidelities.append(float(_mcfe.polarization_to_fidelity(e.mean(), n)))
             if K >= 2:
-                standard_errors.append(float((1 - 4.0**-n) * e.std(ddof=1) / _np.sqrt(K)))
+                repeats = _repeat_covariance(
+                    data.dataset, [[(c, 1.0, m, s)] for c, m, s in
+                                   zip(design.circuit_lists[i], design.measurements[i], design.signs[i])])
+                var = (_np.sum((e - e.mean())**2) + repeats) / (K - 1)
+                standard_errors.append(float((1 - 4.0**-n) * _np.sqrt(var / K)))
             else:
                 standard_errors.append(float('nan'))
 
@@ -395,8 +396,13 @@ class DFE(_vb.SummaryStatistics):
                 p = e.mean() / r.mean()
                 ref_fidelities.append(float(_mcfe.polarization_to_fidelity(p, n)))
                 if K >= 2:
-                    ref_standard_errors.append(float(
-                        (1 - 4.0**-n) * _np.std(e - p * r, ddof=1) / (_np.sqrt(K) * r.mean())))
+                    d_ = e - p * r
+                    repeats = _repeat_covariance(
+                        data.dataset, [[(c, 1.0, m, s), (ref, -p, m, s)] for c, ref, m, s in
+                                       zip(design.circuit_lists[i], references[i],
+                                           design.measurements[i], design.signs[i])])
+                    var = (_np.sum((d_ - d_.mean())**2) + repeats) / (K - 1)
+                    ref_standard_errors.append(float((1 - 4.0**-n) * _np.sqrt(var / K) / r.mean()))
                 else:
                     ref_standard_errors.append(float('nan'))
 
@@ -424,6 +430,23 @@ class DFE(_vb.SummaryStatistics):
                              "A truncation that removes every dressed circuit of some target causes this (a known "
                              "bug in BenchmarkingDesign's truncation). Whole targets can be dropped safely with "
                              "truncate_to_lists.")
+
+    @staticmethod
+    def _check_repeat_shots(design, ds):
+        # The repeat covariance divides by (shots - 1), so a repeated circuit needs 2 or more.
+        references = getattr(design, 'reference_circuits', None)
+        for i, circuit_list in enumerate(design.circuit_lists):
+            counts = {}
+            for c in circuit_list:
+                counts[c] = counts.get(c, 0) + 1
+            if references is not None:
+                for c in references[i]:
+                    counts[c] = counts.get(c, 0) + 1
+            if any(n >= 2 and ds[c].total < 2 for c, n in counts.items()):
+                raise ValueError(
+                    f"Target {design.depths[i]} repeats a dressed or reference circuit whose data has fewer "
+                    "than 2 shots, so its standard error can't account for the repeat. Use 2 or more shots "
+                    "per circuit.")
 
     @staticmethod
     def _check_data_complete(design, ds):
