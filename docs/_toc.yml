@@ -17,13 +17,12 @@ chapters:
   sections:
   - file: markdown/guides/workflow/Workflow
     sections:
-    - file: markdown/guides/workflow/ProtocolExamples
-    - file: markdown/guides/workflow/DescribeYourDevice
     - file: markdown/guides/workflow/Circuits
     - file: markdown/guides/workflow/ExperimentDesigns
     - file: markdown/guides/workflow/DataSets
-    - file: markdown/guides/workflow/SimulatingData
     - file: markdown/guides/workflow/FilesAndDirectories
+    - file: markdown/advanced/interop/Cirq
+    - file: markdown/advanced/interop/IBMQ
   - file: markdown/guides/gst/GSTDesigns
     sections:
     - file: markdown/guides/gst/ModelpackDesigns
@@ -64,6 +63,8 @@ chapters:
     sections:
     - file: markdown/guides/benchmarks/VolumetricBenchmarkExamples
     - file: markdown/guides/benchmarks/MirrorFidelityEstimation
+    - file: markdown/advanced/specialist/ParityBenchmarking
+  - file: markdown/advanced/specialist/RobustPhaseEstimation
   - file: markdown/guides/drift/DriftCharacterization
     sections:
     - file: markdown/guides/drift/DriftAnalysis
@@ -80,18 +81,12 @@ chapters:
 - file: markdown/guides/models/DeviceModels
   sections:
   - file: markdown/guides/models/BuildingModels
+  - file: markdown/guides/workflow/DescribeYourDevice
   - file: markdown/internals/models/ExplicitModels
   - file: markdown/guides/models/MultiQubitModels
   - file: markdown/guides/models/ModelNoise
-- file: markdown/advanced/Index
-  sections:
-  - file: markdown/advanced/specialist/Index
-    sections:
-    - file: markdown/advanced/specialist/RobustPhaseEstimation
-    - file: markdown/advanced/specialist/ParityBenchmarking
+  - file: markdown/guides/workflow/SimulatingData
   - file: markdown/advanced/ml/QPANN
-  - file: markdown/advanced/interop/Cirq
-  - file: markdown/advanced/interop/IBMQ
 - file: markdown/internals/Index
   sections:
   - file: markdown/internals/models/Operators

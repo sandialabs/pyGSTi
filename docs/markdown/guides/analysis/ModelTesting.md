@@ -147,4 +147,4 @@ print(results.estimates['model1'].parameters['model_test_values'] == \
 results_warmstarted.estimates['model1'].parameters['model_test_values'])
 ```
 
-Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGSTi protocols](../workflow/ProtocolExamples).
+That's it! For the other protocols pyGSTi provides, see [Choosing a protocol](../../start/ChooseAProtocol).

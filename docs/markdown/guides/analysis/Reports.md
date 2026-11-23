@@ -91,7 +91,7 @@ est = results_tp.estimates['full TP']
 mdlFinal = est.models['final iteration estimate']
 mdlTarget = est.models['target']
 for spamWt in [1e-4,1e-2,1.0]:
-    mdl = pygsti.gaugeopt_to_target(mdlFinal,mdlTarget,{'gates':1, 'spam':spamWt})
+    mdl = pygsti.gaugeopt_to_target(mdlFinal, mdlTarget, item_weights={'gates':1, 'spam':spamWt})
     est.add_gaugeoptimized({'item_weights': {'gates':1, 'spam':spamWt}}, mdl, "Spam %g" % spamWt)
 ```
 
@@ -107,7 +107,7 @@ est = results_full.estimates['Full']
 mdlFinal = est.models['final iteration estimate']
 mdlTarget = est.models['target']
 for spamWt in [1e-4,1e-2,1.0]:
-    mdl = pygsti.gaugeopt_to_target(mdlFinal,mdlTarget,{'gates':1, 'spam':spamWt})
+    mdl = pygsti.gaugeopt_to_target(mdlFinal, mdlTarget, item_weights={'gates':1, 'spam':spamWt})
     est.add_gaugeoptimized({'item_weights': {'gates':1, 'spam':spamWt}}, mdl, "Spam %g" % spamWt)
 ```
 

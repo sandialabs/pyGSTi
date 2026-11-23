@@ -26,10 +26,6 @@ sns.set_style('white')
 %matplotlib inline
 
 import pygsti.extras.paritybenchmarking as pb
-#Note: if you don't want to install pyGSTi to run this notebook,
-# just grab the pygsti/extras/paritybenchmarking/disturbancecalc.py file, put it
-# in the same directory as this notebook, and use this line instead of the one above:
-# import disturbancecalc as pb
 
 installed_solvers = cvxpy.installed_solvers()
 SOLVER = 'MOSEK' # prefer MOSEK (commercial solver, free for research) if available.

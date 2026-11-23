@@ -78,7 +78,6 @@ SERIAL_CHAIN = [
     "internals/extending/LowLevelGSTAlgorithms", # R Example_Dataset{,_LowCnts}.txt
     "guides/analysis/Reports",                   # R Example_Dataset.txt
     "start/FirstGST",                            # W gettingStartedReport, test_gst_dir
-    "guides/workflow/ProtocolExamples",          # W gettingStartedReport, test_gst_dir, test_rb_dir
     "guides/rb/RBWorkflow",                      # W test_rb_dir
 ]
 

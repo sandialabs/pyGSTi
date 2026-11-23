@@ -14,6 +14,8 @@ Start from what you want to learn.
 
 **I want a very precise value for a rotation angle.** You want robust phase estimation, which spends its circuits on precision for a small number of angles rather than on breadth. See [robust phase estimation](../advanced/specialist/RobustPhaseEstimation).
 
+**I want to score a parity-check circuit.** You want parity benchmarking, which computes the weight-X disturbance between a test data set from the parity check and a reference data set. See [parity benchmarking](../advanced/specialist/ParityBenchmarking).
+
 ## The RB family
 
 RB is not one protocol. For the multi-qubit flavours the main difference is how many qubits you can benchmark at once; Interleaved RB and SU(2) qudit RB differ instead in what they report, isolating a single gate and resolving noise per irreducible component respectively.

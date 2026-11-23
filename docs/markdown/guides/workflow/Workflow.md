@@ -1,14 +1,17 @@
-# Measurement workflow
+# Circuits, designs, and data
 
-A pyGSTi analysis starts with an experiment design, pairs that design with measured counts, and runs a protocol to produce results. [Running QCVV protocols](ProtocolExamples) demonstrates this sequence for GST, randomized benchmarking, model testing, robust phase estimation, and drift analysis.
+A pyGSTi protocol takes an experiment design (the circuits to run) paired with a data set (their measured counts). These pages cover those objects directly: building and editing them, and saving and loading them. [Your first GST run](../../start/FirstGST) and [Your first benchmark](../../start/FirstBenchmark) show them in use end to end.
 
 Choose the notebook for the object or step you're working on:
 
-- [Describing your device](DescribeYourDevice) specifies qubits, available gates, and connectivity.
 - [Circuits](Circuits) constructs and manipulates the sequences you'll run.
 - [Experiment designs](ExperimentDesigns) organizes circuits for a protocol, including combined experiments.
 - [Data sets](DataSets) stores outcome counts and works with individual circuit records.
-- [Simulating data](SimulatingData) generates counts from a model when you don't yet have experimental data.
 - [File input and output](FilesAndDirectories) reads and writes circuits, models, data, and protocol directories.
 
-For counts collected outside pyGSTi, start with [Getting your own data in](../../start/YourOwnData).
+Two pages connect these objects to other platforms:
+
+- [Cirq integration](../../advanced/interop/Cirq) converts circuits between Cirq and pyGSTi and loads experiment results into a pyGSTi data set.
+- [IBM Q integration](../../advanced/interop/IBMQ) submits an experiment design to an IBM backend through Qiskit and collects its counts for analysis. It requires Qiskit and an IBM Q account.
+
+For counts collected any other way, start with [Getting your own data in](../../start/YourOwnData).

@@ -33,9 +33,9 @@ print("With fpr=True: %d circuits" % len(fpr_design.all_circuits_needing_data))
 
 For this pack, 128 circuits instead of 568.  The rest of this page covers the algorithms behind that argument: what to reach for when no model pack covers your gate set, or when you want control over how the pairs are chosen.  To check that a reduced design is still adequate, compute its Fisher information ([evaluating experiment designs](CheckYourDesign)); to estimate what a design costs to run, use `calculate_edesign_estimated_runtime` ([experiment designs](../workflow/ExperimentDesigns)).
 
-## The four reduction methods
+## The three reduction methods
 
-There are currently four different ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
+There are three ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
 
 - **Per-germ fiducial pair reduction (PFPR)** removes the same intelligently-selected set of fiducial pairs for all powers of a given germ, but different sets are removed for different germs.  Since different germs amplify different directions in model space, it makes intuitive sense to specify different fiducial pair sets for different germs.  Because this method only considers one germ at a time, its search stays cheap as the gate set grows.
 
@@ -43,11 +43,7 @@ There are currently four different ways to reduce a standard set of GST operatio
 
 - **Random per-germ power fiducial pair reduction (RFPR)** randomly chooses a different set of fiducial pairs to remove for each germ-power.  It is extremely fast to perform, as pairs are just randomly selected for removal, and in practice works well (i.e. does not impair Heisenberg-scaling) up until some critical fraction of the pairs are removed.  This reflects the fact that the direction detected by a fiducial pair usually has some non-negligible overlap with each of the directions amplified by a germ, and it is the exceptional case that an amplified direction escapes undetected.  As such, the "critical fraction" which can usually be safely removed equals the ratio of amplified-parameters to germ-process-matrix-elements (typically $\approx 1/d^2$ where $d$ is the Hilbert space dimension, so $1/4 = 25\%$ for 1 qubit and $1/16 = 6.25\%$ for 2 qubits).  RFPR can be combined with PFPR so that some number of randomly chosen pairs can be added on top of the "intelligently-chosen" pairs of PFPR.  In this way, one can vary the amount of sequence reduction (in order to trade off speed vs. robustness to non-Markovian noise) without inadvertently selecting too few or an especially bad set of random fiducial pairs.
 
-- **Global fiducial pair reduction (GFPR)** removes a single, intelligently-selected set of fiducial pairs for all germs and all germ-powers, chosen by repeatedly evaluating the number of amplified parameters for an *entire germ set*.  That global search is what rules it out in practice: the number of candidate pair lists grows combinatorially with the number of pairs kept — watch its demo below escalate from 630 candidate lists to test up to 376,992.
-
-```{warning}
-GFPR's `find_sufficient_fiducial_pairs` is deprecated in favor of `find_sufficient_fiducial_pairs_per_germ`, and Python's default warning filters usually hide the deprecation warning at runtime. Use a per-germ method in new code; the GFPR section below is kept for reference.
-```
+The per-germ methods are implemented by the `find_sufficient_fiducial_pairs_per_germ*` family in `pygsti.algorithms`. The API reference for {py:func}`~pygsti.algorithms.fiducialpairreduction.find_sufficient_fiducial_pairs_per_germ` describes the amplificational-completeness test they share and every search option, and the {py:mod}`~pygsti.algorithms.fiducialpairreduction` module page lists the greedy, global and per-germ-power variants alongside it.
 
 ## Preliminaries
 
@@ -74,7 +70,7 @@ print("Gate operation labels = ", opLabels)
 
 ## Sequence reduction
 
-Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the four reduction types listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.  One constant to expect in every table that follows: the L=1 entry is always the same 56 sequences.  That first list is just the LGST circuits, which are always kept — reduction only thins the germ-power circuits stacked on top of them.
+Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the reduction methods listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.  One constant to expect in every table that follows: the L=1 entry is always the same 56 sequences.  That first list is just the LGST circuits, which are always kept — reduction only thins the germ-power circuits stacked on top of them.
 
 ### No reduction ("standard" GST)
 
@@ -203,39 +199,10 @@ rfprExperiments = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(rfprExperiments))
 ```
 
-### Global fiducial pair reduction (GFPR)
-
-For reference, the deprecated global method (see the warning above).
-
-```{code-cell} ipython3
-fid_pairs = pygsti.alg.find_sufficient_fiducial_pairs(
-            target_model, prep_fiducials, meas_fiducials, germs,
-            search_mode="random", n_random=10, seed=1234,
-            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
-
-# fid_pairs is a list of (prepIndex,measIndex) 2-tuples, where
-# prepIndex indexes prep_fiducials and measIndex indexes meas_fiducials
-print("Global FPR says we only need to keep the %d pairs:\n %s\n"
-      % (len(fid_pairs),fid_pairs))
-
-gfprStructs = pc.create_lsgst_circuit_lists(
-    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
-    fid_pairs=fid_pairs)
-
-print("Global FPR reduction")
-for L,strct in zip(maxLengths,gfprStructs):
-    print("L=%d: %d operation sequences" % (L,len(strct)))
-    
-gfprExperiments = pc.create_lsgst_circuits(
-    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
-    fid_pairs=fid_pairs)
-print("\n%d experiments to run GST." % len(gfprExperiments))
-```
-
 ## Running GST
 In each case above, we constructed (1) a list-of-lists giving the GST operation sequences for each maximum-length stage, and (2) a list of the experiments.  In what follows, we'll use the experiment list to generate some simulated ("fake") data, and then run GST on it.  Two fits are enough to make the comparison: the full design, and the greedy per-germ design.  Since both are run in exactly the same way, we'll put all of the logic in a function.
 
-We already built each reduced circuit-structure list by hand above, so there's no need to have GST regenerate it: a `GateSetTomographyDesign` accepts a list of circuit structures directly, where a `StandardGSTDesign` would derive them from fiducials, germs, and maximum lengths (the [experiment designs tutorial](../workflow/ExperimentDesigns) covers the distinction). We pair that experiment design with the simulated dataset in a `ProtocolData` object, and hand the pair to the `GateSetTomography` protocol. This sidesteps the old two-driver split between `run_long_sequence_gst`, which always builds a *complete* list of operation sequences, and `run_long_sequence_gst_base`, the "base" variant that fiducial pair reduction relied on for accepting an explicit circuit-structure list. The Protocol API takes an explicit experiment design either way, so there's only one code path to learn.
+We already built each reduced circuit-structure list by hand above, so there's no need to have GST regenerate it: a `GateSetTomographyDesign` accepts a list of circuit structures directly, where a `StandardGSTDesign` would derive them from fiducials, germs, and maximum lengths (the [experiment designs tutorial](../workflow/ExperimentDesigns) covers the distinction). We pair that experiment design with the simulated dataset in a `ProtocolData` object, and hand the pair to the `GateSetTomography` protocol.
 
 ```{code-cell} ipython3
 #use a depolarized version of the target gates to generate the data

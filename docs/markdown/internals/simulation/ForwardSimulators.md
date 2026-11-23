@@ -8,4 +8,4 @@ A forward simulator computes circuit outcome probabilities from a model. [Choosi
 - [Detector error models from error generators](DEM-Creation-from-Errorgens) builds a Stim detector error model from pyGSTi error generators and decodes with `pymatching`.
 - [Error generator polynomials](ErrorGeneratorPolynomials) constructs symbolic expressions that can be evaluated at different noise parameters.
 
-To sample experimental counts from model probabilities, see [Simulating data](../../guides/workflow/SimulatingData).
+To sample experimental counts from model probabilities, see [Computing probabilities and simulating data](../../guides/workflow/SimulatingData).

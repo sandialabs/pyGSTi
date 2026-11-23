@@ -64,95 +64,19 @@ ff_design = pygsti.protocols.FreeformDesign({C("Gxpi2:0"): {'id': 0, 'name': "do
 ff_design.aux_info
 ```
 
-### Loading from files
-Simple experiment designs can also be created by reading text files containing circuit lists from a directory.  The `create_edesign_from_dir` attempts to read in all the files beneath a root directory's `edesign` subdirectory as circuit list files (text files with one circuit per line).  If a single loadable file is found, an `ExperimentDesign` is created.  If multiple loadable files are found, a `CircuitListsDesign` is created.
-
-The cell below demonstrates the single-file case.
-
-```{code-cell} ipython3
-import pathlib
-
-circuits = """# Example text file of circuits
-{}@(0)
-[]@(0)
-Gxpi2:0@(0)
-Gypi2:0@(0)
-"""
-
-# Write a text file with the above circuit strings to a root/edesign directory
-root = pathlib.Path("../../../tutorial_files/example_edesign_root")  # the root directory
-root.mkdir(exist_ok=True); (root / 'edesign').mkdir(exist_ok=True)  # create a `edesign` subdirectory
-with open(str(root / 'edesign' / 'circuits.txt'), 'w') as f:
-    f.write(circuits)
-
-edesign_from_dir = pygsti.io.create_edesign_from_dir(str(root))
-edesign_from_dir.all_circuits_needing_data
-```
-
 ## Protocol-specific experiment designs
-Some protocols, such as gate set tomography (GST) and randomized benchmarking (RB) require additional information about the circuits that were performed in order to perform their analysis.
+Some protocols need more than a list of circuits: they need to know how the circuits were built. Their experiment designs derive from `CircuitListsDesign` and add that information.
 
-### Gate set tomography
-The `GateSetTomographyDesign` class defines an experiment design with all the necessary information to run the GST protocol.  It is derived from `CircuitListsDesign`, and holds a minimal amount of additional information, namely a *target model*.  
+- **Gate set tomography.** `GateSetTomographyDesign` adds a target processor specification to nested circuit lists of increasing depth. `StandardGSTDesign` derives from it and also keeps the preparation fiducials, measurement fiducials, germs and maximum lengths the circuits were built from, which reports use to organize their plots. The [GST experiment designs](../gst/GSTDesigns) chapter covers building them, from [model packs](../gst/ModelpackDesigns) or from [your own fiducials and germs](../gst/GSTCircuits), and [GST protocol options](../gst/GSTProtocols) builds a `GateSetTomographyDesign` from arbitrary circuit lists.
+- **Randomized benchmarking.** `CliffordRBDesign`, `DirectRBDesign` and `MirrorRBDesign` add what the RB protocol needs about each random circuit, chiefly its correct outcome. [Running an RB experiment](../rb/RBWorkflow) builds one from a processor specification, compilation rules, depths and circuits per depth.
 
-Typically, the set of circuits used to run GST is constructed from *fiducial* and *germ* sub-circuits, the latter repeated some number of times based on a list of *maximum lengths*.  When the circuits are constructed in this "standard" way the `StandardGSTDesign` class should be used as it retains this additional structure.  This structure is useful for organizing (color-box) plots of the GST results later on (e.g. when generating reports), but is not strictly necessary for running the `GateSetTomography` protocol.  Thus, is it distinct (and derived from) the `GateSetTomographyDesign` class.
-
-The most common way to create a `StandardGSTDesign` is to use one of pyGSTi's built-in model packs:
+The rest of this page uses one GST design, from a model pack:
 
 ```{code-cell} ipython3
-from pygsti.modelpacks import smq1Q_XYI as std  # pack for the 1-qubit X(pi/2), Y(pi/2), Idle model 
+from pygsti.modelpacks import smq1Q_XYI as std  # pack for the 1-qubit X(pi/2), Y(pi/2), Idle model
 gst_design = std.create_gst_experiment_design(max_max_length=4)
 print(len(gst_design.all_circuits_needing_data), "GST circuits")
 ```
-
-You could also use your own sets of fiducials, germs and maximum lengths:
-
-```{code-cell} ipython3
-target_model = std.target_model()  # a Model object
-prep_fiducials = [C("{}@(0)"), C("Gxpi2:0"), C("Gypi2:0"), C("Gxpi2:0^2")]
-meas_fiducials = [C("{}@(0)"), C("Gxpi2:0"), C("Gypi2:0"), C("Gxpi2:0^2")]
-germs = [C("[]@(0)"), C("Gxpi2:0"), C("Gypi2:0")]  # for example, we just want to have periodic circuits of Idle,? Gxpi2 and Gypi2
-maxLengths = [1,3,6]
-gst_design2 = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials, meas_fiducials,
-                                                germs, maxLengths)
-print(len(gst_design2.all_circuits_needing_data), "GST circuits")
-```
-
-Finally, you can construct a `GateSetTomographyDesign` using any set of circuits you please.  It is useful, for the stability of the GST algorithm, that these be divided into nested lists of increasingly longer (deeper) circuits.  The cell below illustrates this technique, but specifies too few circuits for finding estimates of all the degrees of freedom in a typical GST model.  When specifying circuits manually like this, it is important to keep in mind that the quality of a GST estimate depends on the data used to generate it.
-
-```{code-cell} ipython3
-target_model = std.target_model()  # a Model object
-circuits1 = [C("Gi@(0)"), C("Gxpi2:0"), C("Gypi2:0")]
-circuits2 = [C("Gi^2@(0)"), C("Gxpi2:0^2"), C("Gypi2:0^2")]
-circuits3 = [C("Gi^8@(0)"), C("Gxpi2:0^8"), C("Gypi2:0^8")]
-
-pspec = pygsti.processors.QubitProcessorSpec(1, ['Gi', 'Gxpi2', 'Gypi2'])
-
-gst_design3 = pygsti.protocols.GateSetTomographyDesign(pspec, [circuits1, circuits2, circuits3])
-gst_design3.all_circuits_needing_data
-```
-
-### Randomized benchmarking
-The `CliffordRBDesign`, `DirectRBDesign`, and `MirrorRBDesign` classes define experiment designs with all the necessary information to run the randomized benchmarking (RB) protocol using different ensembles of circuits.  These classes are also derived from `CircuitListsDesign`, and hold additionally meta-data needed to run the RB protocol (primarily what the correct outcome of each random circuit is).
-
-We create these experiment designs using a processor specification and counts of the depths and number of random circuits per depth that should be generated.  The cell below demonstrates this for the Clifford RB case.
-
-```{code-cell} ipython3
-qubit_labels = ['Q1']
-gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2']
-pspec = pygsti.processors.QubitProcessorSpec(len(qubit_labels), gate_names,
-                 qubit_labels=qubit_labels)
-depths = [0, 10, 20, 30]
-circuits_per_depth = 50
-
-from pygsti.processors import CliffordCompilationRules as CCR
-compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),            
-                'paulieq': CCR.create_standard(pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)}
-
-rb_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, circuits_per_depth)
-```
-
-The `DirectRBDesign` and `MirrorRBDesign` classes are used similarly.
 
 ## Simultaneous and combined experiment designs
 It is not uncommon to run multiple characterization protocols on a single processor, and it can be desirable to run circuits for multiple protocols in a single round of data-taking.  The `CombinedExperimentDesign` and `SimultaneousExperimentDesign` classes allow you to build a *hierarchy* of nested experiment designs that facilitate a multiple-protocols-on-one-processor paradigm.
@@ -161,7 +85,7 @@ It is not uncommon to run multiple characterization protocols on a single proces
 
 - A `SimultaneousExperimentDesign` describes the concurrent application of one or more experiment designs on different disjoint subsets of the simultaneou design's qubits.  The sub-designs of a simultaneous design must therefore act (i.e. have circuits that act) on different sets of qubits.  The circuits of the simultaneous design are the "tensor-product" of the circuits on its sub-designs.  When one sub-design has more circuits than another, the shorter design is "padded" with idle circuits.
 
-The examples below show how to create combined and simultanous experiment designs using simple `ExperimentDesign` objects as their members.
+The examples below show how to create combined and simultaneous experiment designs using simple `ExperimentDesign` objects as their members. [Simultaneous RB](../rb/SimultaneousRB) and the [volumetric benchmark examples](../benchmarks/VolumetricBenchmarkExamples) use them with protocol-specific designs.
 
 ### Combined experiment designs
 
@@ -243,18 +167,36 @@ sim_design2.all_circuits_needing_data
 Note that all of the above circuits have qubit labels `(0,1,2)` even though the simultaneous design was only given a single sub-design with circuits on qubit `0`.
 
 ## Loading and saving experiment designs
-Once an experiment design is created, loading and saving it to a directory is easy.  Experiment designs write their data to the `edesign` sub-directory beneath the specified root directory.  Combined and simultaneous designs write to and load from a directory structure that mimics their structure.  That is, there will be a sub-directory for each sub-design.
+An experiment design writes itself to the `edesign` subdirectory of a root directory, and `pygsti.io.read_edesign_from_dir` reads it back. Combined and simultaneous designs write one subdirectory per sub-design, mirroring their structure. [File input and output](FilesAndDirectories) describes the full directory layout shared with data and results.
 
 ```{code-cell} ipython3
-gst_design.write("../../../tutorial_files/example_gst_edesign_root")
 combined_design.write("../../../tutorial_files/example_combined_edesign_root")
-sim_design.write("../../../tutorial_files/example_simultaneous_edesign_root")
+combined_design_loaded = pygsti.io.read_edesign_from_dir("../../../tutorial_files/example_combined_edesign_root")
+list(combined_design_loaded.keys())
 ```
 
+A simple experiment design can also be created by reading text files containing circuit lists from a directory.  The `create_edesign_from_dir` attempts to read in all the files beneath a root directory's `edesign` subdirectory as circuit list files (text files with one circuit per line).  If a single loadable file is found, an `ExperimentDesign` is created.  If multiple loadable files are found, a `CircuitListsDesign` is created.
+
+The cell below demonstrates the single-file case.
+
 ```{code-cell} ipython3
-gst_design_loaded = pygsti.io.read_edesign_from_dir("../../../tutorial_files/example_gst_edesign_root")
-combined_design_loaded = pygsti.io.read_edesign_from_dir("../../../tutorial_files/example_combined_edesign_root")
-sim_design_loaded = pygsti.io.read_edesign_from_dir("../../../tutorial_files/example_simultaneous_edesign_root")
+import pathlib
+
+circuits = """# Example text file of circuits
+{}@(0)
+[]@(0)
+Gxpi2:0@(0)
+Gypi2:0@(0)
+"""
+
+# Write a text file with the above circuit strings to a root/edesign directory
+root = pathlib.Path("../../../tutorial_files/example_edesign_root")  # the root directory
+root.mkdir(exist_ok=True); (root / 'edesign').mkdir(exist_ok=True)  # create a `edesign` subdirectory
+with open(str(root / 'edesign' / 'circuits.txt'), 'w') as f:
+    f.write(circuits)
+
+edesign_from_dir = pygsti.io.create_edesign_from_dir(str(root))
+edesign_from_dir.all_circuits_needing_data
 ```
 
 ## Estimating runtime of experiment designs

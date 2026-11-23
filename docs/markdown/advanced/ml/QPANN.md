@@ -21,6 +21,10 @@ myst:
 
 # Quantum physics-aware neural networks
 
+```{warning}
+QPANNs are experimental. `pygsti.extras.ml` is under active development, and its API may change between releases.
+```
+
 A quantum physics-aware neural network (QPANN) predicts how well a noisy quantum
 computer will run a given circuit. pyGSTi's implementation lives in
 `pygsti.extras.ml`, and it follows the architecture of

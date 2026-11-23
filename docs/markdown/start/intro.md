@@ -12,12 +12,11 @@ pyGSTi is a Python framework for modeling and characterizing quantum information
 
 ## Where to go next
 
-This documentation is arranged in six sections, and which one you want depends on what you are doing rather than on how much you already know.
+This documentation is arranged in five sections, and which one you want depends on what you are doing rather than on how much you already know.
 
 - **[Start here](Index)** is a short guided path from a fresh install to a characterization result you can read.
 - **[Characterization guides](../guides/Index)** is the practitioner layer: one chapter per protocol, plus the workflow and analysis chapters that all of them draw on.
-- **[Defining models](../guides/models/DeviceModels)** covers explicit and implicit models, their parameterizations, and adding noise to describe your device.
-- **[Advanced capabilities](../advanced/Index)** covers specialist protocols, machine-learned error models, and circuits and data exchanged with Cirq or IBM Q.
+- **[Defining models](../guides/models/DeviceModels)** covers processor specifications, explicit and implicit models, their parameterizations, adding noise to describe your device, and simulating data from a model.
 - **[Core objects](../internals/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. Use it when you need to inspect or extend those components.
 - **[Reference](../reference/Index)** holds the [FAQ](../reference/Troubleshooting), [citing pyGSTi](../reference/Citing), [migrating from the function-based API](../reference/FromFunctionAPI) and the API reference.
 

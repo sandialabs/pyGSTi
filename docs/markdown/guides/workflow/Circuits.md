@@ -394,17 +394,16 @@ pspec = pygsti.processors.QubitProcessorSpec(2, ['Gh', 'Gcphase'], geometry='lin
 model = pygsti.models.create_crosstalk_free_model(pspec)
 ```
 
-Then circuit outcome probabilities can be computed using either the `model.probabilities(circuit)` or `circuit.simulate(model)`, whichever is more convenient:
+Then circuit outcome probabilities are computed by the model's `probabilities` method:
 
 ```{code-cell} ipython3
-out1 = model.probabilities(clifford_circuit)
-out2 = clifford_circuit.simulate(model)
+out = model.probabilities(clifford_circuit)
 ```
 
 The output is simply a dictionary of outcome probabilities:
 
 ```{code-cell} ipython3
-out1
+out
 ```
 
 The keys of the outcome dictionary `out` are things like `('00',)` instead of just `'00'` because of possible *intermediate* outcomes.  See the [Instruments tutorial](../gst/MidCircuitMeasurement) if you're interested in learning more about intermediate outcomes.

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Simulating data
+# Computing probabilities and simulating data
 
 Everything on this page starts with a `Model` and ends with numbers.  Which numbers depends on what you ask for: the outcome probabilities of a single circuit, sampled outcome counts for every circuit in an experiment design, or arbitrary per-circuit quantities that you define yourself.  PyGSTi calls the underlying computation *forward simulation*, and all three cases run through it.
 
@@ -99,31 +99,9 @@ print(probs)
 Simulation by state propagation is a work in progress in pyGSTi, and users should expect that this interface may change (improve!) in the future.
 ```
 
-## Forward-simulation types
+## Choosing a forward simulator
 
-Several forward-simulation methods are available, and a `Model` holds its active one in the `.sim` attribute (an instance of a `ForwardSimulator` subclass).  The default, selected when a construction function is passed `simulator="auto"`, is `"map"`: repeated matrix-vector products against the state representation, with operations treated as abstract *maps*.  The `"matrix"` method multiplies together dense process matrices for the whole circuit; it can win on small (1-2 qubit) Hilbert spaces where caching dense matrices pays off across very large circuit batches, but it is not the automatic choice.  See the [forward simulation types guide](../../internals/simulation/ChoosingForwardSimulators) for the full list, including the term-based and CHP simulators.
-
-Usually you don't need to think about this.  When you do, `.sim` is both readable and assignable:
-
-```{code-cell} ipython3
-print("2Q mdl_2q will simulate probabilities using the '%s' forward-simulation method." % mdl_2q.sim)
-mdl_2q.probabilities(c)
-```
-
-```{code-cell} ipython3
-pspec3 = pygsti.processors.QubitProcessorSpec(3, ('Gxpi2', 'Gypi2', 'Gcnot'), geometry='line')
-implicit_3q = pygsti.models.create_crosstalk_free_model(pspec3)
-print("3Q implicit_3q will simulate probabilities using the '%s' forward-simulation method." % implicit_3q.sim)
-implicit_3q.probabilities(c)
-```
-
-Switching is a one-line assignment.  We do it on the two-qubit model rather than the three-qubit one deliberately: `"matrix"` composes a dense process matrix for the entire circuit, so it can pay off at one or two qubits and [should not be pointed at a many-qubit model](../../internals/simulation/ChoosingForwardSimulators).
-
-```{code-cell} ipython3
-mdl_2q.sim = 'matrix'
-print("2Q mdl_2q will now simulate probabilities using the '%s' forward-simulation method." % mdl_2q.sim)
-mdl_2q.probabilities(c)
-```
+The computation above is carried out by the model's forward simulator, held in its `.sim` attribute. The default, `"map"`, suits almost every case, and `.sim` can be reassigned when it doesn't. See [Choosing a forward simulator](../../internals/simulation/ChoosingForwardSimulators) for the available simulators and when each one pays off.
 
 ## Simulating experimental data
 
