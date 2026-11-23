@@ -39,6 +39,7 @@ If you internalize that triad and the Protocol-on-top picture, the rest of the s
 | [07-tools-library.md](agent-docs/07-tools-library.md) | `tools` | reach for a basis transform, channel conversion, MPI helper, or other utility |
 | [08-domain-plugins.md](agent-docs/08-domain-plugins.md) | `extras`, `errorgenpropagation` | work on RB / RPE / drift / error-generator propagation |
 | [known-debt.md](agent-docs/known-debt.md) | — | the area you're touching has a known smell or in-flight redesign |
+| [termsim-expiry-guide.md](agent-docs/termsim-expiry-guide.md) | — | you are expiring the 0.11 `TermForwardSimulator` deprecation (removal in 0.12); delete this doc when that is done |
 | [META.md](agent-docs/META.md) | — | you've been asked to **update these docs** — the correctness bar, the invariants that break silently, and the link checker |
 
 Files are numbered for stable referencing only — not as a recommended reading order.

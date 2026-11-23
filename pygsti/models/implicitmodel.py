@@ -54,7 +54,7 @@ class ImplicitOpModel(_mdl.OpModel):
         The circuit simulator used to compute any
         requested probabilities, e.g. from :meth:`probs` or
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+    evotype : {"densitymx", "statevec", "stabilizer"}
         The evolution type of this model, describing how states are
         represented, allowing compatibility checks with (super)operator
         objects.

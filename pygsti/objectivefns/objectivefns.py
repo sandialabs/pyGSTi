@@ -4548,7 +4548,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.sim.bulk_fill_probs(self.probs, self.layout) # syncs shared mem
             self._clip_probs() # clips self.probs in place w/shared mem sync
     
-            if oob_check:  # Only used for termgap cases
+            if oob_check:  # Only used for (deprecated) TermForwardSimulator cases; remove with it (see #916)
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
                     raise ValueError("Out of bounds!")  # signals LM optimizer
 

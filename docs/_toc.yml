@@ -110,6 +110,7 @@ chapters:
     - file: markdown/internals/simulation/StabilizerCHP
     - file: markdown/internals/simulation/ErrorGeneratorPropagation
     - file: markdown/internals/simulation/ErrorGeneratorPropagation-Parallelization
+    - file: markdown/internals/simulation/DEM-Creation-from-Errorgens
     - file: markdown/internals/simulation/ErrorGeneratorPolynomials
   - file: markdown/internals/extending/LowLevelGST
     sections:
