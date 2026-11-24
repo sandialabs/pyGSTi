@@ -42,7 +42,7 @@ On a branch containing these tools, the local execution path is:
 
 ```bash
 export PYTHONPATH="$PWD"
-jupytext --to notebook --update 'docs/markdown/**/*.md'
+grep -rl --include='*.md' '^jupytext:' docs/markdown | xargs jupytext --to notebook --update
 python -c "import sys; sys.path.insert(0, 'docs'); import conftest; conftest._generate_shared_fixtures()"
 python docs/execute-notebooks.py --jobs 4 --timeout 1800 --allow-errors
 python docs/collect-reports.py collect
@@ -50,7 +50,7 @@ python docs/collect-reports.py collect
 
 Run these commands in order and stop if one fails. Set the job count to suit the available CPU and memory. The driver retains partial outputs and exits nonzero if a cell fails. Some tutorials require optional packages, an MPI launcher, or hardware credentials; use `--exclude-also` with paths relative to `docs/markdown` without a suffix to deliberately skip unavailable examples, and record what was skipped.
 
-Use `jupytext --to notebook --update`, rather than bidirectional `--sync`, after editing Markdown: freshly executed notebooks have newer timestamps and must not overwrite your edits. Generated `.ipynb` files and reports should not be committed to source branches.
+The `grep` selects the paired notebook pages; landing and prose pages carry no Jupytext header and must not become notebooks. Use `jupytext --to notebook --update`, rather than bidirectional `--sync`, after editing Markdown: freshly executed notebooks have newer timestamps and must not overwrite your edits. Generated `.ipynb` files and reports should not be committed to source branches.
 
 `docs/stage-rtd-branch.py` assembles executed notebooks and collected reports into a generated publishing branch. Its module documentation explains the staging options. The production workflow still uses `develop-with-notebooks`; do not delete that branch while the workflow and ReadTheDocs configuration depend on it. The staging tools also support future documentation reviews, so they remain useful after the restructuring PR merges.
 
