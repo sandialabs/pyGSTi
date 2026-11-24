@@ -213,10 +213,10 @@ class GaugeoptToTargetArgs:
         full_kwargs.update(GaugeoptToTargetArgs.other_kwargs)
         full_kwargs.update(kwargs)
 
-        if extra_posargs := len(args) > 0:
+        if (extra_posargs := len(args)) > 0:
             msg = \
             f"""
-            Recieved {extra_posargs} positional arguments past `model` and `target_model`.
+            Received {extra_posargs} positional argument(s) past `model` and `target_model`.
             These should be passed as appropriate keyword arguments instead. This version
             of pyGSTi will infer intended keyword arguments based on the legacy argument 
             positions. Future versions of pyGSTi will raise an error.

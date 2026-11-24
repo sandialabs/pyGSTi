@@ -1,0 +1,16 @@
+.pygsti-navigation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.pygsti-navigation-controls button {
+  color: var(--pst-color-text-base);
+  border: 1px solid var(--pst-color-border);
+}
+
+.pygsti-navigation-controls button:focus-visible {
+  outline: 2px solid var(--pst-color-primary);
+  outline-offset: 2px;
+}

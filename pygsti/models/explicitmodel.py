@@ -1557,7 +1557,7 @@ class ExplicitOpModel(_mdl.OpModel):
             jmx : _np.ndarray = _jt.jamiolkowski_iso(gate.to_dense("HilbertSchmidt"), self.basis) # type: ignore
             print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
             print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
-        print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
+        print(("Sum of negative Choi eigenvalues = ", _jt.abs_sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
         """

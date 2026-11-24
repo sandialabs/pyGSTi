@@ -84,7 +84,7 @@ flowchart TD
 
 ## Canonical examples
 
-- [docs/markdown/protocols/](../docs/markdown/protocols/) — notebooks for several extras-housed protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
-- [docs/markdown/protocols/DriftCharacterization.md](../docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../docs/markdown/protocols/RobustPhaseEstimation.md), [InterpolatedOperators.md](../docs/markdown/objects/InterpolatedOperators.md) (this one lives under `objects/`, not `protocols/`).
-- **Skip [docs/markdown/protocols/IdleTomography.md](../docs/markdown/protocols/IdleTomography.md)** — broken subsystem.
-- [docs/markdown/rb/](../docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).
+- Notebooks for the extras-housed protocols are spread across the guides: [drift characterization](../docs/markdown/guides/drift/Index.md), [volumetric benchmarks](../docs/markdown/guides/benchmarks/Index.md), [mirror fidelity estimation](../docs/markdown/guides/benchmarks/MirrorFidelityEstimation.md), [RPE](../docs/markdown/guides/RobustPhaseEstimation.md) and [parity benchmarking](../docs/markdown/guides/benchmarks/ParityBenchmarking.md).
+- [docs/markdown/guides/drift/Index.md](../docs/markdown/guides/drift/Index.md), [docs/markdown/guides/RobustPhaseEstimation.md](../docs/markdown/guides/RobustPhaseEstimation.md), [interpolated operators](../docs/markdown/core/operators/CustomOperators.md#interpolating-a-physical-process).
+- **Skip [docs/markdown/guides/IdleTomography.md](../docs/markdown/guides/IdleTomography.md)** — broken subsystem, and deliberately left out of the web docs' table of contents.
+- [docs/markdown/guides/rb/](../docs/markdown/guides/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).

@@ -224,3 +224,19 @@ class GaugeOptCheckJacTester(GaugeOptMethodBase, LGSTGaugeOptInstance, BaseCase)
 #important.
 #class LGSTGaugeOptAllPenaltyTester(LGSTGaugeOptCPTPPenaltyTester, LGSTGaugeOptSPAMPenaltyTester):
 #    pass
+
+
+class GaugeOptPositionalArgsWarningTester(BaseCase):
+    def test_warning_reports_number_of_extra_positional_args(self):
+        import warnings
+        from pygsti.modelpacks import smq1Q_XY
+        from pygsti.tools.exceptions import DeprecatedPositionalArgumentsWarning
+        target = smq1Q_XY.target_model()
+        model = target.depolarize(op_noise=0.01)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            go.gaugeopt_to_target(model, target, {'gates': 1.0, 'spam': 0.5}, 0)
+        msgs = [str(w.message) for w in caught
+                if issubclass(w.category, DeprecatedPositionalArgumentsWarning)]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("Received 2 positional argument(s)", msgs[0])

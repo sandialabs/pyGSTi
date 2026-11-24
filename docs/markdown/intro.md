@@ -1,84 +1,27 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.17.3
-kernelspec:
-  display_name: Python 3 (ipykernel)
-  language: python
-  name: python3
----
-
 # pyGSTi
 
 ```{note}
-You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector to switch between tagged releases and the latest development build.
+You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector in the bottom-right corner of the page to switch between tagged releases and the latest development build.
 ```
 
-Welcome! This page is a top-level introduction to pyGSTi. It and the rest of this documentation describe and demonstrate how you can use the `pygsti` package to accomplish various tasks related to quantum characterization. We'll start with a brief general introduction and then move on to specifics.
+pyGSTi is a Python framework for modeling and characterizing quantum information processors, from single qubits to devices with tens or hundreds of them. It was built to perform gate set tomography, which gives the package its name. It now also runs randomized benchmarking, volumetric and mirror-circuit benchmarks, drift detection, idle tomography and robust phase estimation, and it will build noise models, simulate circuits and generate interactive reports along the way.
 
-## Quickstart
+## Getting started
 
-Install from PyPI (see [Installation](Installation) for conda, optional dependencies, and building from source). You can get our latest official release with the following shell command.
-```bash
-pip install pygsti
-```
-To get the latest version of our develop branch (which is the basis of these web docs), have pip pull from the pyGSTi git repo instead.
-```bash
-pip install git+https://github.com/sandialabs/pyGSTi.git@develop
-```
+[Installing pyGSTi](start/Install) covers installation, optional dependencies, and building from source. Then choose [Your first GST run](start/FirstGST) for a fitted gate model or [Your first benchmark](start/FirstBenchmark) for a benchmarking example.
 
+## Where to go next
 
-Then build a model and compute circuit outcome probabilities:
+This documentation is arranged in five sections, and which one you want depends on what you are doing rather than on how much you already know.
 
-```python
-import pygsti
-from pygsti.modelpacks import smq1Q_XYI
+- **[Start here](start/Index)** is a short guided path from a fresh install to a characterization result you can read.
+- **[Characterization guides](guides/Index)** is the practitioner layer: one chapter per protocol, plus the workflow and analysis chapters that all of them draw on.
+- **[Defining models](models/Index)** covers processor specifications, explicit and implicit models, their parameterizations, adding noise to describe your device, and simulating data from a model.
+- **[Core objects](core/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. Use it when you need to inspect or extend those components.
+- **[Reference](reference/Index)** holds the [FAQ](reference/FAQ), [citing pyGSTi](reference/Citing), [migrating from the function-based API](reference/FromFunctionAPI) and the API reference.
 
-model = smq1Q_XYI.target_model()                    # ideal 1-qubit model
-circuit = pygsti.circuits.Circuit([('Gxpi2', 0)])   # a single X(π/2) gate
-model.probabilities(circuit)                        # ~ {('0',): 0.5, ('1',): 0.5}
-```
+For answers to common usage questions, try the [FAQ](reference/FAQ). For other questions, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
 
-Ready to do more? See **[Getting Started](#getting-started)** below for guided tours of pyGSTi's protocols and objects.
+## Citing pyGSTi
 
-```{tip}
-**Running these notebooks.** This site renders the source MyST Markdown without executing cells, so you won't see outputs (plots, tables) inline. To run a notebook yourself: use the rocket icon at the top right of any page to launch it in Binder or Colab, or use the download dropdown (cloud icon) to grab the `.ipynb` and run it in your own Jupyter environment.
-```
-
-## What does pyGSTi do?
-PyGSTi is a **Python framework for modeling and analyzing collections of qubits**, more affectionately called quantum information processors (QIPs).  We use "**QIP**" generously to include systems of just 1 or 2 qubits in addition to larger systems.  Initially pyGSTi was developed to perform a single type of data analysis called gate set tomography (GST), from where pyGSTi derives it's name.  While GST is still a central capability of the package, pyGSTi is capable of modeling QIP behavior and analyzing QIP data much more generally.
-
-For example, some things you might use pyGSTi for are:
-
-- constructing and manipulating quantum circuits.
-- constructing a model for a QIP.
-- computing the outcome probabilities of a circuit predicted by a QIP model.
-- simulating observed data based on a QIP model. 
-- testing how a particular QIP model agrees with real data taken.
-- running high-level quantum characterization protocols such as:
-    - Gate set tomography (GST) on 1 or 2 qubits
-    - Clifford randomized benchmarking (RB)
-    - Direct randomized benchmarking (DRB)
-    - Robust phase estimation (RPE)
-    - Multi-qubit reduced-model tomography
-- performing "drift-detection" tests on multiple passes of ideally identical data.
-- computing the process fidelity or diamond distance between two gate matrices.
-- making sweet-looking figures that compare QIP models and data.
-- creating integrated reports which explain characterization results (especially GST).
-
-
-## Getting Started
-This documentation facilitates **two basic approaches** to getting started with pyGSTi.  
-
-The first approach is a **top-down** approach that shows how to use pyGSTi as a stand-alone QCVV tool that runs protocols on data.  An overview of what protocols pyGSTi can run and how to invoke them is given in the [pyGSTi protocols overview](overview/00-Protocols) tutorial.
-
-The second is a **bottom-up** approach that starts by introducing the main components of pyGSTi and how they work together, and then explains what you can do with them.  If you like this approach or are ambivalent, you should read through these two tutorials to get a high-level overview of what pyGSTi can do:
-- [Part 1: pyGSTi's essential objects](overview/01-Essential-Objects)
-- [Part 2: Using these objects](overview/02-Using-Essential-Objects)
-
-(These pages link to further tutorials covering more advanced functionality that you are free to explore as desired.)
-
-If you have a particular problem you need solved and you want to know what 5 lines of Python code will get it done for you, then you should visit the [FAQ](FAQ) with its links to associated example tutorials.  If your question isn't answered there, you should email us at pygsti@sandia.gov or add an issue to the pyGSTi github page.
+If pyGSTi contributed to work you are publishing, please see [citing pyGSTi](reference/Citing) for the references to use.

@@ -84,6 +84,6 @@ When editing code in these areas, check the import guard rather than assuming th
 
 ## What's not in here
 
-- **User-facing usage docs** for pyGSTi as a library: see the jupyter-book at [docs/markdown/](docs/markdown/). Notebooks under `docs/markdown/gst/`, `docs/markdown/objects/`, `docs/markdown/reporting/`, `docs/markdown/examples/`, and friends are the canonical tutorials.
+- **User-facing usage docs** for pyGSTi as a library: see the jupyter-book at [docs/markdown/](docs/markdown/). Its folders mirror the site's parts -- `docs/markdown/start/`, `guides/`, `models/`, `core/` and `reference/` -- and the notebooks there are the canonical tutorials.
 - **In-flight project state and active threads**: see [sandialabs/pyGSTi](https://github.com/sandialabs/pyGSTi/issues) on GitHub.
 - **Code conventions, build/test environment, lint rules**: see the repository's `README.md`, `CONTRIBUTING.md`, and `pyproject.toml`.

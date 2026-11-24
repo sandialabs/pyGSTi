@@ -10,11 +10,26 @@ next sync).
 
 This extension rewrites only the source/edit button URLs back to the canonical
 source branch named by the ``pygsti_edit_branch`` config value, leaving the
-launch buttons on the build branch. It is a no-op when:
-  * ``pygsti_edit_branch`` is unset, or
-  * the build branch already equals ``pygsti_edit_branch`` (e.g. local builds or
-    a plain ``develop`` build), or
-  * the source/edit buttons are not enabled.
+launch buttons on the build branch.
+
+Retargeting the branch is not sufficient on its own. The build branch renders each
+notebook page from its ``.ipynb``, so that is the suffix sphinx-book-theme puts in
+the URL -- but ``.ipynb`` is gitignored on the canonical branch, where the page
+exists only as the jupytext-paired ``.md`` it was generated from. A branch-only
+rewrite would therefore point every notebook page's Show source / Suggest edit
+button at a 404. The suffix is swapped along with the branch, which is the same
+translation: build-branch URL to edit-branch URL.
+
+The two rewrites are independently conditional. The *branch* rewrite is a no-op
+when ``pygsti_edit_branch`` is unset or already equals the build branch. The
+*suffix* rewrite is not conditional on either: a page's canonical source is its
+``.md`` on every branch, so a build that renders from ``.ipynb`` while pointing
+its buttons at a branch where only the ``.md`` is committed needs the swap
+regardless of which branch that is. A local preview is exactly that case -- the
+paired ``.ipynb`` exists in the working tree, so pages render from it, while
+``repository.branch`` is still ``develop``, where it is gitignored.
+
+The whole extension is a no-op when the source/edit buttons are not enabled.
 """
 
 from pydata_sphinx_theme.utils import get_theme_options_dict
@@ -26,31 +41,48 @@ LOGGER = logging.getLogger(__name__)
 _BRANCHED_BUTTON_LABELS = ("source-file-button", "source-edit-button")
 
 
+def _to_paired_source(url):
+    """Point an ``.ipynb`` URL at the ``.md`` it is generated from.
+
+    The suffix sits at the end of the path, which may be followed by a query
+    (sphinx-book-theme appends ``?plain=1`` to Show source URLs), so split the
+    query off before touching it.
+    """
+    path, sep, query = url.partition("?")
+    if path.endswith(".ipynb"):
+        path = path[: -len(".ipynb")] + ".md"
+    return path + sep + query
+
+
 def _rewrite(buttons, build_branch, edit_branch):
-    """Recursively rewrite branch segments in source/edit button URLs."""
+    """Recursively rewrite branch and suffix in source/edit button URLs.
+
+    Launch buttons (Binder/Colab) are deliberately untouched: those *should*
+    track the build branch and its committed ``.ipynb``.
+    """
+    retarget = bool(build_branch and edit_branch and build_branch != edit_branch)
     for button in buttons:
         if button.get("type") == "group":
             _rewrite(button.get("buttons", []), build_branch, edit_branch)
         elif button.get("label") in _BRANCHED_BUTTON_LABELS:
             url = button.get("url", "")
-            for segment in ("/edit/", "/blob/"):
-                url = url.replace(
-                    f"{segment}{build_branch}/", f"{segment}{edit_branch}/"
-                )
-            button["url"] = url
+            if retarget:
+                for segment in ("/edit/", "/blob/"):
+                    url = url.replace(
+                        f"{segment}{build_branch}/", f"{segment}{edit_branch}/"
+                    )
+            button["url"] = _to_paired_source(url)
 
 
 def _on_html_page_context(app, pagename, templatename, context, doctree):
-    edit_branch = app.config.pygsti_edit_branch
-    if not edit_branch:
-        return
-    build_branch = get_theme_options_dict(app).get("repository_branch")
-    if not build_branch or build_branch == edit_branch:
-        return
     header_buttons = context.get("header_buttons")
     if not header_buttons:
         return
-    _rewrite(header_buttons, build_branch, edit_branch)
+    _rewrite(
+        header_buttons,
+        get_theme_options_dict(app).get("repository_branch"),
+        app.config.pygsti_edit_branch,
+    )
 
 
 def setup(app):

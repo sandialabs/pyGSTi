@@ -5794,7 +5794,7 @@ def _cptp_penalty(mdl, prefactor, op_basis):
     """
     per_gate_penalties = []
     for op in mdl.operations.values():
-        val = _tools.sum_of_negative_choi_eigenvalues_gate(op.to_dense('HilbertSchmidt'), op_basis)
+        val = _tools.abs_sum_of_negative_choi_eigenvalues_gate(op.to_dense('HilbertSchmidt'), op_basis)
         per_gate_penalties.append(val)
     lsvec = _np.array(per_gate_penalties)
     if NEG_EIG_PENALTY_USE_SQRT:
