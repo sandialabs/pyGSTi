@@ -143,7 +143,7 @@ sphinx:
     # Idle tomography is off the web docs until its factor-of-two discrepancy
     # between reported and injected intrinsic stochastic rates is resolved.
     # The markdown source stays in the repo so it can be fixed and restored.
-    - "markdown/advanced/specialist/IdleTomography*"
+    - "markdown/guides/IdleTomography*"
     - "_autosummary/pygsti.report.*"
     - "_autosummary/pygsti.modelpacks.*"
     - "_autosummary/pygsti.drivers.longsequence*"

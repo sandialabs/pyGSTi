@@ -72,13 +72,13 @@ from nbclient.exceptions import CellExecutionError, CellTimeoutError
 # notebook that touches either tree.
 # --------------------------------------------------------------------------
 SERIAL_CHAIN = [
-    "guides/workflow/DataSets",                  # W Example_Dataset{,_LowCnts}.txt, Example_GST_Data
-    "guides/gst/GSTProtocols",                   # W Example_GST_Data (+ results)
-    "guides/analysis/InspectingResults",         # R Example_GST_Data/results
-    "internals/extending/LowLevelGSTAlgorithms", # R Example_Dataset{,_LowCnts}.txt
-    "guides/analysis/Reports",                   # R Example_Dataset.txt
-    "start/FirstGST",                            # W gettingStartedReport, test_gst_dir
-    "guides/rb/RBWorkflow",                      # W test_rb_dir
+    "guides/data/DataSets",                       # W Example_Dataset{,_LowCnts}.txt, Example_GST_Data
+    "guides/gst/running/ProtocolOptions",         # W Example_GST_Data (+ results)
+    "guides/analysis/InspectingResults",          # R Example_GST_Data/results
+    "core/lowlevel/LowLevelGSTAlgorithms",        # R Example_Dataset{,_LowCnts}.txt
+    "guides/analysis/Reports",                    # R Example_Dataset.txt
+    "start/FirstGST",                             # W gettingStartedReport, test_gst_dir
+    "guides/rb/RBWorkflow",                       # W test_rb_dir
 ]
 
 # --------------------------------------------------------------------------
@@ -301,7 +301,7 @@ def main() -> int:
     # Kernels are subprocesses and inherit this. Without a fixed hash seed,
     # iteration order over sets and dicts keyed by strings (or tuples of them)
     # varies per process, so any cell that prints such a collection produces a
-    # different ordering every run -- observed in internals/models/OperatorTypes,
+    # different ordering every run -- observed in core/operators/OperatorTypes,
     # where elementary error-generator labels came out in a different order.
     os.environ["PYTHONHASHSEED"] = "0"
 

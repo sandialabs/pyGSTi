@@ -41,7 +41,7 @@ compilations = {
     'paulieq': CCR.create_standard(pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)}
 ```
 
-If your device's gate names are not pyGSTi's, or your connectivity is more interesting than a line, see [describing your device](../guides/workflow/DescribeYourDevice).
+If your device's gate names are not pyGSTi's, or your connectivity is more interesting than a line, see [describing your device](../models/ProcessorSpecs).
 
 ## Build the circuits
 

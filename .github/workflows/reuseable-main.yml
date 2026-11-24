@@ -193,13 +193,13 @@ jobs:
       run: |
         set -euo pipefail
 
-        # The `ml` extra (TensorFlow + Keras) backs docs/markdown/advanced/ml/QPANN,
+        # The `ml` extra (TensorFlow + Keras) backs docs/markdown/models/QPANN.md,
         # which imports pygsti.extras.ml. It is pulled in here rather than added to
         # `docs` itself so that ReadTheDocs -- which installs `.[docs]` but never
         # executes a notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't
         # made to download TensorFlow purely to render Markdown.
         uv pip install --system -e .[docs]
-        # chp_sim backs internals/simulation/StabilizerCHP. It is the default
+        # chp_sim backs core/simulation/StabilizerCHP. It is the default
         # backend for the 'chp' evotype and is pure Python, which is why this
         # step no longer downloads and compiles Aaronson's C implementation.
         # That one still works if pygsti.evotypes.chp.chpexe points at it.
@@ -213,15 +213,15 @@ jobs:
         # version that lags moves every year, so a pinned-version guard is wrong by
         # default between rollforwards. The predecessor of this line demonstrated the
         # failure mode: it passed `--ignore=docs/markdown/ml` to nbval, a path that
-        # matched nothing -- the tutorial is at docs/markdown/advanced/ml -- and stayed
+        # matched nothing -- the tutorial is at docs/markdown/models/QPANN.md -- and stayed
         # broken indefinitely because its 3.14 branch was unreachable and so never ran.
         #
         # --exclude-also, not --exclude: --exclude REPLACES the driver's built-in list
         # and would silently start executing the two pages that ship outputless by design.
         NB_EXCLUDE_ML=""
         if ! python -Ic "import tensorflow, keras" >/dev/null 2>&1; then
-          echo "::warning::TensorFlow/Keras unavailable; advanced/ml/QPANN will ship without output"
-          NB_EXCLUDE_ML="--exclude-also advanced/ml/QPANN"
+          echo "::warning::TensorFlow/Keras unavailable; models/QPANN will ship without output"
+          NB_EXCLUDE_ML="--exclude-also models/QPANN"
         fi
 
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each

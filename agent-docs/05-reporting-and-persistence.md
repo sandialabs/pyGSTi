@@ -96,7 +96,7 @@ The reportables file is **predominantly hand-written**, not generated. Adding a 
 
 If you're new to `report/` and have a change to make:
 
-1. Read [docs/markdown/internals/figures/WorkspaceFigures.md](../docs/markdown/internals/figures/WorkspaceFigures.md), then [Switchboards.md](../docs/markdown/internals/figures/Switchboards.md). These are the canonical conceptual intros.
+1. Read [docs/markdown/core/figures/Index.md](../docs/markdown/core/figures/Index.md), then [Switchboards.md](../docs/markdown/core/figures/Switchboards.md). These are the canonical conceptual intros.
 2. In code, read the `Workspace` class skeleton ([workspace.py:177–270](../pygsti/report/workspace.py#L177)) — focus on `__init__`, `_makefactory`, and the digest interaction.
 3. Then read one simple factory function — [`create_drift_report` at factory.py:1283](../pygsti/report/factory.py#L1283) is a reasonable choice because it's shorter than `construct_standard_report`.
 4. **Do not start in [reportables.py](../pygsti/report/reportables.py).** 2868 lines of metric formulas with no scaffolding to orient on. Only go there to add or fix a specific metric.
@@ -147,6 +147,6 @@ This subpackage is small (~600 lines, 2 files) and stable. You only need to touc
 Notebooks under [docs/markdown/guides/analysis/](../docs/markdown/guides/analysis/) are the only good teaching material. There are no high-quality code-level examples inside the `report/` subpackage itself.
 
 - [docs/markdown/guides/analysis/Reports.md](../docs/markdown/guides/analysis/Reports.md) — top-level report-generation walkthrough.
-- [docs/markdown/internals/figures/WorkspaceFigures.md](../docs/markdown/internals/figures/WorkspaceFigures.md) — `Workspace` intro plus a gallery of concrete plot/table examples.
-- [docs/markdown/internals/figures/Switchboards.md](../docs/markdown/internals/figures/Switchboards.md) — switchboard mechanics.
-- [docs/markdown/guides/analysis/Results.md](../docs/markdown/guides/analysis/Results.md) — top-level entry point in the jupyter-book.
+- [docs/markdown/core/figures/Index.md](../docs/markdown/core/figures/Index.md) — `Workspace` intro plus a gallery of concrete plot/table examples.
+- [docs/markdown/core/figures/Switchboards.md](../docs/markdown/core/figures/Switchboards.md) — switchboard mechanics.
+- [docs/markdown/guides/analysis/Index.md](../docs/markdown/guides/analysis/Index.md) — top-level entry point in the jupyter-book.

@@ -21,7 +21,7 @@ This page is under construction. It covers the metrics people reach for most oft
 
 ## Setup
 
-Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [modeling a noisy device](../models/BuildingModels); for the model packs themselves see [target models](../../start/TargetModels).
+Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [modeling a noisy device](../../models/BuildingModels); for the model packs themselves see [target models](../../start/ModelPacks).
 
 ```{code-cell} ipython3
 import numpy as np
@@ -48,7 +48,7 @@ Gx_overrot = overrot_model[('Gxpi2', 0)].to_dense()
 tls.print_mx(Gx_overrot)
 ```
 
-Nearly every metric function needs to know which basis its matrix and vector arguments are written in. You can pass the string `'pp'`, or an explicit `Basis` object; see [Bases](../../internals/conventions/UsingBases) for what the choice means.
+Nearly every metric function needs to know which basis its matrix and vector arguments are written in. You can pass the string `'pp'`, or an explicit `Basis` object; see [Bases](../../core/bases/UsingBases) for what the choice means.
 
 ```{code-cell} ipython3
 basis = pygsti.baseobjs.Basis.cast("pp", 4)  # 1-qubit Pauli basis (2x2 matrices)
@@ -97,7 +97,7 @@ print("Unitarity of the depolarized gate =", tls.unitarity(Gx_depol, basis))
 
 Everything above is *gauge variant*, and that is a real problem. Gauge invariance is the property that a metric doesn't change when either model is replaced by another model predicting exactly the same outcomes for every circuit, even though its operation matrices differ. Since experiments only ever constrain circuit outcomes, a gauge-variant metric is partly reporting a bookkeeping choice rather than a property of the device.
 
-The usual workaround is gauge optimization: search the gauge orbit for the representative closest to your target, then compute the metric there. That works, but it is an extra step, and it is difficult or ill-defined often enough to be worth avoiding. See [gauge freedom](GaugeFreedom) for what pyGSTi does and how to control it.
+The usual workaround is gauge optimization: search the gauge orbit for the representative closest to your target, then compute the metric there. That works, but it is an extra step, and it is difficult or ill-defined often enough to be worth avoiding. See [gauge freedom](GaugeOptimization) for what pyGSTi does and how to control it.
 
 The alternative is a metric that never needed the fix. Gauge transformations act by similarity, so the eigenvalues of a superoperator are gauge invariant, and any metric built only from spectra inherits that. The cost is that these metrics are blind to any error leaving the spectrum alone: a gate whose eigenvalues are right but whose eigenvectors are rotated scores perfectly.
 

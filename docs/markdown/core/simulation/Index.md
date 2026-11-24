@@ -1,0 +1,11 @@
+# Forward simulators
+
+A forward simulator computes circuit outcome probabilities from a model. [Choosing a forward simulator](ChoosingForwardSimulators) introduces evolution types and compares simulation engines as the number of qubits grows.
+
+- [CHP interface](StabilizerCHP) demonstrates stabilizer simulation with the CHP evolution type and the pure-Python `chp_sim` backend.
+- [Error generator propagation](ErrorGeneratorPropagation) propagates error generators through Clifford circuits.
+- [Parallelization for error generator propagation](ErrorGeneratorPropagationParallel) configures worker pools, reuse, and parallelization thresholds.
+- [Detector error models from error generators](DetectorErrorModels) builds a Stim detector error model from pyGSTi error generators and decodes with `pymatching`.
+- [Error generator polynomials](ErrorGeneratorPolynomials) constructs symbolic expressions that can be evaluated at different noise parameters.
+
+To sample experimental counts from model probabilities, see [Computing probabilities and simulating data](../../models/SimulatingData).

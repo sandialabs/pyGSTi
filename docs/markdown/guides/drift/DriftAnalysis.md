@@ -13,7 +13,7 @@ kernelspec:
 
 # Detecting and characterizing drift
 
-This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](ComparingDataSets) tutorial.
+This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](../ComparingDataSets) tutorial.
 
 Currently the gap between data collection times for each circuit is required to be approximately constant, both across the data collection times for each circuit, and across circuits. If this is not the case the code should still work, but the analysis it performs may be significantly sub-optimal, and interpretting the results is more complicated. There is beta-level capabilities within the functions used below to properly analyze unequally-spaced data, but it is untested and will not be used with the default options in the analysis code. This limitation will be addressed in a future release of pyGSTi.
 

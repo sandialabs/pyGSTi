@@ -131,10 +131,10 @@ results = pygsti.protocols.ModelTest(smq1Q_XYI.target_model()).run(data)
 print(type(results).__name__)
 ```
 
-See [model testing](../guides/analysis/ModelTesting) for what to do with that result, and [judging the fit](../guides/gst/FitStatistics) for how to read the statistics it reports.
+See [model testing](../guides/analysis/ModelTesting) for what to do with that result, and [judging the fit](../guides/gst/fit/FitStatistics) for how to read the statistics it reports.
 
 ## Where to go next
 
 - [Your first GST run](FirstGST) — the full protocol path, now that your data is loaded.
-- [Files and directories](../guides/workflow/FilesAndDirectories) — the directory convention in more detail, including where results get written.
-- [Data sets](../guides/workflow/DataSets) — the `DataSet` object itself: timestamps, multiple passes, and outcome bookkeeping.
+- [Files and directories](../guides/data/FileIO) — the directory convention in more detail, including where results get written.
+- [Data sets](../guides/data/DataSets) — the `DataSet` object itself: timestamps, multiple passes, and outcome bookkeeping.

@@ -186,10 +186,10 @@ flowchart TD
 
 ## Canonical examples
 
-- [docs/markdown/guides/workflow/DataSets.md](../docs/markdown/guides/workflow/DataSets.md) (including its [MultiDataSet section](../docs/markdown/guides/workflow/DataSets.md#several-passes-of-the-same-experiment-multidataset)), [docs/markdown/guides/drift/TimestampedData.md](../docs/markdown/guides/drift/TimestampedData.md) — DataSet variants.
-- [docs/markdown/internals/extending/LowLevelGST.md](../docs/markdown/internals/extending/LowLevelGST.md) — exercises the algorithms layer directly without going through Protocols.
-- [docs/markdown/guides/gst/RunningGST.md](../docs/markdown/guides/gst/RunningGST.md) (section *"Wildcard parameters"*) — the canonical wildcard-budget walkthrough: per-gate, per-SPAM, and 1D-diamond-distance variants, invoked via `badfit_options={'actions': ['wildcard']}`.
-- [docs/markdown/guides/gst/RobustGST-TVD.md](../docs/markdown/guides/gst/RobustGST-TVD.md) — robust-objective example using TVD vs. negative-log-likelihood loss for outlier resistance during the fit. **Different mechanism from wildcard:** this notebook is about choosing a different objective so the fit itself is less swayed by outliers, not about post-fit unmodeled-error accounting.
-- [docs/markdown/guides/gst/Leakage.md](../docs/markdown/guides/gst/Leakage.md) — uses `'wildcard1d'` in a leakage workflow.
+- [docs/markdown/guides/data/DataSets.md](../docs/markdown/guides/data/DataSets.md) (including its [MultiDataSet section](../docs/markdown/guides/data/DataSets.md#several-passes-of-the-same-experiment-multidataset)), [docs/markdown/guides/drift/TimestampedData.md](../docs/markdown/guides/drift/TimestampedData.md) — DataSet variants.
+- [docs/markdown/core/lowlevel/Index.md](../docs/markdown/core/lowlevel/Index.md) — exercises the algorithms layer directly without going through Protocols.
+- [docs/markdown/guides/gst/running/Index.md](../docs/markdown/guides/gst/running/Index.md) (section *"Wildcard parameters"*) — the canonical wildcard-budget walkthrough: per-gate, per-SPAM, and 1D-diamond-distance variants, invoked via `badfit_options={'actions': ['wildcard']}`.
+- [docs/markdown/guides/gst/fit/RobustGST.md](../docs/markdown/guides/gst/fit/RobustGST.md) — robust-objective example using TVD vs. negative-log-likelihood loss for outlier resistance during the fit. **Different mechanism from wildcard:** this notebook is about choosing a different objective so the fit itself is less swayed by outliers, not about post-fit unmodeled-error accounting.
+- [docs/markdown/guides/gst/richer/Leakage.md](../docs/markdown/guides/gst/richer/Leakage.md) — uses `'wildcard1d'` in a leakage workflow.
 - [docs/markdown/guides/analysis/ErrorBars.md](../docs/markdown/guides/analysis/ErrorBars.md) — error-bar workflows: Hessian-based confidence regions and parametric/non-parametric bootstrapping.
-- [docs/markdown/guides/gst/CheckYourDesign.md](../docs/markdown/guides/gst/CheckYourDesign.md) — Fisher-information-based analysis.
+- [docs/markdown/guides/gst/designs/EvaluatingDesigns.md](../docs/markdown/guides/gst/designs/EvaluatingDesigns.md) — Fisher-information-based analysis.

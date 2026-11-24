@@ -6,6 +6,6 @@ Start with [Installing pyGSTi](Install), then [Choosing a protocol](ChooseAProto
 
 [Getting your own data in](YourOwnData) shows how to use measured counts in these workflows. [Reading your results](ReadingResults) explains the output and the quantities to inspect first.
 
-Two reference pages support the examples. [Key concepts](KeyConcepts) introduces gauge freedom, error generators, parameterizations, and fit statistics. [Model packs](TargetModels) lists the standard gate sets and experiment designs available in pyGSTi.
+Two reference pages support the examples. [Key concepts](KeyConcepts) introduces gauge freedom, error generators, parameterizations, and fit statistics. [Model packs](ModelPacks) lists the standard gate sets and experiment designs available in pyGSTi.
 
-For protocol options, additional device models, and analysis methods, continue to the [Characterization guides](../guides/Index) and [Defining models](../guides/models/DeviceModels).
+For protocol options, additional device models, and analysis methods, continue to the [Characterization guides](../guides/Index) and [Defining models](../models/Index).

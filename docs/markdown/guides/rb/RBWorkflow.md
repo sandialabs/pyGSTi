@@ -19,7 +19,7 @@ This tutorial is an overview of randomized benchmarking (RB) in pyGSTi. The are 
 - [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) is more streamlined than Clifford RB. As the name suggests, it directly benchmarks a set of native gates, rather than indirectly benchmarking them in the form of the $n$-qubit Clifford group gate set. Direct RB can be used to benchmark more qubits than standard Clifford RB, and only one small change is required to this notebook to run direct RB (this change is called out). Further detail on how to use Direct RB are given in the [Direct RB tutorial](DirectRB). The layer samplers that direct and mirror RB draw their random circuits from are catalogued in [random circuit samplers](Samplers).
 - *Mirror randomized benchmarking* is a new form of RB that is similar to Direct RB, but it is further streamlined so that it can be run on 10s to 100s of qubits. Running this method requires only two small adjustments to this notebook (again, these changes are called out). Further detail on how to use Mirror RB are given in the [Mirror RB tutorial](MirrorRB).
 - [Simultaneous randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.109.240504) involves running RB circuits simultaneously on different subsets of a device, and then perhaps comparing the results to when RB is run while idling all other qubits. It is not a protocol per se. It is better thought of as an add-on to any other RB protocol, for exploring crosstalk and/or benchmarking a large device more efficiently. pyGSTi contains integrated methods for running simultaneous Clifford, Direct or Mirror RB. This is covered in the [multiple RB experiments tutorial](SimultaneousRB).
-- Benchmarking multiple device regions, by running multiple RB sub-experiments in one experimental run. This is also covered in the [multiple RB experiments tutorial](SimultaneousRB) and [volumetric benchmarks tutorial](../benchmarks/VolumetricBenchmarkExamples).
+- Benchmarking multiple device regions, by running multiple RB sub-experiments in one experimental run. This is also covered in the [multiple RB experiments tutorial](SimultaneousRB) and [volumetric benchmarks tutorial](../benchmarks/VolumetricBenchmarks).
 - [Synthetic-SPAM rank-1 randomized benchmarking](https://arxiv.org/abs/2412.18578) of the global $\text{SU}(2)$ rotations on a single spin-$j$ qudit. This protocol extracts a separate, SPAM-robust decay rate for each irreducible component of the noise, rather than a single error rate, and it follows a different work-flow than the multiqubit protocols above. It is covered in the [SU(2) qudit RB tutorial](SU2QuditRB).
 
 ```{code-cell} ipython3
@@ -30,7 +30,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Step 1: create an experiment design
 
-First, we specify the device to be benchmarked, so that pyGSTi can create circuits that use only the native gates in the device (including respecting the device's connectivity). We do this using a `QubitProcessorSpec` object (see the [ProcessorSpec tutorial](../workflow/DescribeYourDevice) for details). Here we'll demonstrate RB on a device with:
+First, we specify the device to be benchmarked, so that pyGSTi can create circuits that use only the native gates in the device (including respecting the device's connectivity). We do this using a `QubitProcessorSpec` object (see the [ProcessorSpec tutorial](../../models/ProcessorSpecs) for details). Here we'll demonstrate RB on a device with:
 - Five qubits on a ring.
 - 1-qubit gates consisting of $\sigma_x$ and $\sigma_y$ rotations by $\pm \pi/2$, and an idle gate
 - Controlled-Z gates connecting adjacent qubits on the ring
@@ -59,7 +59,7 @@ exp_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, k, q
 
 This page runs Clifford RB throughout. Each of the other protocols has its own page with a
 complete worked example of its own — [Direct RB](DirectRB), [Binary RB](BinaryRB),
-[Mirror RB](MirrorRB) and [MRB with universal gate sets](MirrorRB-Universal-Gate-Sets) —
+[Mirror RB](MirrorRB) and [MRB with universal gate sets](MirrorRBUniversalGates) —
 and it is worth starting from those rather than substituting a class name here. The design
 classes do not all take the same arguments in the same order: `MirrorRBDesign` in particular
 takes `depths` second, where the others take the compilations.

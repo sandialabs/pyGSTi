@@ -40,7 +40,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-uv-
     - name: Install package
-      # The `ml` extra is needed for docs/markdown/advanced/ml (QPANN), which
+      # The `ml` extra is needed for docs/markdown/models/QPANN.md (QPANN), which
       # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
       # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
       # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to

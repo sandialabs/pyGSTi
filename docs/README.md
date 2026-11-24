@@ -4,7 +4,7 @@ Use an environment with pyGSTi's documentation dependencies (the `docs` extra). 
 
 ## Routing pages and notebooks
 
-Pages with children help readers choose a notebook: explain what each child covers and when to use it. Put worked code and output in leaf notebooks, keeping Jupytext metadata on the notebooks and off the routing pages. When moving an example, update its incoming tutorial links and any entry in `execute-notebooks.py`'s shared-file execution order. Keep it in the same directory when possible so relative data and report paths remain valid.
+Pages with children help readers choose a notebook: explain what each child covers and when to use it. Put worked code and output in leaf notebooks, keeping Jupytext metadata on the notebooks and off the routing pages. The `markdown/` folders mirror `_toc.yml`: one folder per part and chapter, each landing page named `Index.md`. When a page changes chapter, move its file to match, then update its incoming links, the relative `tutorial_files`, `example_files` and report paths in its own cells (their depth changes with the folder), and any entry in `execute-notebooks.py`'s shared-file execution order.
 
 ## Fast preview
 

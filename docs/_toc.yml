@@ -1,7 +1,8 @@
 # Section pages route readers to notebooks; examples are leaf pages.
-# Paths are kept stable when a page changes its navigation placement.
+# The markdown/ folders mirror this file: one folder per part and chapter, each
+# landing page named Index.md, single-page chapters directly in their part.
 format: jb-book
-root: markdown/start/intro
+root: markdown/intro
 chapters:
 - file: markdown/start/Index
   sections:
@@ -12,112 +13,112 @@ chapters:
   - file: markdown/start/YourOwnData
   - file: markdown/start/ReadingResults
   - file: markdown/start/KeyConcepts
-  - file: markdown/start/TargetModels
+  - file: markdown/start/ModelPacks
 - file: markdown/guides/Index
   sections:
-  - file: markdown/guides/workflow/Workflow
+  - file: markdown/guides/data/Index
     sections:
-    - file: markdown/guides/workflow/Circuits
-    - file: markdown/guides/workflow/ExperimentDesigns
-    - file: markdown/guides/workflow/DataSets
-    - file: markdown/guides/workflow/FilesAndDirectories
-    - file: markdown/advanced/interop/Cirq
-    - file: markdown/advanced/interop/IBMQ
-  - file: markdown/guides/gst/GSTDesigns
+    - file: markdown/guides/data/Circuits
+    - file: markdown/guides/data/ExperimentDesigns
+    - file: markdown/guides/data/DataSets
+    - file: markdown/guides/data/FileIO
+    - file: markdown/guides/data/Cirq
+    - file: markdown/guides/data/IBMQ
+  - file: markdown/guides/gst/designs/Index
     sections:
-    - file: markdown/guides/gst/ModelpackDesigns
-    - file: markdown/guides/gst/GSTCircuits
-    - file: markdown/guides/gst/FiducialsAndGerms
-    - file: markdown/guides/gst/FewerCircuits
-    - file: markdown/guides/gst/CheckYourDesign
-  - file: markdown/guides/gst/RunningGST
+    - file: markdown/guides/gst/designs/ModelpackDesigns
+    - file: markdown/guides/gst/designs/GSTCircuits
+    - file: markdown/guides/gst/designs/FiducialsAndGerms
+    - file: markdown/guides/gst/designs/FiducialPairReduction
+    - file: markdown/guides/gst/designs/EvaluatingDesigns
+  - file: markdown/guides/gst/running/Index
     sections:
-    - file: markdown/guides/gst/GSTProtocols
-    - file: markdown/guides/gst/TwoQubitGST
-    - file: markdown/guides/gst/Parallelism
-  - file: markdown/guides/gst/JudgingTheFit
+    - file: markdown/guides/gst/running/ProtocolOptions
+    - file: markdown/guides/gst/running/TwoQubitGST
+    - file: markdown/guides/gst/running/Parallelism
+  - file: markdown/guides/gst/fit/Index
     sections:
-    - file: markdown/guides/gst/FitStatistics
-    - file: markdown/guides/gst/BadFits
-    - file: markdown/guides/gst/RobustGST-TVD
-  - file: markdown/guides/gst/RicherDeviceModels
+    - file: markdown/guides/gst/fit/FitStatistics
+    - file: markdown/guides/gst/fit/BadFits
+    - file: markdown/guides/gst/fit/RobustGST
+  - file: markdown/guides/gst/richer/Index
     sections:
-    - file: markdown/guides/gst/MidCircuitMeasurement
-    - file: markdown/guides/gst/QutritGST
-    - file: markdown/guides/gst/Leakage
-    - file: markdown/guides/gst/TimeDependentGST
-  - file: markdown/guides/rb/HowRBWorks
+    - file: markdown/guides/gst/richer/Instruments
+    - file: markdown/guides/gst/richer/QutritGST
+    - file: markdown/guides/gst/richer/Leakage
+    - file: markdown/guides/gst/richer/TimeDependentGST
+  - file: markdown/guides/rb/Index
     sections:
     - file: markdown/guides/rb/RBWorkflow
     - file: markdown/guides/rb/CliffordRB
     - file: markdown/guides/rb/InterleavedRB
     - file: markdown/guides/rb/DirectRB
     - file: markdown/guides/rb/MirrorRB
-    - file: markdown/guides/rb/MirrorRB-Universal-Gate-Sets
+    - file: markdown/guides/rb/MirrorRBUniversalGates
     - file: markdown/guides/rb/BinaryRB
     - file: markdown/guides/rb/Samplers
     - file: markdown/guides/rb/SimultaneousRB
     - file: markdown/guides/rb/SimulatingRBData
     - file: markdown/guides/rb/SU2QuditRB
-  - file: markdown/guides/benchmarks/VolumetricBenchmarks
+  - file: markdown/guides/benchmarks/Index
     sections:
-    - file: markdown/guides/benchmarks/VolumetricBenchmarkExamples
+    - file: markdown/guides/benchmarks/VolumetricBenchmarks
     - file: markdown/guides/benchmarks/MirrorFidelityEstimation
-    - file: markdown/advanced/specialist/ParityBenchmarking
-  - file: markdown/advanced/specialist/RobustPhaseEstimation
-  - file: markdown/guides/drift/DriftCharacterization
+    - file: markdown/guides/benchmarks/ParityBenchmarking
+  - file: markdown/guides/RobustPhaseEstimation
+  - file: markdown/guides/drift/Index
     sections:
     - file: markdown/guides/drift/DriftAnalysis
     - file: markdown/guides/drift/TimestampedData
-  - file: markdown/guides/drift/ComparingDataSets
-  - file: markdown/guides/analysis/Results
+  - file: markdown/guides/ComparingDataSets
+  - file: markdown/guides/analysis/Index
     sections:
     - file: markdown/guides/analysis/InspectingResults
     - file: markdown/guides/analysis/Reports
     - file: markdown/guides/analysis/Metrics
-    - file: markdown/guides/analysis/GaugeFreedom
+    - file: markdown/guides/analysis/GaugeOptimization
     - file: markdown/guides/analysis/ErrorBars
     - file: markdown/guides/analysis/ModelTesting
-- file: markdown/guides/models/DeviceModels
+- file: markdown/models/Index
   sections:
-  - file: markdown/guides/models/BuildingModels
-  - file: markdown/guides/workflow/DescribeYourDevice
-  - file: markdown/internals/models/ExplicitModels
-  - file: markdown/guides/models/MultiQubitModels
-  - file: markdown/guides/models/ModelNoise
-  - file: markdown/guides/workflow/SimulatingData
-  - file: markdown/advanced/ml/QPANN
-- file: markdown/internals/Index
+  - file: markdown/models/BuildingModels
+  - file: markdown/models/ProcessorSpecs
+  - file: markdown/models/ExplicitModels
+  - file: markdown/models/ImplicitModels
+  - file: markdown/models/ModelNoise
+  - file: markdown/models/SimulatingData
+  - file: markdown/models/QPANN
+- file: markdown/core/Index
   sections:
-  - file: markdown/internals/models/Operators
+  - file: markdown/core/operators/Index
     sections:
-    - file: markdown/internals/models/OperatorTypes
-    - file: markdown/internals/models/CustomOperators
-    - file: markdown/internals/models/CustomPOVMs
-    - file: markdown/internals/models/TyingParameters
-  - file: markdown/internals/conventions/Bases
+    - file: markdown/core/operators/OperatorTypes
+    - file: markdown/core/operators/CustomOperators
+    - file: markdown/core/operators/CustomPOVMs
+    - file: markdown/core/operators/TyingParameters
+  - file: markdown/core/bases/Index
     sections:
-    - file: markdown/internals/conventions/UsingBases
-    - file: markdown/internals/conventions/StateSpaces
-  - file: markdown/internals/simulation/ForwardSimulators
+    - file: markdown/core/bases/UsingBases
+    - file: markdown/core/bases/StateSpaces
+  - file: markdown/core/simulation/Index
     sections:
-    - file: markdown/internals/simulation/ChoosingForwardSimulators
-    - file: markdown/internals/simulation/StabilizerCHP
-    - file: markdown/internals/simulation/ErrorGeneratorPropagation
-    - file: markdown/internals/simulation/ErrorGeneratorPropagation-Parallelization
-    - file: markdown/internals/simulation/DEM-Creation-from-Errorgens
-    - file: markdown/internals/simulation/ErrorGeneratorPolynomials
-  - file: markdown/internals/extending/LowLevelGST
+    - file: markdown/core/simulation/ChoosingForwardSimulators
+    - file: markdown/core/simulation/StabilizerCHP
+    - file: markdown/core/simulation/ErrorGeneratorPropagation
+    - file: markdown/core/simulation/ErrorGeneratorPropagationParallel
+    - file: markdown/core/simulation/DetectorErrorModels
+    - file: markdown/core/simulation/ErrorGeneratorPolynomials
+  - file: markdown/core/lowlevel/Index
     sections:
-    - file: markdown/internals/extending/LowLevelGSTAlgorithms
-    - file: markdown/internals/extending/GaugeOptReference
-  - file: markdown/internals/figures/WorkspaceFigures
+    - file: markdown/core/lowlevel/LowLevelGSTAlgorithms
+    - file: markdown/core/lowlevel/GaugeOptReference
+  - file: markdown/core/figures/Index
     sections:
-    - file: markdown/internals/figures/WorkspaceFigureExamples
-    - file: markdown/internals/figures/Switchboards
+    - file: markdown/core/figures/WorkspaceFigureExamples
+    - file: markdown/core/figures/Switchboards
 - file: markdown/reference/Index
   sections:
-  - file: markdown/reference/Troubleshooting
+  - file: markdown/reference/FAQ
   - file: markdown/reference/Citing
   - file: markdown/reference/FromFunctionAPI
   - file: markdown/reference/Contributing

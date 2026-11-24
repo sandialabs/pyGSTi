@@ -133,7 +133,7 @@ flowchart TD
 
 ## Canonical examples
 
-- [docs/markdown/start/TargetModels.md](../docs/markdown/start/TargetModels.md) — modelpack API tutorial.
-- [docs/markdown/guides/workflow/DescribeYourDevice.md](../docs/markdown/guides/workflow/DescribeYourDevice.md) — ProcessorSpec walkthrough.
+- [docs/markdown/start/ModelPacks.md](../docs/markdown/start/ModelPacks.md) — modelpack API tutorial.
+- [docs/markdown/models/ProcessorSpecs.md](../docs/markdown/models/ProcessorSpecs.md) — ProcessorSpec walkthrough.
 - [pygsti/modelpacks/smq1Q_XY.py](../pygsti/modelpacks/smq1Q_XY.py) — the canonical data-shape example.
 - [pygsti/modelpacks/_modelpack.py:34](../pygsti/modelpacks/_modelpack.py#L34) — the base API for understanding what subclasses must provide.

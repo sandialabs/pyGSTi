@@ -180,12 +180,12 @@ The third layer has a non-obvious consequence: **representation degeneracies in 
 Notebook sources under [docs/markdown/](../docs/markdown/) are useful teaching material, although they may be out-of-date.
 Tests are mediocre as documentation; consult them only when you need to see actual API usage in isolation.
 
-- [docs/markdown/guides/workflow/Circuits.md](../docs/markdown/guides/workflow/Circuits.md) — Circuit and Label semantics in depth.
-- [docs/markdown/internals/models/ExplicitModels.md](../docs/markdown/internals/models/ExplicitModels.md), [docs/markdown/guides/models/MultiQubitModels.md](../docs/markdown/guides/models/MultiQubitModels.md) — Model variants.
-- [docs/markdown/internals/models/Operators.md](../docs/markdown/internals/models/Operators.md) — gate parameterizations actually used in practice, including the Lindblad (CPTP-constrained) mode; also walks the model-member graph with `print_modelmembers`.
-- [docs/markdown/guides/models/ModelNoise.md](../docs/markdown/guides/models/ModelNoise.md) — noise composition patterns; SPAM noise modeling.
-- [docs/markdown/guides/gst/MidCircuitMeasurement.md](../docs/markdown/guides/gst/MidCircuitMeasurement.md), [docs/markdown/internals/models/CustomOperators.md](../docs/markdown/internals/models/CustomOperators.md), [docs/markdown/internals/models/CustomPOVMs.md](../docs/markdown/internals/models/CustomPOVMs.md) — Instrument and custom-operator extension patterns.
-- [docs/markdown/internals/conventions/StateSpaces.md](../docs/markdown/internals/conventions/StateSpaces.md), [docs/markdown/internals/conventions/Bases.md](../docs/markdown/internals/conventions/Bases.md) — supporting infrastructure.
-- [docs/markdown/internals/models/TyingParameters.md](../docs/markdown/internals/models/TyingParameters.md) — parameter labels, bounds and introspection.
+- [docs/markdown/guides/data/Circuits.md](../docs/markdown/guides/data/Circuits.md) — Circuit and Label semantics in depth.
+- [docs/markdown/models/ExplicitModels.md](../docs/markdown/models/ExplicitModels.md), [docs/markdown/models/ImplicitModels.md](../docs/markdown/models/ImplicitModels.md) — Model variants.
+- [docs/markdown/core/operators/Index.md](../docs/markdown/core/operators/Index.md) — gate parameterizations actually used in practice, including the Lindblad (CPTP-constrained) mode; also walks the model-member graph with `print_modelmembers`.
+- [docs/markdown/models/ModelNoise.md](../docs/markdown/models/ModelNoise.md) — noise composition patterns; SPAM noise modeling.
+- [docs/markdown/guides/gst/richer/Instruments.md](../docs/markdown/guides/gst/richer/Instruments.md), [docs/markdown/core/operators/CustomOperators.md](../docs/markdown/core/operators/CustomOperators.md), [docs/markdown/core/operators/CustomPOVMs.md](../docs/markdown/core/operators/CustomPOVMs.md) — Instrument and custom-operator extension patterns.
+- [docs/markdown/core/bases/StateSpaces.md](../docs/markdown/core/bases/StateSpaces.md), [docs/markdown/core/bases/Index.md](../docs/markdown/core/bases/Index.md) — supporting infrastructure.
+- [docs/markdown/core/operators/TyingParameters.md](../docs/markdown/core/operators/TyingParameters.md) — parameter labels, bounds and introspection.
 
 Source-side anchor for "how do I construct an `ExplicitOpModel` from scratch": [pygsti/models/modelconstruction.py:59](../pygsti/models/modelconstruction.py#L59) and its `create_explicit_model_from_expressions` helper.

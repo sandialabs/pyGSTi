@@ -99,4 +99,4 @@ Runners, mixins, composed designs, simulators, post-processors, and supporting r
 
 ## Canonical examples
 
-- [docs/markdown/guides/workflow/Workflow.md](../../docs/markdown/guides/workflow/Workflow.md) — orientation-level introduction to the Protocol contract, and how `ExperimentDesign`, `ProtocolData`, `Protocol`, and `ProtocolResults` fit together.
+- [docs/markdown/guides/data/Index.md](../../docs/markdown/guides/data/Index.md) — orientation-level introduction to the Protocol contract, and how `ExperimentDesign`, `ProtocolData`, `Protocol`, and `ProtocolResults` fit together.

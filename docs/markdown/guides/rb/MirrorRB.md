@@ -19,7 +19,7 @@ This tutorial contains a few details on how to run *Mirror randomized benchmarki
 
 Like Direct RB, Mirror RB is a streamlined RB method partly inspired by [Clifford RB](CliffordRB). It has the same core purpose as Clifford RB - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information. However, Mirror RB is even more streamlined than Direct RB, making it feasable on 10s or 100s of qubits (it is possible to holistically benchmark around $1/\epsilon$ qubits if the error rate per-gate per-qubit is around $\epsilon$).
 
-Mirror RB can be implemented with non-Clifford gates as well (see the [Universal Gate Set MRB tutorial](MirrorRB-Universal-Gate-Sets)). A depth $m$ ($m\geq 0$) mirror RB circuit consists of:
+Mirror RB can be implemented with non-Clifford gates as well (see the [Universal Gate Set MRB tutorial](MirrorRBUniversalGates)). A depth $m$ ($m\geq 0$) mirror RB circuit consists of:
 
 1. A uniformly random 1-qubit Clifford gate on every qubit. 
 2. A "compute" circuit consisting of $m/2$ independently sampled layers of the native Clifford gates in the device, sampled according to a user-specified distribution $\Omega$. Each of these layers is proceeded by a uniformly random Pauli gate on each qubit.
