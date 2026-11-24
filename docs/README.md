@@ -38,7 +38,18 @@ Download and extract the ZIP, then run `python -m http.server 8950 --bind 127.0.
 
 ## Notebook output and example reports
 
-On a branch containing these tools, the local execution path is:
+To preview the site with executed notebooks and the example reports:
+
+```bash
+export PYTHONPATH="$PWD"
+python docs/local-preview.py full      # execute, collect reports, build (~35 minutes on 8 cores)
+python docs/local-preview.py update    # after editing pages: rebuild in seconds
+python -m http.server 8950 --bind 127.0.0.1 --directory docs/_build/executed/_build/prose/_build/html
+```
+
+`full` passes arguments after `--` to `execute-notebooks.py`, for example `-- --jobs 4`. `update` keeps the outputs already in each notebook, so a page whose code you changed shows stale output until you run `full` again. The script's docstring has the details.
+
+The steps `full` runs, for doing them by hand:
 
 ```bash
 export PYTHONPATH="$PWD"
