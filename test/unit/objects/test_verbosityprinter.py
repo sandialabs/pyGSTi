@@ -1,4 +1,7 @@
+import os
 import pickle
+import tempfile
+import unittest
 from contextlib import contextmanager
 from io import StringIO
 from unittest import mock
@@ -42,12 +45,38 @@ class VerbosityPrinterMethodBase(object):
 
     def test_to_string(self):
         vbp_str = str(self.vbp)
-        # TODO assert correctness
+        self.assertTrue(vbp_str.startswith("Printer Object:"))
 
     def test_pickle(self):
         s = pickle.dumps(self.vbp)
         vbp_pickled = pickle.loads(s)
-        # TODO assert correctness
+        self.assertEqual(vbp_pickled.verbosity, self.vbp.verbosity)
+        self.assertEqual(vbp_pickled.filename, self.vbp.filename)
+        self.assertIsNone(vbp_pickled._comm)
+        
+        # Test __getstate__ directly
+        state = self.vbp.__getstate__()
+        self.assertNotIn('_comm', state)
+
+    def test_recording(self):
+        self.assertFalse(self.vbp.is_recording())
+        self.vbp.start_recording()
+        self.assertTrue(self.vbp.is_recording())
+        
+        self.vbp.error("recorded error")
+        self.vbp.warning("recorded warn")
+        self.vbp.log("recorded log", message_level=1)
+        
+        recorded = self.vbp.stop_recording()
+        self.assertFalse(self.vbp.is_recording())
+        
+        self.assertTrue(any(r[0] == "ERROR" and "recorded error" in r[2] for r in recorded))
+        self.assertTrue(any(r[0] == "WARNING" and "recorded warn" in r[2] for r in recorded))
+        
+        if self.verbosity >= 1:
+            self.assertTrue(any(r[0] == "LOG" and "recorded log" in r[2] for r in recorded))
+        else:
+            self.assertFalse(any(r[0] == "LOG" for r in recorded))
 
 
 class VerbosityPrinterStreamInstance(object):
@@ -71,8 +100,11 @@ class VerbosityPrinterFileInstance(object):
         super(VerbosityPrinterFileInstance, self).setUp()
         self.redirect_output = self.redirect_file_io
         self.redirect_error = self.redirect_file_io
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        log_path = os.path.join(self._tmpdir.name, 'test_file.log')
         with self.redirect_file_io():
-            self.vbp = vbp.VerbosityPrinter(self.verbosity, filename='/tmp/test_file.log')
+            self.vbp = vbp.VerbosityPrinter(self.verbosity, filename=log_path)
 
     @contextmanager
     def redirect_file_io(self):
@@ -138,3 +170,337 @@ class VerbosityPrinterFileLevel2Tester(VerbosityPrinterFileLevel1Tester):
 
 class VerbosityPrinterFileLevel3Tester(VerbosityPrinterFileLevel2Tester):
     verbosity = 3
+
+
+class VerbosityPrinterFactoryTester(BaseCase):
+    def test_create_printer_int(self):
+        printer = vbp.VerbosityPrinter.create_printer(3)
+        self.assertIsInstance(printer, vbp.VerbosityPrinter)
+        self.assertEqual(printer.verbosity, 3)
+
+    def test_create_printer_from_printer(self):
+        orig_printer = vbp.VerbosityPrinter(2, filename="some_file.log", warnings=False, split=True)
+        new_printer = vbp.VerbosityPrinter.create_printer(orig_printer)
+        self.assertIsNot(new_printer, orig_printer)
+        self.assertEqual(new_printer.verbosity, 2)
+        self.assertEqual(new_printer.filename, "some_file.log")
+        self.assertFalse(new_printer.warnings)
+        self.assertTrue(new_printer.split)
+
+    def test_clone_and_deep_copy_stacks(self):
+        orig_printer = vbp.VerbosityPrinter(1)
+        orig_printer._delayQueue.append("queued message")
+        orig_printer._progressStack.append(2)
+        orig_printer._progressParamsStack.append((1, 2, 3))
+
+        cloned = orig_printer.clone()
+        self.assertIsNot(cloned, orig_printer)
+        self.assertEqual(cloned.verbosity, orig_printer.verbosity)
+        
+        # Verify stack independence (deep copied)
+        self.assertEqual(cloned._delayQueue, ["queued message"])
+        cloned._delayQueue.append("new queued")
+        self.assertNotEqual(cloned._delayQueue, orig_printer._delayQueue)
+
+        self.assertEqual(cloned._progressStack, [2])
+        cloned._progressStack.append(3)
+        self.assertNotEqual(cloned._progressStack, orig_printer._progressStack)
+
+        self.assertEqual(cloned._progressParamsStack, [(1, 2, 3)])
+        cloned._progressParamsStack.append((4, 5, 6))
+        self.assertNotEqual(cloned._progressParamsStack, orig_printer._progressParamsStack)
+
+    def test_dunder_add_sub(self):
+        printer = vbp.VerbosityPrinter(2)
+        self.assertEqual(printer.verbosity, 2)
+        self.assertEqual(printer.extra_indents, 0)
+
+        # Addition
+        more_verbose = printer + 1
+        self.assertEqual(more_verbose.verbosity, 3)
+        self.assertEqual(more_verbose.extra_indents, -1)
+        # Original should not be modified
+        self.assertEqual(printer.verbosity, 2)
+        self.assertEqual(printer.extra_indents, 0)
+
+        # Subtraction
+        less_verbose = printer - 2
+        self.assertEqual(less_verbose.verbosity, 0)
+        self.assertEqual(less_verbose.extra_indents, 2)
+        # Original should not be modified
+        self.assertEqual(printer.verbosity, 2)
+        self.assertEqual(printer.extra_indents, 0)
+
+    def test_verbosity_env(self):
+        printer = vbp.VerbosityPrinter(1)
+        self.assertEqual(printer.defaultVerbosity, 1)
+
+        with printer.verbosity_env(3):
+            self.assertEqual(printer.defaultVerbosity, 3)
+
+        # Restored
+        self.assertEqual(printer.defaultVerbosity, 1)
+
+        # Restored even on exception
+        try:
+            with printer.verbosity_env(4):
+                self.assertEqual(printer.defaultVerbosity, 4)
+                raise ValueError("Intentional error")
+        except ValueError:
+            pass
+
+        self.assertEqual(printer.defaultVerbosity, 1)
+
+    def test_progress_logging_queued_log(self):
+        printer = vbp.VerbosityPrinter(1)
+        with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+            with printer.progress_logging():
+                printer.show_progress(0, 2)
+                printer.log("queued log message", 1)
+                self.assertIn("queued log message", printer._delayQueue[0])
+                self.assertNotIn("queued log message", mock_stdout.getvalue())
+            
+            # After context manager exits, the queue should be flushed
+            self.assertIn("queued log message", mock_stdout.getvalue())
+            self.assertEqual(len(printer._delayQueue), 0)
+
+    def test_progress_logging_verbose_messages(self):
+        printer = vbp.VerbosityPrinter(2)
+        with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+            with printer.progress_logging(1):
+                printer.show_progress(0, 2, verbose_messages=["verbose 1"])
+            
+            output = mock_stdout.getvalue()
+            self.assertIn("verbose 1", output)
+
+    def test_log_custom_end(self):
+        printer = vbp.VerbosityPrinter(1)
+        with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+            printer.log("hello", end="---")
+            self.assertEqual(mock_stdout.getvalue(), "hello---")
+
+    def test_warning_suppressed(self):
+        printer = vbp.VerbosityPrinter(1, warnings=False)
+        with mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+            printer.warning("suppressed warn")
+            self.assertEqual(mock_stderr.getvalue(), "")
+
+
+class VerbosityPrinterHelperTester(BaseCase):
+    def test_num_digits(self):
+        self.assertEqual(vbp._num_digits(0), 1)
+        self.assertEqual(vbp._num_digits(1), 1)
+        self.assertEqual(vbp._num_digits(9), 1)
+        self.assertEqual(vbp._num_digits(10), 2)
+        self.assertEqual(vbp._num_digits(99), 2)
+        self.assertEqual(vbp._num_digits(100), 3)
+        self.assertEqual(vbp._num_digits(1000), 4)
+
+    def test_build_progress_bar(self):
+        # Full progress bar at 100% (should have end='\n' if iteration == total)
+        res_full = vbp._build_progress_bar(10, 10, bar_length=10)
+        self.assertTrue(res_full.endswith("\n"))
+        self.assertIn("##########", res_full)
+        self.assertIn("100.0%", res_full)
+
+        # Partial progress bar (should have end='\r' by default if iteration != total)
+        res_half = vbp._build_progress_bar(5, 10, bar_length=10)
+        self.assertTrue(res_half.endswith("\r"))
+        self.assertIn("#####-----", res_half)
+        self.assertIn("50.0%", res_half)
+
+        # Custom empty/fill characters and suffix/prefix
+        res_custom = vbp._build_progress_bar(3, 10, bar_length=10, fill_char="*", empty_char=".", prefix="Prep:", suffix="Done")
+        self.assertIn("***.......", res_custom)
+        self.assertIn("Prep:", res_custom)
+        self.assertIn("Done", res_custom)
+        self.assertIn("30.0%", res_custom)
+
+    def test_build_verbose_iteration(self):
+        res = vbp._build_verbose_iteration(0, 10, prefix="Prep:", suffix="Done", end="\n")
+        # 10 is 2 digits, so 0+1 = 1 should be zero-padded to "01"
+        self.assertIn("Prep: Iter 01 of 10 Done:", res)
+
+
+class VerbosityPrinterPutBehaviorTester(BaseCase):
+    def test_put_behaviors(self):
+        # Helper to test combination of (filename, split, stderr, flush)
+        def run_put_test(filename, split, stderr, flush):
+            printer = vbp.VerbosityPrinter(1, filename=filename, split=split)
+            
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                
+                # Spy on stdout.flush
+                mock_stdout.flush = mock.MagicMock()
+                
+                printer._put("test_msg", flush=flush, stderr=stderr)
+                
+                # Check flush was called if and only if flush is True
+                if flush:
+                    mock_stdout.flush.assert_called_once()
+                else:
+                    mock_stdout.flush.assert_not_called()
+                    
+                stdout_val = mock_stdout.getvalue()
+                stderr_val = mock_stderr.getvalue()
+                
+                return stdout_val, stderr_val
+
+        # Case 1: filename is None, stderr=False
+        stdout_val, stderr_val = run_put_test(None, split=False, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "test_msg")
+        self.assertEqual(stderr_val, "")
+
+        # Case 2: filename is None, stderr=True
+        stdout_val, stderr_val = run_put_test(None, split=False, stderr=True, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "test_msg")
+
+        # Case 3: filename is empty string
+        stdout_val, stderr_val = run_put_test("", split=False, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "")
+
+        # Case 4: filename is empty string, split=True
+        stdout_val, stderr_val = run_put_test("", split=True, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "")
+
+        # Case 5: real file, split=False, stderr=False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=False)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("file_msg", flush=True, stderr=False)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "file_msg")
+
+        # Case 6: real file, split=False, stderr=True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=False)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("file_msg", flush=True, stderr=True)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "file_msg")
+
+        # Case 7: real file, split=True, stderr=False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=True)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("split_msg", flush=True, stderr=False)
+                self.assertEqual(mock_stdout.getvalue(), "split_msg")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "split_msg")
+
+        # Case 8: real file, split=True, stderr=True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=True)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("split_msg", flush=True, stderr=True)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "split_msg")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "split_msg")
+
+
+def demo(verbosity_or_printer):
+    # usage of the show_progress function
+    printer = vbp.VerbosityPrinter.create_printer(verbosity_or_printer)
+    data = range(10)
+    with printer.progress_logging(2):
+        for i, item in enumerate(data):
+            printer.show_progress(i, len(data)-1,
+                                  verbose_messages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
+
+
+def nested_demo(verbosity_or_printer):
+    printer = vbp.VerbosityPrinter.create_printer(verbosity_or_printer)
+    printer.warning('Beginning demonstration of the verbosityprinter class. This could go wrong..')
+    data = range(10)
+    with printer.progress_logging(1):
+        for i, item in enumerate(data):
+            printer.show_progress(i, len(data)-1,
+                                  verbose_messages=['%s circuits' % i], prefix='-- IterativeGST (', suffix=') --')
+            if i == 5:
+                printer.error('The iterator is five. This caused an error, apparently')
+            demo(printer - 1)
+
+
+class TestVerbosityPrinterDemo(unittest.TestCase):
+    def test_nested_demo_stdout(self):
+        # We test nested_demo at levels 0 to 4 and ensure output is printed correctly
+        # at each level, capturing stdout and stderr.
+        outputs = {}
+        for v in range(5):
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                nested_demo(v)
+                outputs[v] = (mock_stdout.getvalue(), mock_stderr.getvalue())
+
+        # Assertions on stdout / stderr matching expected behavior for demo
+        # Level 0 (tersest): stderr has error, warning, no stdout
+        self.assertIn("ERROR: The iterator is five", outputs[0][1])
+        self.assertIn("WARNING: Beginning demonstration", outputs[0][1])
+        self.assertEqual(outputs[0][0], "")
+
+        # Level 1 (terse): has stdout (iterative progress bar), stderr has warning and error
+        self.assertIn("ERROR: The iterator is five", outputs[1][1])
+        self.assertIn("WARNING: Beginning demonstration", outputs[1][1])
+        self.assertIn("IterativeGST", outputs[1][0])
+        # Level 1 nested has demo(printer - 1) which is verbosity 0. So no nested output.
+
+        # Level 2 (standard): Level 2 nested has demo(1), which prints nothing for nested demo, but prints verbose iterations for outer demo.
+        self.assertIn("-- IterativeGST (", outputs[2][0])
+        self.assertNotIn("--- GST (", outputs[2][0])
+
+        # Level 3 (verbose): Level 3 nested has demo(2), which prints progress bars for the nested demo
+        self.assertIn("--- GST (", outputs[3][0])
+        self.assertNotIn("gates", outputs[3][0])
+
+        # Level 4 (most verbose): Level 4 nested has demo(3), which prints verbose iterations for nested demo
+        self.assertIn("--- GST (", outputs[4][0])
+        self.assertIn("gates", outputs[4][0])
+
+        # Verify that output is not empty for verbosity levels >= 1
+        for v in range(1, 5):
+            self.assertGreater(len(outputs[v][0]), 0)
+
+    def test_demo_file_output(self):
+        # Create deterministic sequential file output tests
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # We run 4 independent printer instances writing to output files
+            for i in range(4):
+                file_path = os.path.join(tmpdirname, f"output{i}.txt")
+                printer = vbp.VerbosityPrinter(i, file_path)
+                demo(printer)
+                
+                self.assertTrue(os.path.exists(file_path))
+                with open(file_path, "r") as f:
+                    content = f.read()
+                
+                if i < 3:
+                    # Verbosity levels 0, 1, and 2 do not output to file (progress bar to file is skipped)
+                    self.assertEqual(content, "")
+                else:
+                    # Verbosity level 3 is greater than the progress logging level,
+                    # so it prints verbose iterations instead of a progress bar.
+                    self.assertIn("--- GST (", content)
+                    self.assertIn("gates", content)  # verbose_messages output at level 3
+                    self.assertNotIn("\r", content)  # verbose iterations end in newlines
+
+
+if __name__ == '__main__':
+    unittest.main()
