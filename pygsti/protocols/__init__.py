@@ -13,6 +13,7 @@ Sub-package containing protocol objects and related inputs, data, and results
 from .freeformsim import *
 from .gst import *
 from .modeltest import *
+from .propagatederrortomography import *
 from .protocol import *
 from .rb import *
 from .rpe import *
