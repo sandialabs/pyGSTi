@@ -383,7 +383,8 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
 
 
 def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',
-                            process_num: int = 5, include_spam: bool = False) -> dict:
+                            process_num: int = 5, include_spam: bool = False,
+                            pauli_observables: list | None = None) -> dict:
     """
     Compute the tensors needed by QPANN probability-approximation layers.
 
@@ -409,6 +410,14 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         (see `error_propagation_tensors`). Use with a circuit encoder that encodes the implicit
         initialization and measurement layers, e.g. `StandardCircuitEncoder(pspec, include_spam=True)`,
         so that the rows of the circuit encoding and of these tensors line up.
+    pauli_observables : list or None, default None
+        If None, the QPANN outputs are the circuits' outcome (bit string) probabilities. Otherwise
+        they are expectation values of Pauli observables: either one list of n-qubit Pauli strings
+        (str or `stim.PauliString`) used for every circuit, or a list with one such list per
+        circuit (all of the same length). See `first_order_pauli_expectation_tensors`. Requires
+        `alpha_representation='concise'`. Can be combined with `include_spam=True`: the measurement
+        error row then holds error generators acting right before an ideal measurement of each
+        observable (i.e., after any basis-change gates that are part of the circuit).
 
     Returns
     -------
@@ -416,9 +425,11 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         Dictionary with keys:
           * 'indices' : numpy.ndarray
           * 'signs' : numpy.ndarray
-          * 'probabilities' : numpy.ndarray
+          * 'probabilities' : numpy.ndarray (if `pauli_observables` is None), or
+            'expectations' : numpy.ndarray (ideal Pauli expectation values, otherwise)
           * 'alphas' : numpy.ndarray
-        where the meaning/shape of 'alphas' depends on `alpha_representation`.
+        where the meaning/shape of 'alphas' depends on `alpha_representation`. A QPANN takes
+        'probabilities' or 'expectations' as its ideal-outcome input in either case.
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
@@ -432,7 +443,13 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
             "since it only ever computes alphas for the (few) error generators/indices that actually "
             "occur in each circuit, regardless of type."
         )
+    if pauli_observables is not None and alpha_representation != 'concise':
+        raise NotImplementedError("Pauli observables are only supported with alpha_representation='concise'.")
     indices, signs = error_propagation_tensors(circuits, error_generators, pspec, include_spam=include_spam)
+    if pauli_observables is not None:
+        expectations, alphas = first_order_pauli_expectation_tensors(circuits, pspec, indices, signs, pauli_observables,
+                                                                     process_num=process_num)
+        return {'indices': indices, 'signs': signs, 'expectations': expectations, 'alphas': alphas}
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, pspec, indices=indices)
     elif alpha_representation == 'concise':
@@ -897,3 +914,106 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
                 first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
 
     return (probabilities, first_order_coefficients)
+
+
+def _validated_pauli_observables(pauli_observables: list, num_circuits: int, num_qubits: int) -> list[list[_stim.PauliString]]:
+    """Normalize `pauli_observables` (one shared list, or one list per circuit) to per-circuit lists of
+    unsigned `stim.PauliString`s, with input validation."""
+    def as_pauli(p):
+        if isinstance(p, _stim.PauliString):
+            if p.sign != 1:
+                raise ValueError(f"Pauli observables must be unsigned, got {p!r}.")
+            return p.copy()
+        return _stim.PauliString(_tools._validate_pauli_string(p, 'pauli_observables'))
+
+    per_circuit = len(pauli_observables) > 0 and not isinstance(pauli_observables[0], (str, _stim.PauliString))
+    lists = [list(obs) for obs in pauli_observables] if per_circuit else [list(pauli_observables)] * num_circuits
+    if len(lists) != num_circuits:
+        raise ValueError(f"Got {len(lists)} per-circuit observable lists for {num_circuits} circuits.")
+    if len(lists) == 0 or len(lists[0]) == 0 or any(len(obs) != len(lists[0]) for obs in lists):
+        raise ValueError("Every circuit must have the same (non-zero) number of Pauli observables.")
+    out = [[as_pauli(p) for p in obs] for obs in lists]
+    if any(len(p) != num_qubits for obs in out for p in obs):
+        raise ValueError(f"Pauli observables must be {num_qubits}-qubit Pauli strings.")
+    return out
+
+
+def first_order_pauli_expectation_tensors(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray,
+                                          pauli_observables: list, process_num: int = 5) -> tuple[_np.ndarray, _np.ndarray]:
+    """
+    Compute ideal Pauli expectation values and their "concise" first-order sensitivity tensor for a
+    batch of circuits: the Pauli-observable analogue of
+    `first_order_outcome_probabilities_tensors_concise` (bit string probabilities), multiprocessed
+    over circuits.
+
+    The expectation value of each observable P is approximated, to first order in the error
+    generator rates, as `<P>_ideal + sum_{layer, generator} alphas[P, layer, generator] * rate`,
+    exactly as for probabilities, so a QPANN can be trained on Pauli expectation values (e.g.
+    estimated from measurements in rotated bases) by passing `expectations` as its ideal-outcome
+    input. Supports all four error generator types ('H', 'S', 'C', 'A').
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to process.
+    pspec : ProcessorSpec
+        Processor specification (used for `num_qubits`).
+    indices : numpy.ndarray
+        Propagated end-of-circuit error generator indices, of shape
+        `(num_circuits, depth, num_error_generators)` (see `error_propagation_tensors`).
+    signs : numpy.ndarray
+        Sign factors of the same shape as `indices` (see `error_propagation_tensors`).
+    pauli_observables : list
+        Either one list of K n-qubit Pauli strings (str, e.g. 'XZI', or unsigned `stim.PauliString`)
+        used for every circuit, or a list of `num_circuits` such lists (one per circuit), each of
+        length K.
+    process_num : int, default 5
+        Number of worker processes to use (via `multiprocessing.Pool`).
+
+    Returns
+    -------
+    expectations : numpy.ndarray
+        Array of shape `(num_circuits, K)` with the ideal expectation values.
+    first_order_coefficients : numpy.ndarray
+        Array of shape `(num_circuits, K, depth, num_error_generators)` with the first-order
+        sensitivity of each circuit's k-th observable to each layer's error generator rates,
+        already multiplied by `signs`.
+    """
+    from pygsti.processors import QubitProcessorSpec
+    assert isinstance(pspec, QubitProcessorSpec)
+    num_qubits = pspec.num_qubits
+    observables = _validated_pauli_observables(pauli_observables, len(circuits), num_qubits)
+    num_obs = len(observables[0])
+
+    args = [(circ, indices[idx], num_qubits, [str(p) for p in observables[idx]]) for idx, circ in enumerate(circuits)]
+    with Pool(process_num) as p:
+        output_list = p.starmap(_circuit_loop_paulis, tqdm.tqdm(args))
+    expectations = _np.zeros((len(circuits), num_obs), float)
+    first_order_coefficients = _np.zeros((indices.shape[0], num_obs, indices.shape[1], indices.shape[2]), float)
+    for idx, (ideal, coefficients) in enumerate(output_list):
+        expectations[idx] = ideal
+        first_order_coefficients[idx] = coefficients * signs[idx][None, :, :]
+    return expectations, first_order_coefficients
+
+
+def _circuit_loop_paulis(circuit: _Circuit, indices: _np.ndarray, num_qubits: int,
+                         pauli_strings: list[str]) -> tuple[_np.ndarray, _np.ndarray]:
+    # Module-level worker (multiprocessing requires a picklable function). Pauli strings are passed
+    # as str (stim objects are not reliably picklable) and converted back here.
+    paulis = [_stim.PauliString(p) for p in pauli_strings]
+    tableau = _get_tableau(circuit)
+    sim = _stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau ** -1)
+    ideal = _np.array([sim.peek_observable_expectation(p) for p in paulis], float)
+    unique_indices = sorted(set(int(i) for i in indices.flatten()))
+    # `slow_bulk_alpha_pauli` needs labels whose basis element labels are `stim.PauliString`s.
+    labels = []
+    for i in unique_indices:
+        typ, bels = cast(Any, _tools.index_to_error_gen(i, num_qubits))
+        labels.append(_lseg.LocalStimErrorgenLabel(typ, [_stim.PauliString(b) for b in bels]))
+    # (num paulis, num unique error generators)
+    sensitivities = _egptools.slow_bulk_alpha_pauli(labels, sim, paulis)
+    column = {i: c for c, i in enumerate(unique_indices)}
+    lookup = _np.vectorize(lambda i: column[int(i)])(indices) if indices.size else indices
+    return ideal, sensitivities[:, lookup]
+
